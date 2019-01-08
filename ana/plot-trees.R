@@ -1,0 +1,51 @@
+#library(tidyverse)
+library(ggtree)
+library(ape)
+library(tools)
+
+args = commandArgs(trailingOnly=TRUE)
+data.dir <- args[1]
+
+make.tree <- function(d){
+   nedge <- nrow(d)
+   nleaf <- (nedge + 2)/2
+   nnode <- nleaf - 1
+
+   mytree <- list()
+   mytree$edge <- as.matrix(d[,c(1,2)])
+   mytree$Nnode <- as.integer(nnode)
+   mytree$tip.label <- paste(1:nleaf)
+   mytree$edge.length <- d[,3]
+   class(mytree) <- "phylo"
+   checkValidPhylo(mytree)
+   return(mytree)
+}
+
+plot.tree <- function(tree){
+   p <- ggtree(tree) #+ geom_rootedge() 
+   p <- p + geom_tiplab()
+   p <- p + geom_text2(aes(subset=!isTip,label=node), hjust=-.3)
+   edge=data.frame(tree$edge, edge_num=1:nrow(tree$edge), edge_len=tree$edge.length)
+   colnames(edge)=c("parent", "node", "edge_num", "edge_len")
+   p <- p %<+% edge + geom_text(aes(x=branch, label=edge_len), nudge_y=0.1)
+   print(p)
+}
+
+#dir <- "../sim-data/"
+dir <- data.dir
+files <- list.files(dir,"^sim\\-data\\-\\d+\\-tree")
+for(f in files){
+    
+    dd <- read.table(paste(dir,f,sep=""),header=T)
+    stub <- file_path_sans_ext(f)
+    fout <- paste(dir,"plot-",stub,".pdf",sep="")
+    cat("\n\nrunning over", stub, fout, "\n", sep="\t")
+    
+    dd$start <- dd$start + 1
+    dd$end <- dd$end + 1
+    dd$length <- as.numeric(dd$length)
+    mytree <- make.tree(dd)
+    pdf(fout)
+    plot.tree(mytree)
+    dev.off()
+}
