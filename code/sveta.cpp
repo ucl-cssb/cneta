@@ -384,10 +384,43 @@ void run_sample_set(int Ns, double* prc, double* pvs, int* ret){
 // to match up with ape in R we always print id+1
 
 
+/*
+//order of parameters expected:  Npop, ngen, g_d, mu_i, p_tran, svp2, trp2, SV_min, svgradient, svtransgrad, fitness, SV_mean, mu_k, gnmdou, maxchr, minchr
+void read_params( const string& filename, vector<double>& prior_rates_l, vector<double>& prior_rates_u){
+
+  ifstream infile (filename.c_str());
+
+  int counter = 0; 
+  if (infile.is_open()){
+
+    std::string line;
+    
+    while(!getline(infile,line).eof()){
+      if(line.empty()) continue;
+
+      std::vector<std::string> split;
+      std::string buf; 
+      stringstream ss(line);
+      while (ss >> buf) split.push_back(buf);
+
+      prior_rates_l.push_back( atof( split[0].c_str() ) );
+      prior_rates_u.push_back( atof( split[1].c_str() ) );	      
+    
+      counter++;
+    }
+      
+  }else{
+    std::cerr << "Error: open of input parameter file unsuccessful: " <<  filename << std::endl;
+  }
+  
+  return counter;
+}
+*/
+
 int main (int argc, char ** const argv) {
   setup_rng(0);
 
-  int mode = 1;
+  int mode = 0;
 
   // output directory
   string dir(argv[1]);
@@ -396,40 +429,35 @@ int main (int argc, char ** const argv) {
   // number of regions
   int Ns = atoi(argv[2]);
   
-  // number of multi-region 
+  // number of multi-region samples
   int Nsims = atoi(argv[3]);
+
+  // priors on rates
+  //vector<double> pars;
+  //read_params(argv[4],pars);
+
+  // four event types: duplication, deletion, chromosome gain, chromosome loss, wgd
+  // rates are 1/mean
+  vector<double> rate_consts; 
+  rate_consts.push_back( atof(argv[4]) );
+  rate_consts.push_back( atof(argv[5]) );
+  rate_consts.push_back( atof(argv[6]) );
+  rate_consts.push_back( atof(argv[7]) );
+  rate_consts.push_back( atof(argv[8]) );
+
+  // parameters for mean of dup/del size distributions
+  vector<double> var_size; 
+  var_size.push_back( atof(argv[9]) );
+  var_size.push_back( atof(argv[10]) );
+
+  cout << "rates:\t" << rate_consts[0] << "\t" << rate_consts[1]  << "\t" << rate_consts[2]  << "\t" << rate_consts[3]  << "\t" << rate_consts[4] << endl;
+  cout << "sizes:\t" << var_size[0] << "\t" << var_size[1] << endl;
   
-  //create test tree
+  // simulate and coalescent tree and apply SVs
   if(mode == 0){
-    //static const int arr1[] = {7,8, 6,7, 8,1, 8,2, 7,9, 9,3, 9,4, 6,5 };
-    static const int arr1[] = {6,7, 5,6, 7,0, 7,1, 6,8, 8,2, 8,3, 5,4 };
-
-    vector<int> e (arr1, arr1 + sizeof(arr1) / sizeof(arr1[0]) );
-
-    static const double arr2[] = {5.1,6.3,10.2,9.5,5.2,3.2,5.4,0};
-    vector<double> l (arr2, arr2 + sizeof(arr2) / sizeof(arr2[0]) );
-  
-    evo_tree test_tree(5, e, l);
-
-    test_tree.print();
-  }
-
-  // simulate and plot coalescent trees
-  if(mode == 1){
     
     static const int arr[] = {367, 385, 335, 316, 299, 277, 251, 243, 184, 210, 215, 213, 166, 150, 134, 118, 121, 127, 79, 106, 51, 54};
     vector<int> chr_lengths (arr, arr + sizeof(arr) / sizeof(arr[0]) );
-    
-    // four event types: duplication, deletion, chromosome gain, chromosome loss, wgd
-    // rates are 1/mean
-    vector<double> rate_consts;
-    rate_consts.push_back(0.1);
-    rate_consts.push_back(0.1);
-    rate_consts.push_back(0.1);
-    rate_consts.push_back(0.1);
-    rate_consts.push_back(0.05);
-
-    // parameters for dup/del size distributions
     
     // can specify the germline in a number of different ways
     //genome germline(1,10);
@@ -437,8 +465,8 @@ int main (int argc, char ** const argv) {
     //genome germline(chr_lengths);
     
     genome germline(chr_lengths,2);
-    germline.mean_dup_size = 30.0;
-    germline.mean_del_size = 30.0;
+    germline.mean_dup_size = var_size[0];
+    germline.mean_del_size = var_size[1];
     
     vector<int> edges;
     vector<double> lengths;
@@ -512,6 +540,22 @@ int main (int argc, char ** const argv) {
       node_times.clear();
     }
    
+  }
+
+  /*
+  //create test tree
+  if(mode == 1){
+    //static const int arr1[] = {7,8, 6,7, 8,1, 8,2, 7,9, 9,3, 9,4, 6,5 };
+    static const int arr1[] = {6,7, 5,6, 7,0, 7,1, 6,8, 8,2, 8,3, 5,4 };
+
+    vector<int> e (arr1, arr1 + sizeof(arr1) / sizeof(arr1[0]) );
+
+    static const double arr2[] = {5.1,6.3,10.2,9.5,5.2,3.2,5.4,0};
+    vector<double> l (arr2, arr2 + sizeof(arr2) / sizeof(arr2[0]) );
+  
+    evo_tree test_tree(5, e, l);
+
+    test_tree.print();
   }
   
   // test out the genome classes and functionality
@@ -587,5 +631,5 @@ int main (int argc, char ** const argv) {
     }
     
   }
-
+  */
 }
