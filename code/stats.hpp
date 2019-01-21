@@ -150,3 +150,96 @@ void generate_coal_tree(const int& nsample, vector<int>& edges, vector<double>& 
     //cout << i+1 << "\t" << times[i] << endl;
   //}
 }
+
+
+evo_tree generate_coal_tree(const int& nsample){
+  //cout << "GENERATING COAL TREE" << endl;
+
+  vector<int> edges;
+  vector<double> lengths;
+  vector<double> epoch_times;
+  vector<double> times;
+  
+  int nlin = nsample;
+  vector<int> nodes;
+ 
+  // For compatibility with ape in R, root node must be labelled
+  // 0 to nsample-1 are leaf, nsample is germline, nsample+1 is root
+  // all other nodes ids start from here
+  int node_count = nsample+2;
+
+  // create leaf nodes
+  for(int i=0; i<nsample; ++i) nodes.push_back(i);
+
+  // create vector of event times
+  // total nodes = 2*(nsample+1) -1 
+  for(int i=0; i<(2*nsample+1); ++i) times.push_back(0.0);
+  
+  double t_tot = 0;
+  while(nlin > 1){
+    // sample a time from Exp( combinations(k,2) )
+    double lambda = fact(nlin)/( 2*fact(nlin-2) );
+    double t = gsl_ran_exponential(r, lambda);
+    t_tot += t;
+    
+    // choose two random nodes from available list
+    random_shuffle(nodes.begin(), nodes.end(),fp);
+
+    // edge node_count -> node
+    edges.push_back(node_count);
+    edges.push_back(nodes[nodes.size()-1]);
+    lengths.push_back(t_tot - times[ nodes[nodes.size()-1] ] );
+
+    edges.push_back(node_count);
+    edges.push_back(nodes[nodes.size()-2]);
+    lengths.push_back(t_tot - times[ nodes[nodes.size()-2] ] );
+
+    // update time for this node
+    //cout << "\t" << node_count+1 << "\t" << t_tot << endl;
+    epoch_times.push_back(t_tot);
+    times[ node_count ] = t_tot;
+    
+    nodes.pop_back();
+    nodes.pop_back();
+
+    nodes.push_back(node_count);
+    node_count++;
+    nlin--;
+  }
+
+  // create the root and germline nodes and edges
+  double lambda = 1;
+  double t = gsl_ran_exponential(r, lambda);
+  t_tot += t;
+  epoch_times.push_back(t_tot);
+
+  // add in the time for the root and germline nodes
+  times[nsample+1] = t_tot;
+  times[nsample] = t_tot;
+  
+  edges.push_back(nsample+1);
+  edges.push_back(node_count-1);
+  lengths.push_back(t);
+
+  edges.push_back(nsample+1);
+  edges.push_back(nsample);
+  lengths.push_back(0);
+
+  // invert the times
+  for(int i=0; i<times.size(); ++i){
+    times[i] = t_tot - times[i];
+  }
+  
+  //cout << "total time of tree: " << t_tot << " : ";
+  //for(int i=0; i<epoch_times.size(); ++i) cout << "\t" << epoch_times[i];
+  //cout << endl;
+
+  // invert the times
+  //cout << "times of nodes:" << endl;
+  //for(int i=0; i<times.size(); ++i){
+    //cout << i+1 << "\t" << times[i] << endl;
+  //}
+
+  evo_tree ret(nsample+1, edges, lengths);
+  return ret;
+}

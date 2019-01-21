@@ -5,6 +5,7 @@ library(tools)
 
 args = commandArgs(trailingOnly=TRUE)
 data.dir <- args[1]
+branch.num <- as.numeric(args[2])
 
 make.tree <- function(d){
    nedge <- nrow(d)
@@ -35,15 +36,23 @@ plot.tree <- function(tree){
 dir <- data.dir
 files <- list.files(dir,"^sim\\-data\\-\\d+\\-tree")
 for(f in files){
-    
     dd <- read.table(paste(dir,f,sep=""),header=T)
     stub <- file_path_sans_ext(f)
     fout <- paste(dir,"plot-",stub,".pdf",sep="")
     cat("\n\nrunning over", stub, fout, "\n", sep="\t")
     
-    dd$start <- dd$start + 1
-    dd$end <- dd$end + 1
-    dd$length <- as.numeric(dd$length)
+    #dd$start <- dd$start + 1
+    #dd$end <- dd$end + 1
+
+    if(branch.num==0){
+        dd$length <- as.numeric(dd$length)
+	dd <- dd[,c(1,2,3)]
+    }
+    if(branch.num==1){
+	dd$nmut <- as.numeric(dd$nmut)
+	dd <- dd[,c(1,2,5)]
+    }
+
     mytree <- make.tree(dd)
     pdf(fout)
     plot.tree(mytree)

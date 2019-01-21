@@ -45,7 +45,7 @@ vector<mutation> generate_mutation_times(const int& edge_id, const double& bleng
   
   // model this as a poisson process
   double time = 0.0;
-  while( time < blength){
+  while( time < blength ){
     vector<double> rates;
     for(int i=0; i<rate_constants.size(); ++i){
       rates.push_back(rate_constants[i]);
@@ -63,6 +63,14 @@ vector<mutation> generate_mutation_times(const int& edge_id, const double& bleng
     ret.push_back( mutation( edge_id, e, time/blength, node_time+time ) );
   }
   ret.pop_back();
+
+  //int nmut = 5;
+  //double time = blength/(1.0 + nmut);
+  //ret.push_back( mutation( edge_id, 0, 1/6.0, node_time+time ) );
+  //ret.push_back( mutation( edge_id, 0, 2/6.0, node_time+2*time ) );
+  //ret.push_back( mutation( edge_id, 0, 3/6.0, node_time+3*time ) );
+  //ret.push_back( mutation( edge_id, 0, 4/6.0, node_time+4*time ) );
+  //ret.push_back( mutation( edge_id, 0, 5/6.0, node_time+5*time ) );
   
   return ret;
 }
@@ -215,7 +223,7 @@ void traverse_tree_mutating(const int& node_id, const evo_tree& tree, const vect
   return;
 }
 
-void simulate_samples(vector<genome>& genomes, const evo_tree& tree, genome& germline, const vector<double>& rate_constants, bool print = true ){
+void simulate_samples(vector<genome>& genomes, map<int,vector<mutation> >& muts, const evo_tree& tree, genome& germline, const vector<double>& rate_constants, bool print = true ){
   
   // assign the germline to the root of the tree
   germline.node_id = tree.root_node_id;
@@ -230,7 +238,7 @@ void simulate_samples(vector<genome>& genomes, const evo_tree& tree, genome& ger
   }
 
   // hold all mutations by edge id
-  map<int, vector<mutation> > muts;
+  //map<int, vector<mutation> > muts;
   
   // move through the evolutionary tree mutating genomes
   traverse_tree_mutating( tree.root_node_id, tree, rate_constants, muts, genomes );
@@ -279,44 +287,6 @@ void setup_rng(int set_seed){
   }
 }
 
-/*
-// args:
-// Ns: number of samples (not including germline)
-// prc: 5 rate constants for duplication, deletion, chromosome gain, chromosome loss, wgd
-// pvs: mean dup size, mean del size
-// ptree: parameters for the tree toplogy
-// ret: 2d array of size nbins x Ns
-evo_tree construct_tree( const int& Ns, const vector<double>& epars, const vector<double>& lengths, vector<double>& node_times ){
-
-  vector<int> edges;
-  edges.push_back( 6 );
-  edges.push_back( 5 );
-  edges.push_back( 6 );
-  edges.push_back( 9 );
-  edges.push_back( 7 );
-  edges.push_back( epars[0] );
-  edges.push_back( 7 );
-  edges.push_back( epars[1] );
-  edges.push_back( 7 );
-  edges.push_back( epars[2] );
-  edges.push_back( 8 );
-  edges.push_back( epars[3] );
-  edges.push_back( 8 );
-  edges.push_back( epars[4] );
-  edges.push_back( 9 );
-  edges.push_back( epars[5] );
-  edges.push_back( 9 );
-  edges.push_back( epars[6] );
-
-  node_times[5] = 0;
-  node_times[4] = 0;
-  node_times[8] = lengths[1]; // root -> 9
-  node_times[7] = lengths[1];
-  
-  evo_tree test_tree(Ns+1, edges, lengths);
-  return test_tree;
-}
-*/
 //void run_sample_set(int Ns, double* prc, double* pvs, double* ptree, double* pl, int* ret){
 void run_sample_set(int Ns, double* prc, double* pvs, int* ret){
 
@@ -334,7 +304,8 @@ void run_sample_set(int Ns, double* prc, double* pvs, int* ret){
   vector<double> epoch_times;
   vector<double> node_times;
   stringstream sstm;
-  vector<genome> results;  
+  vector<genome> results;
+  map<int, vector<mutation> > muts;
   //cout << "\n\n###### New sample collection ######" << endl;
   //cout << "###### Ns+1= " << Ns+1 << endl;
       
@@ -346,7 +317,7 @@ void run_sample_set(int Ns, double* prc, double* pvs, int* ret){
   //evo_tree test_tree = construct_tree(Ns, epars, lengths, node_times );
   
   test_tree.node_times = node_times;
-  simulate_samples(results, test_tree, germline, rate_consts, false);
+  simulate_samples(results, muts, test_tree, germline, rate_consts, false);
 
   int nbins = 4401;
   for(int i=0; i<(test_tree.nleaf-1); ++i){
@@ -474,6 +445,7 @@ int main (int argc, char ** const argv) {
     vector<double> node_times;
     stringstream sstm;
     vector<genome> results;
+    map<int, vector<mutation> > muts;
     for(int i=0; i<Nsims; ++i){
       //cout << "\n\n###### New sample collection ######" << endl;
       //int Ns = 2 + gsl_rng_uniform_int(r, 8);
@@ -486,7 +458,7 @@ int main (int argc, char ** const argv) {
 
       evo_tree test_tree(Ns+1, edges, lengths);
       test_tree.node_times = node_times;
-      simulate_samples(results, test_tree, germline, rate_consts, false);
+      simulate_samples(results, muts, test_tree, germline, rate_consts, false);
 
       sstm << dir << "sim-data-" << i+1 << "-info.txt";
       ofstream out_info(sstm.str());
@@ -509,7 +481,12 @@ int main (int argc, char ** const argv) {
       
       sstm << dir << "sim-data-" << i+1 << "-tree.txt";
       ofstream out_tree(sstm.str());
-      test_tree.write(out_tree);
+      //test_tree.write(out_tree);
+      out_tree << "start\tend\tlength\teid\tnmut" << endl;
+      for(int i=0; i<test_tree.nedge; ++i){
+	out_tree << test_tree.edges[i].start+1 << "\t" << test_tree.edges[i].end+1 << "\t" << test_tree.edges[i].length
+		 << "\t" << test_tree.edges[i].id+1 << "\t" << muts[test_tree.edges[i].id].size() << endl;
+      }
       out_tree.close();
       sstm.str("");
       
@@ -536,6 +513,7 @@ int main (int argc, char ** const argv) {
       edges.clear();
       lengths.clear();
       results.clear();
+      muts.clear();
       epoch_times.clear();
       node_times.clear();
     }
