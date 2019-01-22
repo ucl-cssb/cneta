@@ -5,8 +5,8 @@ input=./test/sim-data-2-cn.txt.gz
 Ns=10
 
 # evolutionary algorithm
-Npop=1000
-Ngen=5000
+Npop=100
+Ngen=10000
 cnmax=12
 
 code/svtreeml $input $Ns $Npop $Ngen $cnmax
