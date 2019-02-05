@@ -2,7 +2,8 @@ library(copynumber)
 library(reshape)
 library(tools)
 
-load("../../lpWGS phylogenies/bin_locations_4401.Rdata")
+# load("../../lpWGS phylogenies/bin_locations_4401.Rdata")
+load("./bin_locations_4401.Rdata")
 
 args = commandArgs(trailingOnly=TRUE)
 data.dir <- args[1]
