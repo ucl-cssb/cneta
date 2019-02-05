@@ -3,10 +3,12 @@ library(reshape)
 library(tools)
 
 # load("../../lpWGS phylogenies/bin_locations_4401.Rdata")
-load("./bin_locations_4401.Rdata")
+#load("./bin_locations_4401.Rdata")
 
 args = commandArgs(trailingOnly=TRUE)
 data.dir <- args[1]
+bin.file <- args[2]
+load(bin.file)
 
 if(0){
    d <- read.table("cnprofile-2.txt",header=FALSE)

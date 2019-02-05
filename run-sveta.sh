@@ -3,7 +3,7 @@
 dir="./test/"
 
 # number of regions. Output will be Nr+1 including germline
-Ns=10
+Ns=5
 
 # number of samples. Number of tumours to simulate
 Nsim=3
@@ -22,4 +22,4 @@ s2=30
 mkdir $dir
 code/sveta $dir $Ns $Nsim $r1 $r2 $r3 $r4 $r5 $s1 $s2
 Rscript ana/plot-trees.R $dir 1
-Rscript ana/plot-cns.R $dir
+Rscript ana/plot-cns.R $dir ana/bin_locations_4401.Rdata

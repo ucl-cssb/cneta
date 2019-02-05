@@ -75,6 +75,7 @@ public:
   int nleaf;
   int nnode;
   int nedge;
+  int ntotn;
   vector<edge>   edges;
   vector<double> lengths;
   vector<node>   nodes;
@@ -184,7 +185,8 @@ evo_tree::evo_tree(const int& _nleaf, const vector<int>& _edges, const vector<do
   nleaf = _nleaf;
   nnode = nleaf - 1; // internal nodes
   nedge = 2*nleaf - 2;
-   
+  ntotn = 2*nleaf - 1; // all nodes
+  
   // create list of edges
   int count = 0;
   for(int i=0; i<nedge; ++i){
@@ -200,7 +202,8 @@ evo_tree::evo_tree(const int& _nleaf, const vector<edge>& _edges){
   nleaf = _nleaf;
   nnode = nleaf - 1; // internal nodes
   nedge = 2*nleaf - 2;
-
+  ntotn = 2*nleaf - 1; // all nodes
+  
   edges.clear();
   edges.insert(edges.end(), _edges.begin(), _edges.end() );
 
@@ -266,6 +269,7 @@ evo_tree::evo_tree(const evo_tree& _t2) {
   nleaf = _t2.nleaf;
   nnode = _t2.nnode;
   nedge = _t2.nedge;
+  ntotn = _t2.ntotn;
   root_node_id = _t2.root_node_id;
 
   edges.clear();

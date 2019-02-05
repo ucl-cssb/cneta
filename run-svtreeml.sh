@@ -2,15 +2,15 @@
 
 # input parameters
 input=./test/sim-data-2-cn.txt.gz
-Ns=10
+Ns=5
 
 # evolutionary algorithm
-Npop=100
-Ngen=10000
-cnmax=12
+Npop=50
+Ngen=100
+Nstop=5
 
-code/svtreeml $input $Ns $Npop $Ngen $cnmax
+code/svtreeml $input $Ns $Npop $Ngen $Nstop
 Rscript ana/plot-trees.R ./ 0
 
-mv plot-sim-data-1-tree.pdf results-parsimony-tree.pdf
-mv sim-data-1-tree.txt results-parsimony-tree.txt
+mv plot-sim-data-1-tree.pdf results-maxL-tree.pdf
+mv sim-data-1-tree.txt results-maL-tree.txt
