@@ -114,6 +114,8 @@ vector<vector<int> > read_data_var_regions(const string& filename, const int& Ns
   int nvar = accumulate(var_bins.begin(), var_bins.end(), 0);
   cout << "\tFound variable bins:\t" << nvar << endl;
 
+  // We now need to convert runs of variable bins into segments of constant cn values
+  
   vector<vector<int> > segs;
   for(int k=0; k<4401;){
 
@@ -122,16 +124,34 @@ vector<vector<int> > read_data_var_regions(const string& filename, const int& Ns
       int chr = s_info[0][k][0];
       int seg_start = s_info[0][k][1];
       int id_start = k;
-      //cout << "seg_start: " << chr << "\t" << seg_start << endl;
 
-      while( var_bins[k] == 1 && s_info[0][k][0] == chr){
-	++k;
+      // hold the total copy number of the first bin. If this changes we need a new segment
+      int seg_cn_tot = 0;
+      for(int j=0; j<Ns; ++j) seg_cn_tot += s_info[j][k][2];
+
+      //cout << "seg_start: " << chr << "\t" << seg_start << ", cn= " << seg_cn_tot << endl;
+
+      bool const_cn = true;
+      while( var_bins[k] == 1 && s_info[0][k][0] == chr && const_cn == true){
+
+	// calculate new total cn of next bin
+	int cn_tot = 0;
+	for(int j=0; j<Ns; ++j) cn_tot += s_info[j][k][2];
+	//cout << "\tbin:\t" << k+1 << "\t" << cn_tot << endl;
+	if( cn_tot == seg_cn_tot){
+	  const_cn = true;
+	  ++k;
+	}else{
+	  const_cn = false;
+	  //cout << "\tsplitting segment" << endl;
+	}
       }
       int seg_end = s_info[0][k-1][1];
       int id_end = k-1;
       
-      //cout << "seg_end: " << s_info[0][k][0] << "\t" << seg_end << endl;
+      //cout << "seg_end:\t" << seg_end << "\t" << k << endl;
       //cout << endl;
+
       vector<int> seg;
       seg.push_back(chr);
       seg.push_back(id_start);
@@ -139,6 +159,9 @@ vector<vector<int> > read_data_var_regions(const string& filename, const int& Ns
       seg.push_back(seg_start);
       seg.push_back(seg_end); 
       segs.push_back(seg);
+
+      // rewind k by one to get the split segment start correct
+      if(const_cn == false) k--;
     }
     ++k;
   }
@@ -160,10 +183,12 @@ vector<vector<int> > read_data_var_regions(const string& filename, const int& Ns
       if( ceil(av_cn[j]) != floor(av_cn[j]) ) valid = false;
     }
 
-    //cout << "\t" << segs[i][0] << "\t" << segs[i][1] << "\t" << segs[i][2];
-    //for(int j=0; j<Ns; ++j) cout << "\t" << av_cn[j];
-    //cout << "\t" << valid << endl;
-
+    if(0){
+      cout << "\t" << segs[i][0] << "\t" << segs[i][1] << "\t" << segs[i][2];
+      for(int j=0; j<Ns; ++j) cout << "\t" << av_cn[j];
+      cout << "\t" << valid << endl;
+    }
+      
     if( valid == true ){
       vector<int> vals;
       vals.push_back( segs[i][0] );
@@ -298,6 +323,8 @@ int main (int argc, char ** const argv) {
   vector<vector<int> > data = read_data_var_regions(datafile, Ns);
   int Nchar = data.size();
 
+  //exit(0);
+  
   // node_ass is the initial assignments of the characters
   int ntotn = 2*(Ns+1) - 1;
   vector<vector<int> > node_ass(ntotn, vector<int>(Nchar, 0));
@@ -404,6 +431,8 @@ int main (int argc, char ** const argv) {
     fill(distances.begin(), distances.end(), 0);
   }
 
+  cout << "FINISHED. MIN DIST = " << min_dist << endl;
+  
   // Write out the top tree
   stringstream sstm;
   min_dist_tree.print();
