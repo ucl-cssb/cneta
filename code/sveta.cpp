@@ -48,7 +48,7 @@ vector<mutation> generate_mutation_times(const int& edge_id, const double& bleng
   while( time < blength ){
     vector<double> rates;
     for(int i=0; i<rate_constants.size(); ++i){
-      rates.push_back(rate_constants[i]);
+      rates.push_back(rate_constants[i]/2.0);        // in coalescent Nmut ~ Pois( theta*l/2 )
       //cout << "##:\t" << rates[i] << endl;
     }
 
@@ -63,14 +63,6 @@ vector<mutation> generate_mutation_times(const int& edge_id, const double& bleng
     ret.push_back( mutation( edge_id, e, time/blength, node_time+time ) );
   }
   ret.pop_back();
-
-  //int nmut = 5;
-  //double time = blength/(1.0 + nmut);
-  //ret.push_back( mutation( edge_id, 0, 1/6.0, node_time+time ) );
-  //ret.push_back( mutation( edge_id, 0, 2/6.0, node_time+2*time ) );
-  //ret.push_back( mutation( edge_id, 0, 3/6.0, node_time+3*time ) );
-  //ret.push_back( mutation( edge_id, 0, 4/6.0, node_time+4*time ) );
-  //ret.push_back( mutation( edge_id, 0, 5/6.0, node_time+5*time ) );
   
   return ret;
 }
@@ -421,10 +413,16 @@ int main (int argc, char ** const argv) {
   var_size.push_back( atof(argv[9]) );
   var_size.push_back( atof(argv[10]) );
 
+  // effective population size
+  double Ne = atof(argv[11]);
+
+  // relative timing difference
+  double delta_t = atof(argv[12]);
+
   cout << "rates:\t" << rate_consts[0] << "\t" << rate_consts[1]  << "\t" << rate_consts[2]  << "\t" << rate_consts[3]  << "\t" << rate_consts[4] << endl;
   cout << "sizes:\t" << var_size[0] << "\t" << var_size[1] << endl;
   
-  // simulate and coalescent tree and apply SVs
+  // simulate coalescent tree and apply SVs
   if(mode == 0){
     
     static const int arr[] = {367, 385, 335, 316, 299, 277, 251, 243, 184, 210, 215, 213, 166, 150, 134, 118, 121, 127, 79, 106, 51, 54};
@@ -448,24 +446,45 @@ int main (int argc, char ** const argv) {
     map<int, vector<mutation> > muts;
     for(int i=0; i<Nsims; ++i){
       //cout << "\n\n###### New sample collection ######" << endl;
-      //int Ns = 2 + gsl_rng_uniform_int(r, 8);
-      //int Ns = 4;
-      //cout << "###### Ns+1= " << Ns+1 << endl;
-
+ 
       generate_coal_tree(Ns, edges, lengths, epoch_times, node_times);
-      //cout << "EDGES:" << endl;
-      //for(int j=0; j<edges.size(); j=j+2) cout << edges[j]+1 << " -> " << edges[j+1]+1 << endl;
 
+      // Scale branch lengths
+      for(int l=0; l<lengths.size(); ++l) lengths[l] = lengths[l]*Ne;
+
+      // randomly assign leaf edges to time points t0, t1, t2, t3
+      //
+      cout << "assigning temporal structure" << endl;
+      bool assign0 = false;
+      int bcount = 0;
+      for(int l=1; l<edges.size(); l=l+2){
+	if( edges[l] < Ns){
+	  int ind = 0;
+	  if(assign0 == false){
+	    ind = 0;
+	    assign0 = true;
+	  }
+	  else{
+	    ind = gsl_rng_uniform_int(r, 4);
+	  }
+	  cout << "\t sample / time point:" << edges[l]+1 << "\t" << ind << endl;
+	  lengths[bcount] = lengths[bcount] + ind*delta_t;
+	}
+	bcount++;
+      }
+      
+      //lengths[0] = lengths[0]*1.25;
+      //lengths[1] = lengths[1]*1.25;
+      
       evo_tree test_tree(Ns+1, edges, lengths);
-      test_tree.node_times = node_times;
       simulate_samples(results, muts, test_tree, germline, rate_consts, false);
 
       sstm << dir << "sim-data-" << i+1 << "-info.txt";
       ofstream out_info(sstm.str());
       out_info << "NODE TIMES:";
       out_info << "\tnid\ttime" << endl;
-      for(int j=0; j< node_times.size(); ++j){
-	out_info << "\t" << j+1 << "\t" << node_times[j] << endl;
+      for(int j=0; j< test_tree.node_times.size(); ++j){
+	out_info << "\t" << j+1 << "\t" << test_tree.node_times[j] << endl;
       }
       out_info << endl;
      
@@ -509,6 +528,19 @@ int main (int argc, char ** const argv) {
       }
       out_mut.close();
       sstm.str("");
+
+      sstm << dir << "sim-data-" << i+1 << "-rel-times.txt";
+      double node_min = 1000;
+      for(int j=0; j<Ns; ++j){
+	if( test_tree.node_times[j] < node_min ) node_min = test_tree.node_times[j];
+      }
+      //cout << "leaf minimum: " << node_min << endl;
+      ofstream out_rel(sstm.str());
+      for(int j=0; j<Ns; ++j){
+	out_rel << j+1 << "\t" << test_tree.node_times[j] - node_min << endl;
+      }
+      out_rel.close();
+      sstm.str("");
       
       edges.clear();
       lengths.clear();
@@ -516,6 +548,7 @@ int main (int argc, char ** const argv) {
       muts.clear();
       epoch_times.clear();
       node_times.clear();
+      
     }
    
   }

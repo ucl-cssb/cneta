@@ -83,6 +83,11 @@ public:
   int root_node_id;
 
   vector<vector<int> > chars;
+
+  vector<double> tobs;
+  int s0;
+  
+  double score;
   
   evo_tree(){}
   evo_tree(const int& _nleaf, const vector<int>& _edges, const vector<double>& _lengths);
@@ -196,6 +201,7 @@ evo_tree::evo_tree(const int& _nleaf, const vector<int>& _edges, const vector<do
 
   generate_nodes();
   calculate_node_times();
+  score = 0;
 }
 
 evo_tree::evo_tree(const int& _nleaf, const vector<edge>& _edges){
@@ -209,6 +215,7 @@ evo_tree::evo_tree(const int& _nleaf, const vector<edge>& _edges){
 
   generate_nodes();
   calculate_node_times();
+  score = 0;
 }
 
 void evo_tree::generate_nodes(){
@@ -254,7 +261,7 @@ void evo_tree::calculate_node_times(){
 	reverse(aedges.begin(),aedges.end());
 	double time = 0;
 	for(int j=0; j<aedges.size(); ++j){
-	  time += edges[aedges[j]].length;   
+	  time += edges[aedges[j]].length;
 	}
 	node_times[ nodes[i].id ] = time;
       }
@@ -271,7 +278,10 @@ evo_tree::evo_tree(const evo_tree& _t2) {
   nedge = _t2.nedge;
   ntotn = _t2.ntotn;
   root_node_id = _t2.root_node_id;
-
+  score = _t2.score;
+  tobs = _t2.tobs;
+  s0 = _t2.s0;
+  
   edges.clear();
   edges.insert(edges.end(), _t2.edges.begin(), _t2.edges.end() );
   lengths.clear();
