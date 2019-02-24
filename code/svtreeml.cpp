@@ -40,6 +40,7 @@ double LARGE_LNL = -1e9;
 
 // global values for gsl function minimization
 vector<vector<int> > vobs;
+vector<double> tobs;
 int Ns;
 int Nchar;
 
@@ -82,7 +83,7 @@ vector<double> read_time_info(const string& filename, const int& Ns){
       while (ss >> buf) split.push_back(buf);
 
       int dt = atof(split[1].c_str());
-      cout << "read dt: " << dt << endl;
+      //cout << "read dt: " << dt << endl;
       t_info.push_back(dt);
     }
   }else{
@@ -96,6 +97,43 @@ vector<double> read_time_info(const string& filename, const int& Ns){
   }
 
   return t_info;
+}
+
+evo_tree read_tree_info(const string& filename, const int& Ns){
+  if(debug) cout << "\tread_tree_info" << endl;
+
+  vector<edge> edges;
+  int id = 0;
+  
+  ifstream infile (filename.c_str());
+  if (infile.is_open()){
+    std::string line;
+    while(!getline(infile,line).eof()){
+      if(line.empty()) continue;
+
+      std::vector<std::string> split;
+      std::string buf; 
+      stringstream ss(line);
+      while (ss >> buf) split.push_back(buf);
+
+      if( id > 0 ){
+	int start = atoi(split[0].c_str());
+	int end   = atoi(split[1].c_str());
+	double length = atof(split[2].c_str());
+	//cout << "t: " << id << "\t" << start << "\t" << end << "\t" << length << endl;
+	edges.push_back( edge( id-1, start-1, end-1, length) );
+      }
+      id++;
+    }
+  }else{
+    std::cerr << "Error: open of tree data unsuccessful: " <<  filename << std::endl;
+    exit(1);
+  }
+
+  evo_tree new_tree(Ns+1, edges);
+  //new_tree.print();
+  
+  return new_tree;
 }
 
 vector<vector<int> > read_data_var_regions(const string& filename, const int& Ns, const int& max_cn){
@@ -335,6 +373,8 @@ evo_tree perturb_tree( const int& Ns, const int& Nchar, const evo_tree& tree ){
   }
 
   evo_tree new_tree(Ns+1, enew);
+  new_tree.mu = tree.mu;
+  new_tree.tobs = tree.tobs;
   
   //cout << "\tntree: ";
   //cout << create_tree_string( new_tree ) << endl;
@@ -348,7 +388,7 @@ evo_tree perturb_tree( const int& Ns, const int& Nchar, const evo_tree& tree ){
 }
 
 evo_tree perturb_tree( const int& Ns, const int& Nchar, vector<evo_tree> trees ){
-  //if(debug) cout << "\tperturb_tree" << endl;
+  if(debug) cout << "\tperturb_tree" << endl;
 
   int count = 0;
   while(true){
@@ -357,7 +397,7 @@ evo_tree perturb_tree( const int& Ns, const int& Nchar, vector<evo_tree> trees )
 
     // generate a new tree
     evo_tree ttree = perturb_tree( Ns, Nchar, trees[ind] );
-
+    
     string tstring = order_tree_string( create_tree_string( ttree ) );
 
     if ( searched_trees.find(tstring) == searched_trees.end() ) {
@@ -425,7 +465,7 @@ double get_transition_prob(const double& mu, double blength, const int& sk, cons
 }
 
 
-double get_likelihood(const int& Ns, const int& Nchar, const vector<vector<int> >& vobs, evo_tree& rtree, const double& mu){
+double get_likelihood(const int& Ns, const int& Nchar, const vector<vector<int> >& vobs, evo_tree& rtree){
   if(debug) cout << "\tget_likelihood" << endl;
   int nstate = 5;
 
@@ -480,13 +520,13 @@ double get_likelihood(const int& Ns, const int& Nchar, const vector<vector<int> 
 	double Li = 0;
 	// loop over possible si
 	for(int si=0; si<nstate; ++si){
-	  Li += get_transition_prob(mu, bli, sk, si ) * L_sk_k[ni][si];
+	  Li += get_transition_prob(rtree.mu, bli, sk, si ) * L_sk_k[ni][si];
 	  //cout << "\tscoring: Li\t" << li << "\t" << get_transition_prob(mu, bli, sk, si ) << "\t" << L_sk_k[ni][si] << endl;
 	}
 	double Lj = 0;
 	// loop over possible sj
 	for(int sj=0; sj<nstate; ++sj){
-	  Lj += get_transition_prob(mu, blj, sk, sj ) * L_sk_k[nj][sj];
+	  Lj += get_transition_prob(rtree.mu, blj, sk, sj ) * L_sk_k[nj][sj];
 	}
 	//cout << "scoring: sk" << sk << "\t" <<  Li << "\t" << Lj << endl;
 	L_sk_k[k][sk] = Li*Lj;
@@ -512,22 +552,9 @@ double get_likelihood(const int& Ns, const int& Nchar, const vector<vector<int> 
   return logL;
 }
 
-/*
-double prior(const evo_tree& tree){
-  for(int i=0; i<tree.nedge; ++i){
-    if( tree.edges[i].length < 0.0){
-      return 0.0;
-    }
-  }
-  return 1.0;
-}
-*/
-
 double my_f (const gsl_vector *v, void *params){
   
   evo_tree *tree = (evo_tree*) params;
-
-  double mu = 1.0/Nchar; // theta = 2*lambda
 
   //create a new tree with the current branch lengths
   vector<edge> enew;
@@ -538,51 +565,161 @@ double my_f (const gsl_vector *v, void *params){
     enew[i].length = exp( gsl_vector_get(v, i) );
   }
   evo_tree new_tree(Ns+1, enew);
-    
-  //return -1.0*get_likelihood(Ns, Nchar, vobs, new_tree, mu)*prior(new_tree);
-  return -1.0*get_likelihood(Ns, Nchar, vobs, new_tree, mu);
+  new_tree.mu = tree->mu;
+  
+  return -1.0*get_likelihood(Ns, Nchar, vobs, new_tree);
+}
+
+double my_f_mu (const gsl_vector *v, void *params){
+  //cout << "my_f_mu" << endl;
+  evo_tree *tree = (evo_tree*) params;
+
+  //create a new tree with the current branch lengths
+  vector<edge> enew;
+  for(int i=0; i<(tree->nedge); ++i){
+    enew.push_back( tree->edges[i] );
+  }
+  for(int i=0; i<(tree->nedge)-1; ++i){
+    enew[i].length = exp( gsl_vector_get(v, i) );
+  }
+  evo_tree new_tree(Ns+1, enew);
+  new_tree.mu = exp( gsl_vector_get(v,tree->nedge-1) );  // 0 to nedge-2 are epars, nedge-1 is mu
+  
+  return -1.0*get_likelihood(Ns, Nchar, vobs, new_tree);
+}
+
+double my_f_cons (const gsl_vector *v, void *params){
+  
+  evo_tree *tree = (evo_tree*) params;
+
+  //create a new tree with the current parameters observing timing constraints
+  vector<edge> enew;
+  for(int i=0; i<(tree->nedge); ++i){
+    enew.push_back( tree->edges[i] );
+  }
+
+  // parameters coming in are internal branch lengths followed by total time
+  int count = 0;
+  for(int i=0; i<(tree->nedge)-1; ++i){
+    if(enew[i].end > Ns){
+      enew[i].length = exp( gsl_vector_get(v, count) );
+      count++;
+    }else{
+      enew[i].length = 0;
+    }
+  }
+
+  evo_tree new_tree(tree->nleaf, enew, exp( gsl_vector_get(v, count)), tree->tobs);
+  new_tree.mu = tree->mu;
+  
+  return -1.0*get_likelihood(Ns, Nchar, vobs, new_tree);
+}
+
+double my_f_cons_mu (const gsl_vector *v, void *params){
+  
+  evo_tree *tree = (evo_tree*) params;
+
+  //create a new tree with the current parameters observing timing constraints
+  vector<edge> enew;
+  for(int i=0; i<(tree->nedge); ++i){
+    enew.push_back( tree->edges[i] );
+  }
+
+  // parameters coming in are internal branch lengths followed by total time
+  int count = 0;
+  for(int i=0; i<(tree->nedge)-1; ++i){
+    if(enew[i].end > Ns){
+      enew[i].length = exp( gsl_vector_get(v, count) );
+      count++;
+    }else{
+      enew[i].length = 0;
+    }
+  }
+
+  evo_tree new_tree(tree->nleaf, enew, exp( gsl_vector_get(v, count)), tree->tobs);
+  new_tree.mu = exp( gsl_vector_get(v, count+1) );
+  
+  return -1.0*get_likelihood(Ns, Nchar, vobs, new_tree);
 }
   
-  
 
 
-// given a tree, maximise the mu and branch lengths assuming branch lengths are independent
-evo_tree max_likelihood(evo_tree& rtree, double& minL){
+// given a tree, maximise the branch lengths (and optionally mu) assuming branch lengths are independent or constrained in time
+evo_tree max_likelihood(evo_tree& rtree, double& minL, int cons=0, int maxj=0){
 
   const gsl_multimin_fminimizer_type *T = gsl_multimin_fminimizer_nmsimplex2;
   gsl_multimin_fminimizer *s = NULL;
   gsl_multimin_function minex_func;
 
-  int npar_ne = rtree.nedge-1;
-  int npar = npar_ne;
-
-  // initialise the best guess branch length
-  gsl_vector *x = gsl_vector_alloc (npar);
-  for(int i=0; i<npar_ne; ++i){
-    gsl_vector_set (x, i, log(rtree.edges[i].length));
-  }
-  //gsl_vector_set (x, i, log(1.0));
+  int npar_ne;
+  int npar;
+  gsl_vector *x;
   
+  if(cons == 0){
+    npar_ne = rtree.nedge-1;
+    if(maxj==0){
+      npar = npar_ne;
+    }else{
+      npar = npar_ne + 1;
+    }
+      
+    // initialise the best guess branch length and mu if required
+    x = gsl_vector_alloc (npar);
+    for(int i=0; i<npar_ne; ++i){
+      gsl_vector_set (x, i, log(rtree.edges[i].length));
+    }
+    if(maxj==1) gsl_vector_set (x, npar_ne, log(rtree.mu) );
+
+    if(maxj==0){
+      minex_func.f = my_f;
+    }else{
+      minex_func.f = my_f_mu;
+    }
+    
+  }else{
+    npar_ne = rtree.nintedge + 1;
+    if(maxj==0){
+      npar = npar_ne;
+    }else{
+      npar = npar_ne + 1;
+    }
+
+    x = gsl_vector_alloc (npar);
+    
+    // initialise with internal edges
+    for(int i=0; i<rtree.nintedge; ++i){
+      gsl_vector_set (x, i, log(rtree.intedges[i]->length));
+    }
+
+    // initialise with current total tree time
+    gsl_vector_set (x, rtree.nintedge, log(rtree.get_total_time()) );
+
+    if(maxj==1) gsl_vector_set (x, npar_ne, log(rtree.mu) );
+    
+    if(maxj==0){
+      minex_func.f = my_f_cons;
+    }else{
+      minex_func.f = my_f_cons_mu;
+    }
+  }
   evo_tree *p = &rtree;
   void * pv = p;  
-  //my_f (x, pv);
   
   // Set initial step sizes to 1
+  //cout << "numbers: nedge / nintedge / npar / x->size: " << rtree.nedge << "\t" << rtree.nintedge << "\t" << npar << "\t" << x->size << endl;
   gsl_vector* ss = gsl_vector_alloc (npar);
   gsl_vector_set_all (ss, 0.01);
-
+  
   // Initialize method and iterate
   minex_func.n = npar;
-  minex_func.f = my_f;
   minex_func.params = pv;
-
+  
   s = gsl_multimin_fminimizer_alloc (T, npar);
   gsl_multimin_fminimizer_set (s, &minex_func, x, ss);
-
+ 
   size_t iter = 0;
   int status;
   double size;
-  
   do{
     iter++;
     status = gsl_multimin_fminimizer_iterate(s);
@@ -590,196 +727,91 @@ evo_tree max_likelihood(evo_tree& rtree, double& minL){
     if (status) break;
 
     size = gsl_multimin_fminimizer_size (s);
-    status = gsl_multimin_test_size (size, 1e-3);
+    status = gsl_multimin_test_size (size, 1e-2);
 
+    if(0){
+      printf ("%5d, %10.3e, %10.3e, f() = %7.3f, size = %.3f\n", 
+	      iter,
+	      exp(gsl_vector_get (s->x, 0)), 
+	      exp(gsl_vector_get (s->x, s->x->size-1)), 
+	      s->fval, size);
+    }
+      
     if (status == GSL_SUCCESS){
       if(0){
 	printf ("converged to minimum at\n");
     
-	printf ("%5d %10.3e %10.3e f() = %7.3f size = %.3f\n", 
+	printf ("%5d, %10.3e, %10.3e, f() = %7.3f, size = %.3f\n", 
 		iter,
-		gsl_vector_get (s->x, 0), 
-		gsl_vector_get (s->x, 1), 
+		exp(gsl_vector_get (s->x, 0)), 
+		exp(gsl_vector_get (s->x, s->x->size-1)), 
 		s->fval, size);
       }
     }
 
   }
-  while (status == GSL_CONTINUE && iter < 1000);
+  while (status == GSL_CONTINUE && iter < 2000);
 
+  if( status == GSL_CONTINUE ){
+    cout << "### WARNING: maximum likelihood did not converge" << endl;
+  }
+  
   // create a new tree
   vector<edge> enew;
   for(int i=0; i<rtree.nedge; ++i){
     enew.push_back( rtree.edges[i] );
   }
-  for(int i=0; i<rtree.nedge-1; ++i){
-    enew[i].length = exp(gsl_vector_get(s->x, i));
-  }
-  evo_tree new_tree(Ns+1, enew);
-
-  minL = s->fval;
   
-  gsl_vector_free(x);
-  gsl_vector_free(ss);
-  gsl_multimin_fminimizer_free (s);
+  if(cons == 0){  
 
-  return new_tree;
-}
+    for(int i=0; i<npar_ne; ++i){
+      enew[i].length = exp(gsl_vector_get(s->x, i));
+    }
+    evo_tree new_tree(Ns+1, enew);
+    if(maxj==0){
+      new_tree.mu = rtree.mu;
+    }else{
+      new_tree.mu = exp(gsl_vector_get(s->x, npar_ne));
+    }
+      
+    minL = s->fval;
+    gsl_vector_free(x);
+    gsl_vector_free(ss);
+    gsl_multimin_fminimizer_free (s);
 
-// map constrained and free branch lengths
-vector<int> create_mapping( const evo_tree& rtree, const int& s0 ){
-  vector<int> ret(rtree.nedge-1, 0);
-  int count = 1;
-  for(int i=0; i<rtree.nedge; ++i){
-    if( rtree.edges[i].end < Ns ){
-      if( rtree.edges[i].end == s0 ){
-	ret[i] = 0;
+    return new_tree;
+
+  }else{
+
+    int count = 0;
+    for(int i=0; i<rtree.nedge-1; ++i){
+      if(enew[i].end > Ns){
+	enew[i].length = exp( gsl_vector_get(s->x, count) );
+	count++;
+      }else{
+	enew[i].length = 0;
       }
-      else{
-	ret[i] = -1;
-      }
     }
-    else{
-      ret[i] = count;
-      ++count;
+    evo_tree new_tree(rtree.nleaf, enew, exp( gsl_vector_get(s->x, count)), rtree.tobs);
+    if(maxj==0){
+      new_tree.mu = rtree.mu;
+    }else{
+      new_tree.mu = exp(gsl_vector_get(s->x, npar_ne));
     }
-  }
-
-  return ret;
-}
-
-/*
-vector<double> extract_free_edges( const evo_tree& rtree, const int& s0 ){
-  
-  vector<double> ret;
-  
-  for(int i=0; i<rtree.nedge-1; ++i){
-    if( rtree.edges[i].end == s0 ){
-      ret.push_back(rtree.edges[i].length);
-    }
-  }
-  // next free parameters are the branch lengths of the internal edges
-  // internal edges are any edge that doesn't end on a leaf node
-  for(int i=0; i<rtree.nedge-1; ++i){
-    if( rtree.edges[i].end >= Ns+1 ){
-      ret.push_back(rtree.edges[i].length);
-    }
-  }
-  return ret;
-}
-
-vector<double> reconstruct_edges( const vector<double>& reduced_edges, const int& s0, const vector<double> t_info ){
-  
-  vector<double> ret;
-  for(int i=0; i<rtree.nedge-1; ++i){
-    if( rtree.edges[i].end < Ns ){
-      ret.push_back( reduced_edges[0] + t_info[ rtree.edges[i].end - 1] );
-    }
-  }
-  for(int i=0; i<rtree.nedge-1; ++i){
-    if( rtree.edges[i].end >= Ns+1 ){
-      ret.push_back(rtree.edges[i].length);
-    }
-  
-
-  ret.push_back( reduced_edges[0]
     
-  }
-  
-  return ret;
-}
-*/  
+    minL = s->fval;
+    gsl_vector_free(x);
+    gsl_vector_free(ss);
+    gsl_multimin_fminimizer_free (s);
 
-
-// given a tree, maximise the mu and branch lengths assuming branch lengths are related through tobs
-evo_tree max_likelihood_cons(evo_tree& rtree, double& minL, const int& s0, const vector<double>& tobs){
-
-  const gsl_multimin_fminimizer_type *T = gsl_multimin_fminimizer_nmsimplex2;
-  gsl_multimin_fminimizer *s = NULL;
-  gsl_multimin_function minex_func;
-
-  // now there is essentially only one parameter for the leaf nodes corresponding to the length of t0
-  int npar_ne = rtree.nedge - 1 - (Ns - 1);
-  int npar = npar_ne;
-
-  // initialise the best guess branch length
-  vector<int> mapping = create_mapping( rtree, s0 );
-  
-  gsl_vector *x = gsl_vector_alloc (npar);
-  for(int i=0; i<npar_ne; ++i){
-    gsl_vector_set (x, i, log(rtree.edges[i].length) );
+    return new_tree;
   }
  
-  // next free parameter mutation rate
-  //gsl_vector_set (x, i, log(1.0));
-  
-  evo_tree *p = &rtree;
-  void * pv = p;  
-  //my_f (x, pv);
-  
-  // Set initial step sizes to 1
-  gsl_vector* ss = gsl_vector_alloc (npar);
-  gsl_vector_set_all (ss, 0.01);
-
-  // Initialize method and iterate
-  minex_func.n = npar;
-  minex_func.f = my_f;
-  minex_func.params = pv;
-
-  s = gsl_multimin_fminimizer_alloc (T, npar);
-  gsl_multimin_fminimizer_set (s, &minex_func, x, ss);
-
-  size_t iter = 0;
-  int status;
-  double size;
-  
-  do{
-    iter++;
-    status = gsl_multimin_fminimizer_iterate(s);
-      
-    if (status) break;
-
-    size = gsl_multimin_fminimizer_size (s);
-    status = gsl_multimin_test_size (size, 1e-3);
-
-    if (status == GSL_SUCCESS){
-      if(0){
-	printf ("converged to minimum at\n");
-    
-	printf ("%5d %10.3e %10.3e f() = %7.3f size = %.3f\n", 
-		iter,
-		gsl_vector_get (s->x, 0), 
-		gsl_vector_get (s->x, 1), 
-		s->fval, size);
-      }
-    }
-
-  }
-  while (status == GSL_CONTINUE && iter < 1000);
-
-  // create a new tree
-  vector<edge> enew;
-  for(int i=0; i<rtree.nedge; ++i){
-    enew.push_back( rtree.edges[i] );
-  }
-  for(int i=0; i<rtree.nedge-1; ++i){
-    enew[i].length = exp(gsl_vector_get(s->x, i));
-  }
-  evo_tree new_tree(Ns+1, enew);
-
-  minL = s->fval;
-  
-  gsl_vector_free(x);
-  gsl_vector_free(ss);
-  gsl_multimin_fminimizer_free (s);
-
-  return new_tree;
 }
 
+evo_tree do_evolutionary_algorithm(const int& Npop, const int& Ngen, const int& max_static, const double& mu, int cons=0, int maxj=0){
 
-evo_tree do_evolutionary_algorithm(const int& Npop, const int& Ngen, const int& max_static){
-
-  cout << "Running evolutionary algorithm" << endl;
+  //cout << "Running evolutionary algorithm" << endl;
   
   // create initial population of trees. Sample from coalescent trees
   vector<evo_tree> trees;
@@ -787,8 +819,10 @@ evo_tree do_evolutionary_algorithm(const int& Npop, const int& Ngen, const int& 
   vector<double> lnLs(2*Npop,0);
   for(int i=0; i<Npop; ++i){
     evo_tree rtree = generate_coal_tree(Ns);
+    rtree.mu = mu;
+    rtree.tobs = tobs;
     trees.push_back( rtree );
-
+    
     string tstring = order_tree_string( create_tree_string( rtree ) );
     searched_trees[ tstring ] = 1;
   }
@@ -812,14 +846,14 @@ evo_tree do_evolutionary_algorithm(const int& Npop, const int& Ngen, const int& 
 	//new_trees.push_back( perturb_tree(Ns, Nchar, trees[i]) );
 	new_trees.push_back( perturb_tree(Ns, Nchar, trees) );
       }
-    
+      
       // Selection: score the trees
       for(int i=0; i<2*Npop; ++i){
-	evo_tree otree = max_likelihood( new_trees[i], Lf );
+	evo_tree otree = max_likelihood( new_trees[i], Lf, cons, maxj );
 	otree.score = Lf;
 	lnLs[i] = Lf;
 	opt_trees.push_back( otree );
-	cout << "g/i/lnL:\t" << g << "\t" << i << "\t" << lnLs[i] << endl;
+	//cout << "g/i/lnL:\t" << g << "\t" << i << "\t" << lnLs[i] << endl;
       }
     }else{
 
@@ -836,11 +870,11 @@ evo_tree do_evolutionary_algorithm(const int& Npop, const int& Ngen, const int& 
 
 	new_trees.push_back( perturb_tree(Ns, Nchar, trees) );
 		
-	evo_tree otree = max_likelihood( new_trees[Npop + i], Lf );     // new_trees of size 2 Npop
+	evo_tree otree = max_likelihood( new_trees[Npop + i], Lf, cons, maxj );     // new_trees of size 2 Npop
 	otree.score = Lf;
 	lnLs[Npop + i] = Lf;
 	opt_trees.push_back( otree );
-	cout << "g/i/lnL:\t" << g << "\t" << Npop+i << "\t" << lnLs[i] << endl;
+	//cout << "g/i/lnL:\t" << g << "\t" << Npop+i << "\t" << lnLs[i] << endl;
       }
 
       // Randomly sample again?
@@ -897,6 +931,34 @@ evo_tree do_evolutionary_algorithm(const int& Npop, const int& Ngen, const int& 
   return min_lnL_tree;
 }
 
+vector<edge> create_edges_from_nodes( const vector<node>& nodes, const vector<double>& node_times ){
+  vector<edge> enew;
+
+  // Add leaf and internal nodes
+  int root_id = 0;
+  int id = 0;
+  for(int i=0; i<nodes.size(); ++i){
+    if(nodes[i].parent == -1) root_id = nodes[i].id;
+  }
+  
+  for(int i=0; i<nodes.size(); ++i){
+    if(nodes[i].id != root_id && nodes[i].id != root_id-1 && nodes[i].parent != root_id){
+      enew.push_back( edge(id, nodes[i].parent, nodes[i].id, node_times[nodes[i].id] - node_times[nodes[i].parent]) );
+      id++;
+    }
+  }
+  // Add root nodes
+  for(int i=0; i<nodes.size(); ++i){
+  if( nodes[i].parent == root_id && nodes[i].id != root_id-1){
+    enew.push_back( edge(id, nodes[i].parent, nodes[i].id, node_times[nodes[i].id] - node_times[nodes[i].parent]) );
+    id++;
+  }
+  }
+  enew.push_back( edge(id, root_id, Ns, 0) );
+  
+  return enew;
+}
+
 int main (int argc, char ** const argv) {
   setup_rng(0);
 
@@ -906,11 +968,6 @@ int main (int argc, char ** const argv) {
   
   // number of regions
   Ns = atoi(argv[3]);
-  
-  // control parameters
-  //int Npop = 10;
-  //int Ngen = 5000;
-  //int max_static = 10;
 
   int Npop = atoi(argv[4]);
   int Ngen = atoi(argv[5]);
@@ -920,17 +977,8 @@ int main (int argc, char ** const argv) {
   vector<vector<int> > data = read_data_var_regions(datafile, Ns, cn_max);
   Nchar = data.size();
 
-  vector<double> del_t = read_time_info(timefile,Ns);
-  int s0 = 0;
-  for(int i=0; i<del_t.size();++i){
-    if(del_t[i] == 0){
-      s0 = i;
-      break;
-    }
-  }
-  cout << "assigned ref branch to leaf: " << s0 << endl;
-
-  //exit(0);
+  // tobs already defined globally
+  tobs = read_time_info(timefile,Ns);
   
   //vector<vector<int> > vobs; // already defined globally
   for(int nc=0; nc<Nchar; ++nc){
@@ -942,21 +990,27 @@ int main (int argc, char ** const argv) {
   }
 
   if(0){
-    static const int arr1[] = {8,5, 8,1, 9,2, 9,3, 10,9, 10,8, 11,4, 11,10, 7,11, 7,6 };
-    vector<int> e (arr1, arr1 + sizeof(arr1) / sizeof(arr1[0]) );
-    for(int i=0; i<e.size();++i) e[i] = e[i] - 1;
+    // MLE testing
+    
+    //static const int arr1[] = {8,5, 8,1, 9,2, 9,3, 10,9, 10,8, 11,4, 11,10, 7,11, 7,6 };
+    //vector<int> e (arr1, arr1 + sizeof(arr1) / sizeof(arr1[0]) );
+    //for(int i=0; i<e.size();++i) e[i] = e[i] - 1;
   
-    static const double arr2[] = {18.49, 38.49, 51.71, 31.71, 0.51, 3.73, 22.2, 0.013, 0.99, 0};
-    vector<double> l (arr2, arr2 + sizeof(arr2) / sizeof(arr2[0]) );
-    //for(int i=0; i<l.size();++i) l[i] = l[i]/10.0;
+    //static const double arr2[] = {18.49, 38.49, 51.71, 31.71, 0.51, 3.73, 22.2, 0.013, 0.99, 0};
+    //vector<double> l (arr2, arr2 + sizeof(arr2) / sizeof(arr2[0]) );
   
-    evo_tree test_tree(Ns+1, e, l);
+    //evo_tree test_tree(Ns+1, e, l, 1);
+    //test_tree.tobs = tobs;
+    //test_tree.print();
+
+    // read in true tree
+    evo_tree test_tree = read_tree_info("./test/sim-data-1-tree.txt",Ns);
     test_tree.print();
-
-    double mu = 1.0/Nchar;
+    
+    test_tree.mu = 1.0/Nchar;
     double Ls = 0.0;
-
-    Ls = get_likelihood(Ns, Nchar, vobs, test_tree, mu);
+    
+    Ls = get_likelihood(Ns, Nchar, vobs, test_tree);
     cout << "\nOriginal tree -ve likelihood: " << -Ls << endl;
 
     //for(int i=0; i<10; ++i){
@@ -965,42 +1019,95 @@ int main (int argc, char ** const argv) {
     //cout << "\n -ve likelihood: " << mu_p << "\t" << -Ls << endl;
     //}
 
-    test_tree.print();
-
     double Lf = 0;
-    cout << "\n\nRunning optimisation free" << endl;
-    evo_tree min_tree = max_likelihood(test_tree, Lf);
-    cout << "\nMinimised tree likelihood: " << Lf << endl;
+    stringstream sstm;
+    ofstream out_tree;
+
+    cout << "\n\n### Running optimisation: branches free, mu fixed" << endl;
+    evo_tree min_tree = max_likelihood(test_tree, Lf, 0, 0);
+    cout << "\nMinimised tree likelihood / mu : " << Lf << "\t" << min_tree.mu*Nchar <<  endl;
     min_tree.print();
 
-    vector<int> mapping = create_mapping( test_tree, s0 );
-    cout << "##### created mapping #####" << endl;
-    for(int i=0; i< mapping.size(); ++i){
-      cout << "\t" << i+1 << "\t" << mapping[i] << endl;
-    }
+    sstm << "sim-data-" << "00" << "-tree.txt";
+    out_tree.open(sstm.str());
+    min_tree.write(out_tree);
+    out_tree.close();
+    sstm.str("");
+
+    cout << "\n\n### Running optimisation: branches free, mu free" << endl;
+    //reinitialize estimate of mu
+    test_tree.mu = 1.0/Nchar;
+    //test_tree.mu = 1;
     
-    //cout << "\n\nRunning optimisation constrained" << endl;
-    //evo_tree min_tree2 = max_likelihood_cons(test_tree, Lf, s0, del_t);
-    //cout << "\nMinimised tree likelihood: " << Lf << endl;
-    //min_tree2.print();
+    evo_tree min_tree_mu = max_likelihood(test_tree, Lf, 0, 1);
+    cout << "\nMinimised tree likelihood / mu : " << Lf << "\t" << min_tree_mu.mu*Nchar << endl;
+    min_tree_mu.print();
+
+    sstm << "sim-data-" << "01" << "-tree.txt";
+    out_tree.open(sstm.str());
+    min_tree_mu.write(out_tree);
+    out_tree.close();
+    sstm.str("");
     
+    cout << "\n\n### Running optimisation: branches constrained, mu fixed" << endl;
+    test_tree.tobs = tobs;
     
+    evo_tree min_tree2 = max_likelihood(test_tree, Lf, 1, 0);
+    cout << "\nMinimised tree likelihood / mu : " << Lf << "\t" << min_tree2.mu*Nchar <<endl;
+    min_tree2.print();
+
+    sstm << "sim-data-" << "10" << "-tree.txt";
+    out_tree.open(sstm.str());
+    min_tree2.write(out_tree);
+    out_tree.close();
+    sstm.str("");
+    
+    cout << "\n\n### Running optimisation: branches constrained, mu free" << endl;
+    test_tree.tobs = tobs;
+    
+    evo_tree min_tree2_mu = max_likelihood(test_tree, Lf, 1, 1);
+    cout << "\nMinimised tree likelihood / mu : " << Lf << "\t" << min_tree2_mu.mu*Nchar <<endl;
+    min_tree2_mu.print();
+
+    sstm << "sim-data-" << "11" << "-tree.txt";
+    out_tree.open(sstm.str());
+    min_tree2_mu.write(out_tree);
+    out_tree.close();
+    sstm.str("");
   }
   
-  
   if(1){
-    evo_tree min_lnL_tree = do_evolutionary_algorithm(Npop, Ngen, max_static);
+    double mu = 1.0/Nchar;
+    evo_tree min_lnL_tree = do_evolutionary_algorithm(Npop, Ngen, max_static,mu,1,0);
   
     // Write out the top tree
     stringstream sstm;
     //cout << "Best fitting tree, -ve lnL = " << global_min << endl;
     min_lnL_tree.print();
-    sstm << "sim-data-" << "1" << "-tree.txt";
+    sstm << "results-maxL-tree.txt";
     ofstream out_tree(sstm.str());
     min_lnL_tree.write(out_tree);
     out_tree.close();
     sstm.str("");
+
+
+    if( accumulate(tobs.begin(), tobs.end(), 0) > 0 ){
+      // in this case the time points are not all zero and we can try and maximise the likelihood wrt mu
+      cout << "\n\n### Running optimisation: branches constrained, mu free" << endl;
+      min_lnL_tree.tobs = tobs;
+      min_lnL_tree.mu = mu;
+      
+      double Lf = 0;
+      evo_tree min_tree_mu = max_likelihood(min_lnL_tree, Lf, 1, 1);
+      cout << "\nMinimised tree likelihood / mu : " << Lf << "\t" << min_tree_mu.mu*Nchar <<endl;
+      min_tree_mu.print();
+
+      sstm << "results-maxL-mu-tree.txt";
+      out_tree.open(sstm.str());
+      min_tree_mu.write(out_tree);
+      out_tree.close();
+      sstm.str("");
+    }
   }
   
-  //evo_tree min_lnL_tree = do_greedy_algorithm();
 }
