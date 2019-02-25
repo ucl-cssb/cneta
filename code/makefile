@@ -1,5 +1,5 @@
 
-all: sveta svtreeml
+all: sveta svtreeml svtreemu
 
 sveta: sveta.cpp
 	cd gzstream/ && make
@@ -8,6 +8,11 @@ sveta: sveta.cpp
 svtreeml: svtreeml.cpp
 	cd gzstream/ && make
 	g++ -std=gnu++11 svtreeml.cpp -o svtreeml -L/usr/local/lib/ -lgsl -lgslcblas -L./gzstream -lgzstream -lz -I. -I/usr/local/include -I./gzstream
+
+svtreemu: svtreemu.cpp
+	cd gzstream/ && make
+	g++ -std=gnu++11 svtreemu.cpp -o svtreemu -L/usr/local/lib/ -lgsl -lgslcblas -L./gzstream -lgzstream -lz -I. -I/usr/local/include -I./gzstream
+
 
 #./sveta ./ 5 1
 

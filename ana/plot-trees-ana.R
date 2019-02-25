@@ -28,7 +28,7 @@ make.tree <- function(d, labels){
 
 plot.tree <- function(tree){
    p <- ggtree(tree, size=0.5, linetype=1) #+ geom_rootedge() 
-   p <- p + geom_tiplab(size=2.2)
+   p <- p + geom_tiplab(align=TRUE) + theme_tree2() + xlim(NA, 130)
    p <- p + geom_text2(aes(subset=!isTip,label=node), hjust=-.3)
    edge=data.frame(tree$edge, edge_num=1:nrow(tree$edge), edge_len=tree$edge.length)
    colnames(edge)=c("parent", "node", "edge_num", "edge_len")
@@ -42,17 +42,19 @@ da <- read.table(annot.file,header=T)
 da$sample <- as.character(da$sample)
 
 
-    if(branch.num==0){
-        dd$length <- as.numeric(dd$length)
-	dd <- dd[,c(1,2,3)]
-    }
-    if(branch.num==1){
-	dd$nmut <- as.numeric(dd$nmut)
-	dd <- dd[,c(1,2,5)]
-    }
+if(branch.num==0){
+   dd$length <- as.numeric(dd$length)
+   dd[ which(dd$length < 1e-3), ]$length <- 0
 
-    mytree <- make.tree(dd, as.character(da$sample))
-    pdf(out.file)
-    plot.tree(mytree)
-    dev.off()
+   dd <- dd[,c(1,2,3)]
+}
+if(branch.num==1){
+   dd$nmut <- as.numeric(dd$nmut)
+   dd <- dd[,c(1,2,5)]
+}
+
+mytree <- make.tree(dd, as.character(da$sample))
+pdf(out.file)
+plot.tree(mytree)
+dev.off()
 

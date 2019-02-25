@@ -12,6 +12,9 @@ Nstop=3
 
 code/svtreeml $input $times $Ns $Npop $Ngen $Nstop
 Rscript ana/plot-trees-single.R results-maxL-tree.txt 0 #>& /dev/null
+
+mu_est=1.0
+code/svtreemu $input $times results-maxL-tree.txt $Ns $mu_est
 Rscript ana/plot-trees-single.R results-maxL-mu-tree.txt 0 #>& /dev/null
 
 
