@@ -19,7 +19,7 @@ odir=./test
 
 # Create a ML tree
 ofile=$odir/results-maxL-tree-sim1.txt
-code/svtreeml -c $input -t $times -p $Npop -g $Ngen -e $Nstop -o $ofile
+code/svtreeml -c $input -t $times -s $Ns -p $Npop -g $Ngen -e $Nstop -o $ofile
 # > $odir/std-maxL-tree-sim1
 
 # Do bootstapping
@@ -27,11 +27,11 @@ for i in {1..10..1}
 do
   echo $i
   ofile=$bdir/results-maxL-sim1-btree-$i.txt
-  code/svtreeml -c $input -t $times -s $Ns -p $Npop -g $Ngen -e $Nstop -b 1 -o $ofile > $bdir/std-maxL-sim1-btree-$i
+  code/svtreeml -c $input -t $times -s $Ns -p $Npop -g $Ngen -e $Nstop -o $ofile -b 1 > $bdir/std-maxL-sim1-btree-$i
 done
 
 # Draw the ML tree with bootstapping support
 Rscript ana/plot-consensus.R $bdir $ofile $odir/results-maxL-tree-sim1-bootstap.pdf
 
 # Find the number of mutations along edges of the simulated tree
-less $minfo | sed '1,20d' | grep -v "MUT" | grep -v "eid" | sed '/^$/d' - | awk '{count[$1]++} END{for(e in count) print e, count[e]}' > $odir/sim-data-1-mut-count.txt
+# less $minfo | sed '1,20d' | grep -v "MUT" | grep -v "eid" | sed '/^$/d' - | awk '{count[$1]++} END{for(e in count) print e, count[e]}' > $odir/sim-data-1-mut-count.txt
