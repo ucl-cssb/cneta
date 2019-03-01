@@ -1,6 +1,6 @@
 ##!/usr/bin/env bash
 
-# fit tree model to copy number profile
+# Create a ML tree from copy number profile and do bootstapping
 
 # input parameters
 input=./test/sim-data-1-cn.txt.gz
@@ -17,17 +17,20 @@ bdir=./test/bootstrap
 mkdir $bdir
 odir=./test
 
+# Create a ML tree
 ofile=$odir/results-maxL-tree-sim1.txt
-# code/svtreeml -c $input -t $times -p $Npop -g $Ngen -e $Nstop -o $ofile
-#> $odir/std-maxL-tree-sim1
+code/svtreeml -c $input -t $times -p $Npop -g $Ngen -e $Nstop -o $ofile
+# > $odir/std-maxL-tree-sim1
 
-# for i in {1..100..1}
-# do
-#   echo $i
-#   ofile=$bdir/results-maxL-sim1-btree-$i.txt
-#   code/svtreeml -c $input -t $times -s $Ns -p $Npop -g $Ngen -e $Nstop -b 1 -o $ofile > $bdir/std-maxL-sim1-btree-$i
-# done
+# Do bootstapping
+for i in {1..10..1}
+do
+  echo $i
+  ofile=$bdir/results-maxL-sim1-btree-$i.txt
+  code/svtreeml -c $input -t $times -s $Ns -p $Npop -g $Ngen -e $Nstop -b 1 -o $ofile > $bdir/std-maxL-sim1-btree-$i
+done
 
+# Draw the ML tree with bootstapping support
 Rscript ana/plot-consensus.R $bdir $ofile $odir/results-maxL-tree-sim1-bootstap.pdf
 
 # Find the number of mutations along edges of the simulated tree
