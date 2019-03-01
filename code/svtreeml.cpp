@@ -24,6 +24,7 @@
 #include <gsl/gsl_multimin.h>
 
 #include <boost/algorithm/string.hpp>
+#include <boost/program_options.hpp>
 
 #include "gzstream.h"
 
@@ -33,10 +34,12 @@
 
 using namespace std;
 
+
 gsl_rng * r;
 
 int debug = 0;
-double LARGE_LNL = -1e9;
+const double LARGE_LNL = -1e9;
+const int CN_MAX = 4;
 
 // global values for gsl function minimization
 vector<vector<int> > vobs;
@@ -78,7 +81,7 @@ vector<double> read_time_info(const string& filename, const int& Ns){
       if(line.empty()) continue;
 
       std::vector<std::string> split;
-      std::string buf; 
+      std::string buf;
       stringstream ss(line);
       while (ss >> buf) split.push_back(buf);
 
@@ -104,7 +107,7 @@ evo_tree read_tree_info(const string& filename, const int& Ns){
 
   vector<edge> edges;
   int id = 0;
-  
+
   ifstream infile (filename.c_str());
   if (infile.is_open()){
     std::string line;
@@ -112,7 +115,7 @@ evo_tree read_tree_info(const string& filename, const int& Ns){
       if(line.empty()) continue;
 
       std::vector<std::string> split;
-      std::string buf; 
+      std::string buf;
       stringstream ss(line);
       while (ss >> buf) split.push_back(buf);
 
@@ -132,7 +135,7 @@ evo_tree read_tree_info(const string& filename, const int& Ns){
 
   evo_tree new_tree(Ns+1, edges);
   //new_tree.print();
-  
+
   return new_tree;
 }
 
@@ -142,18 +145,18 @@ vector<vector<int> > read_data_var_regions(const string& filename, const int& Ns
 
   // data indexed by [sample][data][ chr, bid, cn ]
   for(int i=0; i<Ns; ++i) s_info.push_back( vector< vector<int> >(4401, vector<int>(3,0) ) );
-  
+
   //ifstream infile (filename.c_str());
   igzstream infile (filename.c_str());
 
-  int counter = 0; 
+  int counter = 0;
   //if (infile.is_open()){
     std::string line;
     while(!getline(infile,line).eof()){
       if(line.empty()) continue;
-      
+
       std::vector<std::string> split;
-      std::string buf; 
+      std::string buf;
       stringstream ss(line);
       while (ss >> buf) split.push_back(buf);
 
@@ -168,16 +171,16 @@ vector<vector<int> > read_data_var_regions(const string& filename, const int& Ns
 
       if(counter >= 4401) counter = 0;
     }
-      
+
     //}else{
     // std::cerr << "Error: open of data file unsuccessful: " <<  filename << std::endl;
     //exit(1);
     //}
   cout << "\tSuccessfully read input file" << endl;
-  
+
   // Loop over and output only the regions that have varied
   vector<int> var_bins(4401,0);
-  for(int k=0; k<4401; ++k){ 
+  for(int k=0; k<4401; ++k){
     int sum = 0;
     for(int i=0; i<Ns; ++i){
       sum += abs(s_info[i][k][2]);
@@ -200,7 +203,7 @@ vector<vector<int> > read_data_var_regions(const string& filename, const int& Ns
   cout << "\tFound variable bins:\t" << nvar << endl;
 
   // We now need to convert runs of variable bins into segments of constant cn values
-  
+
   vector<vector<int> > segs;
   for(int k=0; k<4401;){
 
@@ -233,7 +236,7 @@ vector<vector<int> > read_data_var_regions(const string& filename, const int& Ns
       }
       int seg_end = s_info[0][k-1][1];
       int id_end = k-1;
-      
+
       //cout << "seg_end:\t" << seg_end << "\t" << k << endl;
       //cout << endl;
 
@@ -242,7 +245,7 @@ vector<vector<int> > read_data_var_regions(const string& filename, const int& Ns
       seg.push_back(id_start);
       seg.push_back(id_end);
       seg.push_back(seg_start);
-      seg.push_back(seg_end); 
+      seg.push_back(seg_end);
       segs.push_back(seg);
 
       // rewind k by one to get the split segment start correct
@@ -250,10 +253,10 @@ vector<vector<int> > read_data_var_regions(const string& filename, const int& Ns
     }
     ++k;
   }
-  cout << "\tFound segments:\t\t" << segs.size() << endl;  
+  cout << "\tFound segments:\t\t" << segs.size() << endl;
 
   vector<vector<int> > ret;
-  
+
   for(int i=0; i<segs.size(); ++i){
     vector<double> av_cn(Ns,0);
     bool valid = true;
@@ -273,7 +276,7 @@ vector<vector<int> > read_data_var_regions(const string& filename, const int& Ns
       for(int j=0; j<Ns; ++j) cout << "\t" << av_cn[j];
       cout << "\t" << valid << endl;
     }
-      
+
     if( valid == true ){
       vector<int> vals;
       vals.push_back( segs[i][0] ); // chr
@@ -286,7 +289,7 @@ vector<vector<int> > read_data_var_regions(const string& filename, const int& Ns
       }
       ret.push_back( vals );
     }
-    
+
   }
   cout << "\tUsing segments:\t\t" << ret.size() << endl;
   for(int i=0; i<ret.size(); ++i){
@@ -295,9 +298,9 @@ vector<vector<int> > read_data_var_regions(const string& filename, const int& Ns
     }
     cout << endl;
   }
-  
+
   return ret;
-  
+
 }
 
 string create_tree_string( evo_tree tree ){
@@ -308,7 +311,7 @@ string create_tree_string( evo_tree tree ){
       sstm << ";" << tree.nodes[i].daughters[0]+1 << ";" << tree.nodes[i].daughters[1]+1;
     }
     sstm << ":";
-  }  
+  }
   return sstm.str();
 }
 
@@ -321,14 +324,14 @@ string order_tree_string( string tree ){
   for(int i=0; i<split1.size()-1; ++ i){     // split creates an empty string at the end
     //sstm << split1[i];
     //cout << "\t" << split1[i] << endl;
-    
+
     vector<string> split2;
     boost::split(split2, split1[i], [](char c){return c == ';';});
 
     if( split2.size() == 1){
       sstm << split1[i];
     }
-    else{ 
+    else{
       sstm << split2[0] << ";"; //  << split2[1] << ";" << split2[2];
       if( atoi(split2[1].c_str() ) < atoi(split2[2].c_str() ) ){
 	sstm << split2[1] << ";" << split2[2];
@@ -344,7 +347,7 @@ string order_tree_string( string tree ){
 
 evo_tree perturb_tree( const int& Ns, const int& Nchar, const evo_tree& tree ){
   //if(debug) cout << "\tperturb_tree" << endl;
-  
+
   // swap two leaf nodes: 0 to Ns-1 are the samples, Ns is germline, Ns+1 is root
   vector<int> n_0;
   for(int i=0; i<Ns; ++i) n_0.push_back( i );
@@ -375,7 +378,7 @@ evo_tree perturb_tree( const int& Ns, const int& Nchar, const evo_tree& tree ){
   evo_tree new_tree(Ns+1, enew);
   new_tree.mu = tree.mu;
   new_tree.tobs = tree.tobs;
-  
+
   //cout << "\tntree: ";
   //cout << create_tree_string( new_tree ) << endl;
 
@@ -383,7 +386,7 @@ evo_tree perturb_tree( const int& Ns, const int& Nchar, const evo_tree& tree ){
   //cout << "\totree: ";
   //cout << ordered << endl;
   //cout << endl;
-  
+
   return new_tree;
 }
 
@@ -397,7 +400,7 @@ evo_tree perturb_tree( const int& Ns, const int& Nchar, vector<evo_tree> trees )
 
     // generate a new tree
     evo_tree ttree = perturb_tree( Ns, Nchar, trees[ind] );
-    
+
     string tstring = order_tree_string( create_tree_string( ttree ) );
 
     if ( searched_trees.find(tstring) == searched_trees.end() ) {
@@ -405,7 +408,7 @@ evo_tree perturb_tree( const int& Ns, const int& Nchar, vector<evo_tree> trees )
       searched_trees[ tstring ] = 1;
 
       return ttree;
-      
+
     }
     else {
       //cout << "Tree already present" << endl;
@@ -418,7 +421,7 @@ evo_tree perturb_tree( const int& Ns, const int& Nchar, vector<evo_tree> trees )
       return ttree;
     }
   }
-  
+
 }
 
 
@@ -442,7 +445,7 @@ double get_transition_prob(const double& mu, double blength, const int& sk, cons
   }
   if(model == 1){
     // this model assumes a band structure on the Q matrix
-    
+
     if( sk == sj ){
       if( sk == 0 || sk == 4 ){
 	exp(-mu*blength) + (1 - exp(-mu*blength))/2.0;
@@ -459,8 +462,8 @@ double get_transition_prob(const double& mu, double blength, const int& sk, cons
       }
       else{
 	return 0;
-      } 
-    }  
+      }
+    }
   }
 }
 
@@ -478,9 +481,9 @@ double get_likelihood(const int& Ns, const int& Nchar, const vector<vector<int> 
       for(int i=0; i<Ns; ++i) cout << "\t" << obs[i];
       cout << endl;
     }
-      
+
     vector<vector<double> > L_sk_k( rtree.ntotn, vector<double>(nstate,0) );
-  
+
     for(int i=0; i<Ns; ++i){
       for(int j=0; j<nstate; ++j){
 	if( j == obs[i] ) L_sk_k[i][j] = 1.0;
@@ -498,7 +501,7 @@ double get_likelihood(const int& Ns, const int& Nchar, const vector<vector<int> 
 	cout << endl;
       }
     }
-    
+
     //create a list of nodes to loop over, making sure the root is last
     vector<int> knodes;
     for(int k=Ns+2; k<rtree.ntotn; ++k) knodes.push_back( k );
@@ -506,17 +509,17 @@ double get_likelihood(const int& Ns, const int& Nchar, const vector<vector<int> 
 
     for(int kn=0; kn<knodes.size(); ++kn){
       int k = knodes[kn];
-    
+
       int ni = rtree.edges[rtree.nodes[k].e_ot[0]].end;
       double bli = rtree.edges[rtree.nodes[k].e_ot[0]].length;
       int nj = rtree.edges[rtree.nodes[k].e_ot[1]].end;
       double blj = rtree.edges[rtree.nodes[k].e_ot[1]].length;
-      
+
       if(0) cout << "node:" << rtree.nodes[k].id + 1 << " -> " << ni+1 << " , " << bli << "\t" <<  nj+1 << " , " << blj << endl;
-      
+
       //loop over possible values of sk
       for(int sk=0; sk<nstate; ++sk){
-    
+
 	double Li = 0;
 	// loop over possible si
 	for(int si=0; si<nstate; ++si){
@@ -553,7 +556,7 @@ double get_likelihood(const int& Ns, const int& Nchar, const vector<vector<int> 
 }
 
 double my_f (const gsl_vector *v, void *params){
-  
+
   evo_tree *tree = (evo_tree*) params;
 
   //create a new tree with the current branch lengths
@@ -566,7 +569,7 @@ double my_f (const gsl_vector *v, void *params){
   }
   evo_tree new_tree(Ns+1, enew);
   new_tree.mu = tree->mu;
-  
+
   return -1.0*get_likelihood(Ns, Nchar, vobs, new_tree);
 }
 
@@ -584,12 +587,12 @@ double my_f_mu (const gsl_vector *v, void *params){
   }
   evo_tree new_tree(Ns+1, enew);
   new_tree.mu = exp( gsl_vector_get(v,tree->nedge-1) );  // 0 to nedge-2 are epars, nedge-1 is mu
-  
+
   return -1.0*get_likelihood(Ns, Nchar, vobs, new_tree);
 }
 
 double my_f_cons (const gsl_vector *v, void *params){
-  
+
   evo_tree *tree = (evo_tree*) params;
 
   //create a new tree with the current parameters observing timing constraints
@@ -611,12 +614,12 @@ double my_f_cons (const gsl_vector *v, void *params){
 
   evo_tree new_tree(tree->nleaf, enew, exp( gsl_vector_get(v, count)), tree->tobs);
   new_tree.mu = tree->mu;
-  
+
   return -1.0*get_likelihood(Ns, Nchar, vobs, new_tree);
 }
 
 double my_f_cons_mu (const gsl_vector *v, void *params){
-  
+
   evo_tree *tree = (evo_tree*) params;
 
   //create a new tree with the current parameters observing timing constraints
@@ -638,14 +641,14 @@ double my_f_cons_mu (const gsl_vector *v, void *params){
 
   evo_tree new_tree(tree->nleaf, enew, exp( gsl_vector_get(v, count)), tree->tobs);
   new_tree.mu = exp( gsl_vector_get(v, count+1) );
-  
+
   return -1.0*get_likelihood(Ns, Nchar, vobs, new_tree);
 }
-  
+
 
 
 // given a tree, maximise the branch lengths (and optionally mu) assuming branch lengths are independent or constrained in time
-evo_tree max_likelihood(evo_tree& rtree, double& minL, int cons=0, int maxj=0){
+evo_tree max_likelihood(evo_tree& rtree, double& minL, const double ssize, const double tolerance, const int miter, int cons=0, int maxj=0){
 
   const gsl_multimin_fminimizer_type *T = gsl_multimin_fminimizer_nmsimplex2;
   gsl_multimin_fminimizer *s = NULL;
@@ -654,7 +657,7 @@ evo_tree max_likelihood(evo_tree& rtree, double& minL, int cons=0, int maxj=0){
   int npar_ne;
   int npar;
   gsl_vector *x;
-  
+
   if(cons == 0){
     npar_ne = rtree.nedge-1;
     if(maxj==0){
@@ -662,7 +665,7 @@ evo_tree max_likelihood(evo_tree& rtree, double& minL, int cons=0, int maxj=0){
     }else{
       npar = npar_ne + 1;
     }
-      
+
     // initialise the best guess branch length and mu if required
     x = gsl_vector_alloc (npar);
     for(int i=0; i<npar_ne; ++i){
@@ -675,7 +678,7 @@ evo_tree max_likelihood(evo_tree& rtree, double& minL, int cons=0, int maxj=0){
     }else{
       minex_func.f = my_f_mu;
     }
-    
+
   }else{
     npar_ne = rtree.nintedge + 1;
     if(maxj==0){
@@ -685,7 +688,7 @@ evo_tree max_likelihood(evo_tree& rtree, double& minL, int cons=0, int maxj=0){
     }
 
     x = gsl_vector_alloc (npar);
-    
+
     // initialise with internal edges
     for(int i=0; i<rtree.nintedge; ++i){
       gsl_vector_set (x, i, log(rtree.intedges[i]->length));
@@ -695,7 +698,7 @@ evo_tree max_likelihood(evo_tree& rtree, double& minL, int cons=0, int maxj=0){
     gsl_vector_set (x, rtree.nintedge, log(rtree.get_total_time()) );
 
     if(maxj==1) gsl_vector_set (x, npar_ne, log(rtree.mu) );
-    
+
     if(maxj==0){
       minex_func.f = my_f_cons;
     }else{
@@ -703,66 +706,66 @@ evo_tree max_likelihood(evo_tree& rtree, double& minL, int cons=0, int maxj=0){
     }
   }
   evo_tree *p = &rtree;
-  void * pv = p;  
-  
+  void * pv = p;
+
   // Set initial step sizes to 1
   //cout << "numbers: nedge / nintedge / npar / x->size: " << rtree.nedge << "\t" << rtree.nintedge << "\t" << npar << "\t" << x->size << endl;
   gsl_vector* ss = gsl_vector_alloc (npar);
-  gsl_vector_set_all (ss, 0.01);
-  
+  gsl_vector_set_all (ss, ssize);
+
   // Initialize method and iterate
   minex_func.n = npar;
   minex_func.params = pv;
-  
+
   s = gsl_multimin_fminimizer_alloc (T, npar);
   gsl_multimin_fminimizer_set (s, &minex_func, x, ss);
- 
+
   size_t iter = 0;
   int status;
   double size;
   do{
     iter++;
     status = gsl_multimin_fminimizer_iterate(s);
-      
+
     if (status) break;
 
     size = gsl_multimin_fminimizer_size (s);
-    status = gsl_multimin_test_size (size, 1e-2);
+    status = gsl_multimin_test_size (size, tolerance);
 
     if(0){
-      printf ("%5d, %10.3e, %10.3e, f() = %7.3f, size = %.3f\n", 
+      printf ("%5lu, %10.3e, %10.3e, f() = %7.3f, size = %.3f\n",
 	      iter,
-	      exp(gsl_vector_get (s->x, 0)), 
-	      exp(gsl_vector_get (s->x, s->x->size-1)), 
+	      exp(gsl_vector_get (s->x, 0)),
+	      exp(gsl_vector_get (s->x, s->x->size-1)),
 	      s->fval, size);
     }
-      
+
     if (status == GSL_SUCCESS){
       if(0){
 	printf ("converged to minimum at\n");
-    
-	printf ("%5d, %10.3e, %10.3e, f() = %7.3f, size = %.3f\n", 
+
+	printf ("%5lu, %10.3e, %10.3e, f() = %7.3f, size = %.3f\n",
 		iter,
-		exp(gsl_vector_get (s->x, 0)), 
-		exp(gsl_vector_get (s->x, s->x->size-1)), 
+		exp(gsl_vector_get (s->x, 0)),
+		exp(gsl_vector_get (s->x, s->x->size-1)),
 		s->fval, size);
       }
     }
 
   }
-  while (status == GSL_CONTINUE && iter < 2000);
+  while (status == GSL_CONTINUE && iter < miter);
 
   if( status == GSL_CONTINUE ){
     cout << "### WARNING: maximum likelihood did not converge" << endl;
   }
-  
+
   // create a new tree
   vector<edge> enew;
   for(int i=0; i<rtree.nedge; ++i){
     enew.push_back( rtree.edges[i] );
   }
-  
-  if(cons == 0){  
+
+  if(cons == 0){
 
     for(int i=0; i<npar_ne; ++i){
       enew[i].length = exp(gsl_vector_get(s->x, i));
@@ -773,7 +776,7 @@ evo_tree max_likelihood(evo_tree& rtree, double& minL, int cons=0, int maxj=0){
     }else{
       new_tree.mu = exp(gsl_vector_get(s->x, npar_ne));
     }
-      
+
     minL = s->fval;
     gsl_vector_free(x);
     gsl_vector_free(ss);
@@ -798,7 +801,7 @@ evo_tree max_likelihood(evo_tree& rtree, double& minL, int cons=0, int maxj=0){
     }else{
       new_tree.mu = exp(gsl_vector_get(s->x, npar_ne));
     }
-    
+
     minL = s->fval;
     gsl_vector_free(x);
     gsl_vector_free(ss);
@@ -806,23 +809,23 @@ evo_tree max_likelihood(evo_tree& rtree, double& minL, int cons=0, int maxj=0){
 
     return new_tree;
   }
- 
+
 }
 
-evo_tree do_evolutionary_algorithm(const int& Npop, const int& Ngen, const int& max_static, const double& mu, int cons=0, int maxj=0){
+evo_tree do_evolutionary_algorithm(const int& Npop, const int& Ngen, const int& max_static, const double& mu, const double ssize, const double tolerance, const int miter, int cons=0, int maxj=0){
 
   //cout << "Running evolutionary algorithm" << endl;
-  
+
   // create initial population of trees. Sample from coalescent trees
   vector<evo_tree> trees;
-  
+
   vector<double> lnLs(2*Npop,0);
   for(int i=0; i<Npop; ++i){
     evo_tree rtree = generate_coal_tree(Ns);
     rtree.mu = mu;
     rtree.tobs = tobs;
     trees.push_back( rtree );
-    
+
     string tstring = order_tree_string( create_tree_string( rtree ) );
     searched_trees[ tstring ] = 1;
   }
@@ -830,7 +833,7 @@ evo_tree do_evolutionary_algorithm(const int& Npop, const int& Ngen, const int& 
   evo_tree min_lnL_tree;
   double Lf = 0;
   int count_static = 0;
-  
+
   for(int g=0; g<Ngen; ++g){
     // Growth stage: create Npop copies + Npop copies with mutation
     // The top scoring trees have already been scored and optimised
@@ -841,15 +844,15 @@ evo_tree do_evolutionary_algorithm(const int& Npop, const int& Ngen, const int& 
       for(int i=0; i<Npop; ++i){
 	new_trees.push_back( trees[i] );
       }
-    
+
       for(int i=0; i<Npop; ++i){
 	//new_trees.push_back( perturb_tree(Ns, Nchar, trees[i]) );
 	new_trees.push_back( perturb_tree(Ns, Nchar, trees) );
       }
-      
+
       // Selection: score the trees
       for(int i=0; i<2*Npop; ++i){
-	evo_tree otree = max_likelihood( new_trees[i], Lf, cons, maxj );
+	evo_tree otree = max_likelihood(new_trees[i], Lf, ssize, tolerance, miter, cons, maxj);
 	otree.score = Lf;
 	lnLs[i] = Lf;
 	opt_trees.push_back( otree );
@@ -869,8 +872,8 @@ evo_tree do_evolutionary_algorithm(const int& Npop, const int& Ngen, const int& 
 	//new_trees.push_back( perturb_tree(Ns, Nchar, trees[i]) );       // trees is of size Npop
 
 	new_trees.push_back( perturb_tree(Ns, Nchar, trees) );
-		
-	evo_tree otree = max_likelihood( new_trees[Npop + i], Lf, cons, maxj );     // new_trees of size 2 Npop
+
+	evo_tree otree = max_likelihood(new_trees[Npop + i], Lf, ssize, tolerance, miter, cons, maxj);     // new_trees of size 2 Npop
 	otree.score = Lf;
 	lnLs[Npop + i] = Lf;
 	opt_trees.push_back( otree );
@@ -880,7 +883,7 @@ evo_tree do_evolutionary_algorithm(const int& Npop, const int& Ngen, const int& 
       // Randomly sample again?
 
     }
-    
+
     vector<int> index(2*Npop);
     int x=0;
     iota( index.begin(), index.end(), x++);
@@ -907,7 +910,7 @@ evo_tree do_evolutionary_algorithm(const int& Npop, const int& Ngen, const int& 
       count_static = 0;
 
       min_lnL_tree.print();
-      
+
     }else{
       cout << "min static" << endl;
       count_static += 1;
@@ -917,9 +920,9 @@ evo_tree do_evolutionary_algorithm(const int& Npop, const int& Ngen, const int& 
       cout << "\t### static likelihood function. Finishing on ngen = " << g << endl;
       break;
     }
-    
+
     fill(lnLs.begin(), lnLs.end(), 0);
-    
+
     if( exhausted_tree_search == true ){
       cout << "\tperturb_tree struggling to find new topologies. Either exhausted possible trees or local minimum" << endl;
       break;
@@ -940,7 +943,7 @@ vector<edge> create_edges_from_nodes( const vector<node>& nodes, const vector<do
   for(int i=0; i<nodes.size(); ++i){
     if(nodes[i].parent == -1) root_id = nodes[i].id;
   }
-  
+
   for(int i=0; i<nodes.size(); ++i){
     if(nodes[i].id != root_id && nodes[i].id != root_id-1 && nodes[i].parent != root_id){
       enew.push_back( edge(id, nodes[i].parent, nodes[i].id, node_times[nodes[i].id] - node_times[nodes[i].parent]) );
@@ -955,31 +958,87 @@ vector<edge> create_edges_from_nodes( const vector<node>& nodes, const vector<do
   }
   }
   enew.push_back( edge(id, root_id, Ns, 0) );
-  
+
   return enew;
 }
 
 int main (int argc, char ** const argv) {
+  int Npop, Ngen, max_static, miter, bootstrap;
+  double tolerance, ssize;
+  string datafile, timefile, ofile;
+
+  namespace po = boost::program_options;
+  po::options_description generic("Generic options");
+  generic.add_options()
+    ("version,v", "print version string")
+    ("help,h", "produce help message")
+    ;
+  po::options_description required("Required parameters");
+  required.add_options()
+     ("cfile,c", po::value<string>(&datafile)->required(), "input copy number profile file")
+     ("tfile,t", po::value<string>(&timefile)->required(), "input time information file")
+     ;
+  po::options_description optional("Optional parameters");
+  optional.add_options()
+    ("nsample,s", po::value<int>(&Ns)->default_value(5), "number of samples or regions")
+    ("npop,p", po::value<int>(&Npop)->default_value(100), "number of population")
+    ("ngen,g", po::value<int>(&Ngen)->default_value(50), "number of generation")
+    ("nstop,e", po::value<int>(&max_static)->default_value(3), "stop condition")
+    ("tolerance,r", po::value<double>(&tolerance)->default_value(1e-2), "tolerance value")
+    ("miter,m", po::value<int>(&miter)->default_value(2000), "maximum number of iterations in maximization")
+    ("ssize,z", po::value<double>(&ssize)->default_value(0.01), "initial step size")
+    ("bootstrap,b", po::value<int>(&bootstrap)->default_value(0), "doing bootstrap or not")
+    ("ofile,o", po::value<string>(&ofile)->default_value("results-maxL-tree.txt"), "output tree file")
+    ;
+
+  po::options_description cmdline_options;
+  cmdline_options.add(generic).add(required).add(optional);
+  po::variables_map vm;
+
+  try {
+      po::store(po::command_line_parser(argc, argv).options(cmdline_options).run(), vm);
+
+      if(vm.count("help")){
+          cout << cmdline_options << endl;
+          return 1;
+      }
+
+      if(vm.count("version")){
+          cout << "svtreeml [version 0.1], a program to build a phylogenetic tree from copy number profile" << endl;
+          return 1;
+      }
+
+      po::notify(vm);
+
+      datafile = vm["cfile"].as<string>();
+      timefile = vm["tfile"].as<string>();
+      Ns = vm["nsample"].as<int>();
+      Npop = vm["npop"].as<int>();
+      Ngen = vm["ngen"].as<int>();
+      max_static = vm["nstop"].as<int>();
+      tolerance = vm["tolerance"].as<double>();
+      miter = vm["miter"].as<int>();
+      ssize = vm["ssize"].as<double>();
+      // cout << "Input: " << endl;
+      // cout << " Data file: " << datafile << endl;
+      // cout << " Time file: " << timefile << endl;
+      // cout << " Number of samples: " << Ns << endl;
+      // cout << " Number of population: " << Npop << endl;
+      // cout << " Number of generation: " << Ngen << endl;
+      // cout << " Tolerance value: " << tolerance << endl;
+  } catch (const std::exception& e) {
+        std::cerr << e.what() << std::endl;
+        return 1;
+  }
+
   setup_rng(0);
 
-  // input cn file and temporal information
-  string datafile(argv[1]);
-  string timefile(argv[2]);
-  
-  // number of regions
-  Ns = atoi(argv[3]);
-
-  int Npop = atoi(argv[4]);
-  int Ngen = atoi(argv[5]);
-  int max_static = atoi(argv[6]);
-
-  int cn_max = 4;
-  vector<vector<int> > data = read_data_var_regions(datafile, Ns, cn_max);
+  vector<vector<int> > data = read_data_var_regions(datafile, Ns, CN_MAX);
   Nchar = data.size();
 
   // tobs already defined globally
   tobs = read_time_info(timefile,Ns);
-  
+
   //vector<vector<int> > vobs; // already defined globally
   for(int nc=0; nc<Nchar; ++nc){
     vector<int> obs;
@@ -989,16 +1048,31 @@ int main (int argc, char ** const argv) {
     vobs.push_back( obs );
   }
 
+  // Do a bootstrap replicate
+  if(bootstrap){
+      // create a copy of vobs to resample
+      vector<vector<int> > vobs_copy = vobs;
+      vobs.clear();
+      // cout << "rows selected: ";
+      for(int nc=0; nc<Nchar; ++nc){
+          // randomly select a row
+         int i = gsl_rng_uniform_int(r, Nchar);
+         // cout << i << "\t";
+         vobs.push_back(vobs_copy[i]);
+      }
+      // cout << endl;
+  }
+
   if(0){
     // MLE testing
-    
+
     //static const int arr1[] = {8,5, 8,1, 9,2, 9,3, 10,9, 10,8, 11,4, 11,10, 7,11, 7,6 };
     //vector<int> e (arr1, arr1 + sizeof(arr1) / sizeof(arr1[0]) );
     //for(int i=0; i<e.size();++i) e[i] = e[i] - 1;
-  
+
     //static const double arr2[] = {18.49, 38.49, 51.71, 31.71, 0.51, 3.73, 22.2, 0.013, 0.99, 0};
     //vector<double> l (arr2, arr2 + sizeof(arr2) / sizeof(arr2[0]) );
-  
+
     //evo_tree test_tree(Ns+1, e, l, 1);
     //test_tree.tobs = tobs;
     //test_tree.print();
@@ -1006,10 +1080,10 @@ int main (int argc, char ** const argv) {
     // read in true tree
     evo_tree test_tree = read_tree_info("./test/sim-data-1-tree.txt",Ns);
     test_tree.print();
-    
+
     test_tree.mu = 1.0/Nchar;
     double Ls = 0.0;
-    
+
     Ls = get_likelihood(Ns, Nchar, vobs, test_tree);
     cout << "\nOriginal tree -ve likelihood: " << -Ls << endl;
 
@@ -1024,7 +1098,7 @@ int main (int argc, char ** const argv) {
     ofstream out_tree;
 
     cout << "\n\n### Running optimisation: branches free, mu fixed" << endl;
-    evo_tree min_tree = max_likelihood(test_tree, Lf, 0, 0);
+    evo_tree min_tree = max_likelihood(test_tree, Lf, ssize, tolerance, miter, 0, 0);
     cout << "\nMinimised tree likelihood / mu : " << Lf << "\t" << min_tree.mu*Nchar <<  endl;
     min_tree.print();
 
@@ -1038,8 +1112,8 @@ int main (int argc, char ** const argv) {
     //reinitialize estimate of mu
     test_tree.mu = 1.0/Nchar;
     //test_tree.mu = 1;
-    
-    evo_tree min_tree_mu = max_likelihood(test_tree, Lf, 0, 1);
+
+    evo_tree min_tree_mu = max_likelihood(test_tree, Lf, ssize, tolerance, miter, 0, 1);
     cout << "\nMinimised tree likelihood / mu : " << Lf << "\t" << min_tree_mu.mu*Nchar << endl;
     min_tree_mu.print();
 
@@ -1048,11 +1122,11 @@ int main (int argc, char ** const argv) {
     min_tree_mu.write(out_tree);
     out_tree.close();
     sstm.str("");
-    
+
     cout << "\n\n### Running optimisation: branches constrained, mu fixed" << endl;
     test_tree.tobs = tobs;
-    
-    evo_tree min_tree2 = max_likelihood(test_tree, Lf, 1, 0);
+
+    evo_tree min_tree2 = max_likelihood(test_tree, Lf, ssize, tolerance, miter, 1, 0);
     cout << "\nMinimised tree likelihood / mu : " << Lf << "\t" << min_tree2.mu*Nchar <<endl;
     min_tree2.print();
 
@@ -1061,11 +1135,11 @@ int main (int argc, char ** const argv) {
     min_tree2.write(out_tree);
     out_tree.close();
     sstm.str("");
-    
+
     cout << "\n\n### Running optimisation: branches constrained, mu free" << endl;
     test_tree.tobs = tobs;
-    
-    evo_tree min_tree2_mu = max_likelihood(test_tree, Lf, 1, 1);
+
+    evo_tree min_tree2_mu = max_likelihood(test_tree, Lf, ssize, tolerance, miter, 1, 1);
     cout << "\nMinimised tree likelihood / mu : " << Lf << "\t" << min_tree2_mu.mu*Nchar <<endl;
     min_tree2_mu.print();
 
@@ -1075,20 +1149,17 @@ int main (int argc, char ** const argv) {
     out_tree.close();
     sstm.str("");
   }
-  
+
   if(1){
     double mu = 1.0/Nchar;
-    evo_tree min_lnL_tree = do_evolutionary_algorithm(Npop, Ngen, max_static,mu,1,0);
-  
+    evo_tree min_lnL_tree = do_evolutionary_algorithm(Npop, Ngen, max_static,mu, ssize, tolerance, miter, 1, 0);
+
     // Write out the top tree
-    stringstream sstm;
     //cout << "Best fitting tree, -ve lnL = " << global_min << endl;
     min_lnL_tree.print();
-    sstm << "results-maxL-tree.txt";
-    ofstream out_tree(sstm.str());
+    ofstream out_tree(ofile);
     min_lnL_tree.write(out_tree);
     out_tree.close();
-    sstm.str("");
 
 
     /*
@@ -1097,7 +1168,7 @@ int main (int argc, char ** const argv) {
       cout << "\n\n### Running optimisation: branches constrained, mu free" << endl;
       min_lnL_tree.tobs = tobs;
       min_lnL_tree.mu = mu;
-      
+
       double Lf = 0;
       evo_tree min_tree_mu = max_likelihood(min_lnL_tree, Lf, 1, 1);
       cout << "\nMinimised tree likelihood / mu : " << Lf << "\t" << min_tree_mu.mu*Nchar <<endl;
@@ -1111,5 +1182,5 @@ int main (int argc, char ** const argv) {
     }
     */
   }
-  
+
 }
