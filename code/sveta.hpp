@@ -1,6 +1,6 @@
 extern "C" {
 
-  gsl_rng * r;
+  //gsl_rng * r;
 
   void setup_rng(int set_seed);
   

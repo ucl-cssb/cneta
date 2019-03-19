@@ -29,7 +29,6 @@
 #include "gzstream.h"
 
 #include "sveta.hpp"
-
 #include "evo_tree.hpp"
 #include "genome.hpp"
 #include "stats.hpp"
@@ -259,7 +258,7 @@ void simulate_samples(vector<genome>& genomes, map<int,vector<mutation> >& muts,
   }
 }
 
-
+/*
 void setup_rng(int set_seed){
 
   gsl_rng_env_setup();
@@ -278,6 +277,7 @@ void setup_rng(int set_seed){
     gsl_rng_set (r, abs(s) );
   }
 }
+*/
 
 //void run_sample_set(int Ns, double* prc, double* pvs, double* ptree, double* pl, int* ret){
 void run_sample_set(int Ns, double* prc, double* pvs, int* ret){

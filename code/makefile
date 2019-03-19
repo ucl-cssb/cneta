@@ -11,7 +11,7 @@ svtreeml: svtreeml.cpp
 
 svtreemu: svtreemu.cpp
 	cd gzstream/ && make
-	g++ -std=gnu++11 svtreemu.cpp -o svtreemu -L/usr/local/lib/ -lgsl -lgslcblas -L./gzstream -lgzstream -lz -I. -I/usr/local/include -I./gzstream
+	g++ -std=gnu++11 svtreemu.cpp -o svtreemu -L/usr/local/lib/ -lboost_program_options -lgsl -lgslcblas -L./gzstream -lgzstream -lz -I. -I/usr/local/include -I./gzstream
 
 
 #./sveta ./ 5 1
@@ -23,6 +23,7 @@ svtreemu: svtreemu.cpp
 clean:
 	rm -f sveta
 	rm -f svtreeml
+	rm -f svtreemu
 	rm -f libsveta.o
 	rm -f gzstream/libgzstream.a
 	rm -f gzstream/gzstream.o
