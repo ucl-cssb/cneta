@@ -68,7 +68,7 @@ int main (int argc, char ** const argv) {
     ("nmax,n", po::value<int>(&nmax)->default_value(100), "number of maximizations to attempt")
     ("ssize,z", po::value<double>(&ssize)->default_value(0.01), "initial step size")
     ("ofile,o", po::value<string>(&ofile)->default_value("results-maxL-mu-tree.txt"), "output tree file")
-    ("est,e", po::value<double>(&mu_0)->default_value(1.0), "initial mu estimate")
+    ("mu,x", po::value<double>(&mu_0)->default_value(1.0), "initial mutation rate estimate (SCA/locus/time)")
     ("vlnorm,l", po::value<double>(&vlnorm)->default_value(1.0), "scale of lognorm for initial value sampling")
     ;
 
@@ -132,23 +132,29 @@ int main (int argc, char ** const argv) {
   }
   
   // estimate mutation rate
-  test_tree.print();
+  //test_tree.print();
   test_tree.tobs = tobs;
-  test_tree.mu = 1.0;
+  test_tree.mu = mu_0;
   
-  double Ls = get_likelihood(Ns, Nchar, vobs, test_tree);
-  cout << "\nOriginal tree -ve likelihood: " << -Ls << endl;
+  //double Ls = get_likelihood(Ns, Nchar, vobs, test_tree);
+  //cout << "\nOriginal tree -ve likelihood: " << -Ls << endl;
 
   cout << "\n\n### Running optimisation: branches constrained, mu free" << endl;
-
+  cout << "vlnorm: " << vlnorm << endl;
+  
   double minL = -1*LARGE_LNL;
   evo_tree min_tree_mu;
   
   for(int i=0; i<nmax; ++i){
     double Lf = 0;
-    double mu_g = gsl_ran_lognormal(r, mu_0/Nchar, vlnorm);
-    
+    double mu_g;
+    if(i==0){
+      mu_g = mu_0;
+    }else{
+      mu_g = gsl_ran_lognormal(r, log(mu_0), vlnorm);
+    }
     test_tree.mu = mu_g;
+    
     //evo_tree min_tree = max_likelihood(test_tree, Lf, 1, 1);
     evo_tree min_tree = max_likelihood(test_tree, Lf, ssize, tolerance, miter, 1, 1);
     cout << "Testing mu_g / -lnL / mu: " << mu_g << " / " << Lf << " / " << min_tree.mu << endl;
@@ -162,7 +168,7 @@ int main (int argc, char ** const argv) {
     
   }
 
-  cout << "\nMinimised tree likelihood / mu / Nchar / mu (SCA/locus/time): " << minL << " / " << min_tree_mu.mu*Nchar << " / " << Nchar << " / " <<  min_tree_mu.mu << endl;
+  cout << "\nMinimised tree likelihood / Nchar / mu (SCA/locus/time): " << minL << " / " << Nchar << " / " <<  min_tree_mu.mu << endl;
   min_tree_mu.print();
   
   stringstream sstm;

@@ -323,7 +323,7 @@ vector<edge> create_edges_from_nodes( const vector<node>& nodes, const vector<do
 
 int main (int argc, char ** const argv) {
   int Npop, Ngen, max_static, miter, bootstrap;
-  double tolerance, ssize;
+  double tolerance, ssize, mu;
   string datafile, timefile, ofile;
 
   namespace po = boost::program_options;
@@ -348,6 +348,7 @@ int main (int argc, char ** const argv) {
     ("ssize,z", po::value<double>(&ssize)->default_value(0.01), "initial step size")
     ("bootstrap,b", po::value<int>(&bootstrap)->default_value(0), "doing bootstrap or not")
     ("ofile,o", po::value<string>(&ofile)->default_value("results-maxL-tree.txt"), "output tree file")
+    ("mu,x", po::value<double>(&mu)->default_value(0.025), "mutation rate (SCA/locus/time)")
     ;
 
   po::options_description cmdline_options;
@@ -510,7 +511,7 @@ int main (int argc, char ** const argv) {
   }
 
   if(1){
-    double mu = 1.0/Nchar;
+    cout << "Assuming mu (SCA/locus/time):  " << mu << endl;
     evo_tree min_lnL_tree = do_evolutionary_algorithm(Npop, Ngen, max_static,mu, ssize, tolerance, miter, 1, 0);
 
     // Write out the top tree
@@ -519,27 +520,6 @@ int main (int argc, char ** const argv) {
     ofstream out_tree(ofile);
     min_lnL_tree.write(out_tree);
     out_tree.close();
-
-
-    /*
-    if( accumulate(tobs.begin(), tobs.end(), 0) > 0 ){
-      // in this case the time points are not all zero and we can try and maximise the likelihood wrt mu
-      cout << "\n\n### Running optimisation: branches constrained, mu free" << endl;
-      min_lnL_tree.tobs = tobs;
-      min_lnL_tree.mu = mu;
-
-      double Lf = 0;
-      evo_tree min_tree_mu = max_likelihood(min_lnL_tree, Lf, 1, 1);
-      cout << "\nMinimised tree likelihood / mu : " << Lf << "\t" << min_tree_mu.mu*Nchar <<endl;
-      min_tree_mu.print();
-
-      sstm << "results-maxL-mu-tree.txt";
-      out_tree.open(sstm.str());
-      min_tree_mu.write(out_tree);
-      out_tree.close();
-      sstm.str("");
-    }
-    */
   }
 
 }

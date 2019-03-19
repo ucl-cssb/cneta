@@ -32,8 +32,11 @@
 #include "evo_tree.hpp"
 #include "genome.hpp"
 #include "stats.hpp"
+#include "utilities.hpp"
 
 using namespace std;
+
+int debug = 0;
 
 vector<mutation> generate_mutation_times(const int& edge_id, const double& blength, const double& node_time, const vector<double>& rate_constants ){
   bool print = false;
@@ -259,26 +262,6 @@ void simulate_samples(vector<genome>& genomes, map<int,vector<mutation> >& muts,
 }
 
 /*
-void setup_rng(int set_seed){
-
-  gsl_rng_env_setup();
-
-  const gsl_rng_type* T = gsl_rng_default;
-  r = gsl_rng_alloc (T);
-
-  if( set_seed != 0 ){
-    gsl_rng_set(r, set_seed );
-  }else{
-    int t = time(NULL);
-    int pid = getpid();
-    long s = t*pid;
-    //cout << "pid:" << "\t" << getpid() << endl;
-    cout << "seed:" << "\t" << t << "\t" << pid << "\t" << abs(s) << endl;
-    gsl_rng_set (r, abs(s) );
-  }
-}
-*/
-
 //void run_sample_set(int Ns, double* prc, double* pvs, double* ptree, double* pl, int* ret){
 void run_sample_set(int Ns, double* prc, double* pvs, int* ret){
 
@@ -330,6 +313,7 @@ void run_sample_set(int Ns, double* prc, double* pvs, int* ret){
   }
   return;
 }	    
+*/
 
 //////////////////////////////////////////////////////////
 ///                                                    ///
@@ -346,39 +330,6 @@ void run_sample_set(int Ns, double* prc, double* pvs, int* ret){
 // Internally nodes and edges have ids starting from 0
 // to match up with ape in R we always print id+1
 
-
-/*
-//order of parameters expected:  Npop, ngen, g_d, mu_i, p_tran, svp2, trp2, SV_min, svgradient, svtransgrad, fitness, SV_mean, mu_k, gnmdou, maxchr, minchr
-void read_params( const string& filename, vector<double>& prior_rates_l, vector<double>& prior_rates_u){
-
-  ifstream infile (filename.c_str());
-
-  int counter = 0; 
-  if (infile.is_open()){
-
-    std::string line;
-    
-    while(!getline(infile,line).eof()){
-      if(line.empty()) continue;
-
-      std::vector<std::string> split;
-      std::string buf; 
-      stringstream ss(line);
-      while (ss >> buf) split.push_back(buf);
-
-      prior_rates_l.push_back( atof( split[0].c_str() ) );
-      prior_rates_u.push_back( atof( split[1].c_str() ) );	      
-    
-      counter++;
-    }
-      
-  }else{
-    std::cerr << "Error: open of input parameter file unsuccessful: " <<  filename << std::endl;
-  }
-  
-  return counter;
-}
-*/
 
 int main (int argc, char ** const argv) {
   setup_rng(0);
@@ -479,6 +430,20 @@ int main (int argc, char ** const argv) {
       evo_tree test_tree(Ns+1, edges, lengths);
       simulate_samples(results, muts, test_tree, germline, rate_consts, false);
 
+      sstm << dir << "sim-data-" << i+1 << "-cn.txt.gz";
+      //ofstream out_cn(sstm.str());
+      ogzstream out_cn(sstm.str().c_str());
+      for(int j=0; j<test_tree.nleaf; ++j){
+	results[j].write(out_cn);
+      }
+      out_cn.close();
+      
+      // re-read the cn data to get the segments
+      vector<vector<int> > seg_data = read_data_var_regions(sstm.str().c_str(), Ns, 4);
+      int Nchar = seg_data.size();
+      cout << "#### Nchar: " << Nchar << endl;
+      sstm.str("");
+      
       sstm << dir << "sim-data-" << i+1 << "-info.txt";
       ofstream out_info(sstm.str());
       out_info << "NODE TIMES:";
@@ -487,7 +452,10 @@ int main (int argc, char ** const argv) {
 	out_info << "\t" << j+1 << "\t" << test_tree.node_times[j] << endl;
       }
       out_info << endl;
-     
+
+      out_info << "SEGMENTS: " << Nchar << endl;
+      out_info << endl;
+      
       for(int i=0; i<test_tree.nleaf; ++i){
 	test_tree.print_ancestral_edges( results[i].node_id, out_info );
       }
@@ -509,15 +477,6 @@ int main (int argc, char ** const argv) {
       out_tree.close();
       sstm.str("");
       
-      sstm << dir << "sim-data-" << i+1 << "-cn.txt.gz";
-      //ofstream out_cn(sstm.str());
-      ogzstream out_cn(sstm.str().c_str());
-      for(int j=0; j<test_tree.nleaf; ++j){
-	results[j].write(out_cn);
-      }
-      out_cn.close();
-      sstm.str("");
-
       sstm << dir << "sim-data-" << i+1 << "-mut.txt";
       ofstream out_mut(sstm.str());
       for(int j=0; j<test_tree.nleaf; ++j){
@@ -541,6 +500,8 @@ int main (int argc, char ** const argv) {
       }
       out_rel.close();
       sstm.str("");
+
+      
       
       edges.clear();
       lengths.clear();

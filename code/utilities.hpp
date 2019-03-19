@@ -70,7 +70,7 @@ evo_tree read_tree_info(const string& filename, const int& Ns){
 }
 
 vector<vector<int> > read_data_var_regions(const string& filename, const int& Ns, const int& max_cn){
-  if(debug) cout << "\tread_data_var_regions" << endl;
+  cout << "reading data and calculating CNA regions" << endl;
   vector<vector<vector<int> > > s_info;
 
   // data indexed by [sample][data][ chr, bid, cn ]
@@ -221,13 +221,14 @@ vector<vector<int> > read_data_var_regions(const string& filename, const int& Ns
     }
 
   }
+
   cout << "\tUsing segments:\t\t" << ret.size() << endl;
-  for(int i=0; i<ret.size(); ++i){
-    for(int j=0; j<ret[i].size(); ++j){
-    cout << "\t" << ret[i][j];
-    }
-    cout << endl;
-  }
+  //for(int i=0; i<ret.size(); ++i){
+  //for(int j=0; j<ret[i].size(); ++j){
+  //cout << "\t" << ret[i][j];
+  //}
+  //cout << endl;
+  //}
 
   return ret;
 
