@@ -8,7 +8,8 @@ data.file <- args[1]
 annot.file <- args[2]
 out.file <- args[3]
 branch.num <- as.numeric(args[4])
-tree.max <- as.numeric(args[5])
+tree.sample = 60
+if(length(args)>4) tree.max <- as.numeric(args[5])
 
 make.tree <- function(d, labels){
    nedge <- nrow(d)
