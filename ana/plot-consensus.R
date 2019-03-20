@@ -11,6 +11,7 @@ file.out = args[3]
 file.sample = NA
 if(length(args)>3) file.sample = args[4]
 
+cat(dir.bstrap,file.tree,file.out,"\n")
 
 # dir.bstrap = "D:/Gdrive/git/sveta/test/bootstrap"
 # file.tree="D:/Gdrive/git/sveta/test/results-maxL-tree-sim1.txt"
@@ -44,7 +45,7 @@ plot.tree <- function(tree){
   # support[tree$node.label >= 95] <- "red"
   # support[tree$node.label < 95 & tree$node.label >= 70] <- "pink"
   # support[tree$node.label < 70] <- "blue"
-  p <- p + geom_tiplab() + xlim(c(0,60))
+  p <- p + geom_tiplab() #+ xlim(c(0,60))
   p <- p + geom_text2(aes(subset=!isTip, label=label, hjust=-.3, color="red"))
   edge=data.frame(tree$edge, edge_num=1:nrow(tree$edge), edge_len=tree$edge.length)
   colnames(edge)=c("parent", "node", "edge_num", "edge_len")

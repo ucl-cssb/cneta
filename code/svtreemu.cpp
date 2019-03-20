@@ -173,8 +173,7 @@ int main (int argc, char ** const argv) {
   
   stringstream sstm;
   ofstream out_tree;
-  sstm << "results-maxL-mu-tree.txt";
-  out_tree.open(sstm.str());
+  out_tree.open(ofile);
   min_tree_mu.write(out_tree);
   out_tree.close();
   sstm.str("");  
