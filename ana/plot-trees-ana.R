@@ -8,7 +8,7 @@ data.file <- args[1]
 annot.file <- args[2]
 out.file <- args[3]
 branch.num <- as.numeric(args[4])
-
+tree.max <- as.numeric(args[5])
 
 make.tree <- function(d, labels){
    nedge <- nrow(d)
@@ -28,8 +28,8 @@ make.tree <- function(d, labels){
 
 plot.tree <- function(tree){
    p <- ggtree(tree, size=0.5, linetype=1) #+ geom_rootedge() 
-   p <- p + geom_tiplab(align=TRUE) + theme_tree2() + xlim(NA, 130)
-   p <- p + geom_text2(aes(subset=!isTip,label=node), hjust=-.3)
+   p <- p + geom_tiplab(align=TRUE) + theme_tree2() + xlim(NA, tree.max)
+   #p <- p + geom_text2(aes(subset=!isTip,label=node), hjust=-.3)
    edge=data.frame(tree$edge, edge_num=1:nrow(tree$edge), edge_len=tree$edge.length)
    colnames(edge)=c("parent", "node", "edge_num", "edge_len")
    p <- p %<+% edge + geom_text(aes(x=branch, label=edge_len), nudge_y=0.1)
