@@ -6,6 +6,10 @@ library(tools)
 args = commandArgs(trailingOnly=TRUE)
 in.file <- args[1]
 branch.num <- as.numeric(args[2])
+out.file <- NA
+if(length(args)>2){
+  out.file <- args[3]
+}
 
 make.tree <- function(d){
    nedge <- nrow(d)
@@ -23,7 +27,7 @@ make.tree <- function(d){
 }
 
 plot.tree <- function(tree){
-   p <- ggtree(tree) #+ geom_rootedge() 
+   p <- ggtree(tree) #+ geom_rootedge()
    p <- p + geom_tiplab()
    p <- p + geom_text2(aes(subset=!isTip,label=node), hjust=-.3)
    edge=data.frame(tree$edge, edge_num=1:nrow(tree$edge), edge_len=tree$edge.length)
@@ -40,9 +44,14 @@ for(f in files){
     cat("running on:", f, "\n")
     dd <- read.table(f,header=T)
     stub <- file_path_sans_ext(f)
-    fout <- paste("plot-",stub,".pdf",sep="")
+    if(length(args)>2){
+      fout <- out.file
+    }
+    else{
+      fout <- paste("plot-",stub,".pdf",sep="")
+    }
     cat("\n\nrunning over", stub, fout, "\n", sep="\t")
-    
+
     #dd$start <- dd$start + 1
     #dd$end <- dd$end + 1
 
