@@ -34,6 +34,8 @@
 #include "stats.hpp"
 #include "utilities.hpp"
 
+#include <boost/program_options.hpp>
+
 using namespace std;
 
 int debug = 0;
@@ -44,7 +46,7 @@ vector<mutation> generate_mutation_times(const int& edge_id, const double& bleng
   if(print) cout << "\tgenerate_mutations, blength:" << "\t" << blength << endl;
 
   vector<mutation> ret;
-  
+
   // model this as a poisson process
   double time = 0.0;
   while( time < blength ){
@@ -65,22 +67,22 @@ vector<mutation> generate_mutation_times(const int& edge_id, const double& bleng
     ret.push_back( mutation( edge_id, e, time/blength, node_time+time ) );
   }
   ret.pop_back();
-  
+
   return ret;
 }
 
 void apply_mutations( const vector<mutation>& muts, genome& g, bool print = false ){
   //print = true;
-  
+
   // mean variant size in bins
   double mdup = g.mean_dup_size;
   double mdel = g.mean_del_size;
-  
+
   for(int i=0; i<muts.size(); ++i){
 
     g.nmuts[ muts[i].type ]++;
     g.mutations.push_back( muts[i] );
-    
+
     if(muts[i].type == 0){   //duplications
 
       if(print == true){
@@ -88,11 +90,11 @@ void apply_mutations( const vector<mutation>& muts, genome& g, bool print = fals
 	//g.print();
 	//g.print_cn();
       }
-	
+
       // make sure a duplication somewhere is possible
       bool possible = false;
       for(int j=0; j < g.chrs.size(); ++j){
-	if( g.chrs[j].size() > 1 ) possible = true; 
+	if( g.chrs[j].size() > 1 ) possible = true;
       }
 
       if( possible == true ){
@@ -102,11 +104,11 @@ void apply_mutations( const vector<mutation>& muts, genome& g, bool print = fals
 	  int len = gsl_ran_exponential(r, mdup);
 	  //int len =  1 + gsl_ran_poisson (r, ldup);
 	  //cout << "dup len:" << len << endl;
-	  
+
 	  if( len < g.chrs[c].size() ){
 	    // choose a random location up to size-len
 	    int loc = gsl_rng_uniform_int(r,g.chrs[c].size()-len);
-      
+
 	    if(print == true) cout << "\tSV: duplicating segment, chr, start, len: " << c << "\t" << loc << "\t" << len+1 << endl;
 	    //cout << "SV: insert: " << loc+len+1 << "\t" << loc << "\t" << loc+len+1 << endl;
 	    g.chrs[c].insert(g.chrs[c].begin()+loc+len+1, g.chrs[c].begin()+loc, g.chrs[c].begin()+loc+len+1);
@@ -130,11 +132,11 @@ void apply_mutations( const vector<mutation>& muts, genome& g, bool print = fals
 	//g.print();
 	//g.print_cn();
       }
-	
+
       // make sure a deletion somewhere is possible
       bool possible = false;
       for(int j=0; j < g.chrs.size(); ++j){
-	if( g.chrs[j].size() > 1 ) possible = true; 
+	if( g.chrs[j].size() > 1 ) possible = true;
       }
 
       if( possible == true ){
@@ -144,7 +146,7 @@ void apply_mutations( const vector<mutation>& muts, genome& g, bool print = fals
 	  int len = (int) gsl_ran_exponential(r, mdel);
 	  //int len =  1 + gsl_ran_poisson (r, ldel);
 	  //cout << "del len:" << len << endl;
-	
+
 	  if( len < g.chrs[c].size() ){
 	    int loc = gsl_rng_uniform_int(r,g.chrs[c].size()-len);
 	    if(print == true) cout << "\tSV: deleting segment, chrs, start, len: " << c << "\t" << loc << "\t" << len+1 << endl;
@@ -167,18 +169,18 @@ void apply_mutations( const vector<mutation>& muts, genome& g, bool print = fals
 	int c = gsl_rng_uniform_int(r, g.chrs.size() );
 	g.chrs.erase(g.chrs.begin()+c);
       }
-	
+
     }
     else if( muts[i].type == 3){   //chr gain
       if( g.chrs.size() > 0 ){
 	int c = gsl_rng_uniform_int(r, g.chrs.size() );
 	g.chrs.insert(g.chrs.end(), g.chrs.begin()+c, g.chrs.begin()+c+1);
-      }	
+      }
     }
     else if( muts[i].type == 4){   // whole genome duplication
       if( g.chrs.size() > 0 ){
 	g.chrs.insert(g.chrs.end(), g.chrs.begin(), g.chrs.end());
-      }	
+      }
     }
     else{
       cerr << "Unknown mutation type" << endl;
@@ -206,10 +208,10 @@ void traverse_tree_mutating(const int& node_id, const evo_tree& tree, const vect
     }
     all_muts[edge_id] = muts;
   }
-  
+
   if( tree.nodes[ node_id ].daughters.size() == 0 ){
     // we are done
-    return;      
+    return;
   }else{
     traverse_tree_mutating(tree.nodes[ node_id ].daughters[0], tree, rate_constants, all_muts, genomes );
     traverse_tree_mutating(tree.nodes[ node_id ].daughters[1], tree, rate_constants, all_muts, genomes );
@@ -218,10 +220,10 @@ void traverse_tree_mutating(const int& node_id, const evo_tree& tree, const vect
 }
 
 void simulate_samples(vector<genome>& genomes, map<int,vector<mutation> >& muts, const evo_tree& tree, genome& germline, const vector<double>& rate_constants, bool print = true ){
-  
+
   // assign the germline to the root of the tree
   germline.node_id = tree.root_node_id;
-  
+
   for(int i=0; i<(tree.nnode+tree.nleaf); ++i){
     if(i == tree.root_node_id){
       genomes.push_back( germline );
@@ -233,10 +235,10 @@ void simulate_samples(vector<genome>& genomes, map<int,vector<mutation> >& muts,
 
   // hold all mutations by edge id
   //map<int, vector<mutation> > muts;
-  
+
   // move through the evolutionary tree mutating genomes
   traverse_tree_mutating( tree.root_node_id, tree, rate_constants, muts, genomes );
-  
+
   // final samples returned, print out leaf nodes
   if(print == true){
     cout << "MUTATIONS:" << endl;
@@ -267,14 +269,14 @@ void run_sample_set(int Ns, double* prc, double* pvs, int* ret){
 
   static const int arr[] = {367, 385, 335, 316, 299, 277, 251, 243, 184, 210, 215, 213, 166, 150, 134, 118, 121, 127, 79, 106, 51, 54};
   vector<int> chr_lengths (arr, arr + sizeof(arr) / sizeof(arr[0]) );
-    
-  vector<double> rate_consts (prc, prc + sizeof(prc) / sizeof(prc[0]) );    
+
+  vector<double> rate_consts (prc, prc + sizeof(prc) / sizeof(prc[0]) );
   genome germline(chr_lengths,2);
   germline.mean_dup_size = pvs[0];
   germline.mean_del_size = pvs[1];
-    
+
   vector<int> edges;
-  
+
   vector<double> lengths;
   vector<double> epoch_times;
   vector<double> node_times;
@@ -283,14 +285,14 @@ void run_sample_set(int Ns, double* prc, double* pvs, int* ret){
   map<int, vector<mutation> > muts;
   //cout << "\n\n###### New sample collection ######" << endl;
   //cout << "###### Ns+1= " << Ns+1 << endl;
-      
+
   generate_coal_tree(Ns, edges, lengths, epoch_times, node_times);
   evo_tree test_tree(Ns+1, edges, lengths);
 
   //for(int i=0; i<6; ++i) epars.push_back( ptree[i] );
   //for(int i=0; i<8; ++i) lengths.push_back( pl[i] );
   //evo_tree test_tree = construct_tree(Ns, epars, lengths, node_times );
-  
+
   test_tree.node_times = node_times;
   simulate_samples(results, muts, test_tree, germline, rate_consts, false);
 
@@ -312,7 +314,7 @@ void run_sample_set(int Ns, double* prc, double* pvs, int* ret){
     sstm.str("");
   }
   return;
-}	    
+}
 */
 
 //////////////////////////////////////////////////////////
@@ -332,62 +334,115 @@ void run_sample_set(int Ns, double* prc, double* pvs, int* ret){
 
 
 int main (int argc, char ** const argv) {
+    string dir; // output directory
+    string prefix; // prefix of output file
+    int Ns; // number of regions
+    int Nsims;  // number of multi-region samples
+    // four event types: duplication, deletion, chromosome gain, chromosome loss, wgd
+    // rates are 1/mean
+    double dup_rate, del_rate, chr_gain, chr_loss, wgd;
+    // parameters for mean of dup/del size distributions
+    double dup_size, del_size;
+    // effective population size
+    double Ne;
+    // relative timing difference
+    double delta_t;
+
+    namespace po = boost::program_options;
+    po::options_description generic("Generic options");
+    generic.add_options()
+      ("version,v", "print version string")
+      ("help,h", "produce help message")
+      ;
+    po::options_description required("Required parameters");
+    required.add_options()
+       ("odir,o", po::value<string>(&dir)->required(), "output directory")
+       ;
+    po::options_description optional("Optional parameters");
+    optional.add_options()
+       ("prefix,p", po::value<string>(&prefix)->default_value(""), "prefix of output file (it will be sim-data-N if not specified")
+      ("nregion,r", po::value<int>(&Ns)->default_value(5), "number of regions")
+      ("nsim,n", po::value<int>(&Nsims)->default_value(1), "number of multi-region samples")
+      ("dup_rate", po::value<double>(&dup_rate)->default_value(0.5), "duplication rate")
+      ("del_rate", po::value<double>(&del_rate)->default_value(0.5), "deletion rate")
+      ("chr_gain", po::value<double>(&chr_gain)->default_value(0), "chromosome gain rate")
+      ("chr_loss", po::value<double>(&chr_loss)->default_value(0), "chromosome loss rate")
+      ("wgd", po::value<double>(&wgd)->default_value(0), "WGD (whole genome doubling) rate")
+      ("dup_size", po::value<double>(&dup_size)->default_value(30), "mean of duplication size distributions")
+      ("del_size", po::value<double>(&del_size)->default_value(30), "mean of deletion size distributions")
+      ("epop,e", po::value<double>(&Ne)->default_value(2), "effective population size")
+      ("tdiff,t", po::value<double>(&delta_t)->default_value(10), "relative timing difference")
+      ;
+
+    po::options_description cmdline_options;
+    cmdline_options.add(generic).add(required).add(optional);
+    po::variables_map vm;
+
+    try {
+        po::store(po::command_line_parser(argc, argv).options(cmdline_options).run(), vm);
+
+        if(vm.count("help")){
+            cout << cmdline_options << endl;
+            return 1;
+        }
+
+        if(vm.count("version")){
+            cout << "sveta [version 0.1], a program to simulate structural variations along a phylogenetic tree" << endl;
+            return 1;
+        }
+
+        po::notify(vm);
+
+        dir = vm["odir"].as<string>();
+        Ns = vm["nregion"].as<int>();
+        Nsims = vm["nsim"].as<int>();
+        dup_rate = vm["dup_rate"].as<double>();
+        del_rate = vm["del_rate"].as<double>();
+        chr_gain = vm["chr_gain"].as<double>();
+        chr_loss = vm["chr_loss"].as<double>();
+        wgd = vm["wgd"].as<double>();
+        dup_size = vm["dup_size"].as<double>();
+        del_size = vm["del_size"].as<double>();
+        Ne = vm["epop"].as<double>();
+        delta_t = vm["tdiff"].as<double>();
+    } catch (const std::exception& e) {
+          std::cerr << e.what() << std::endl;
+          return 1;
+    }
+
   setup_rng(0);
 
   int mode = 0;
 
   // output directory
-  string dir(argv[1]);
-  dir = dir + "/";
-
-  // number of regions
-  int Ns = atoi(argv[2]);
-  
-  // number of multi-region samples
-  int Nsims = atoi(argv[3]);
+  if(dir.back() != '/'){
+      dir = dir + "/";
+  }
+  vector<double> rate_consts = {dup_rate, del_rate, chr_gain, chr_loss, wgd};
+  vector<double> var_size = {dup_size, del_size};
 
   // priors on rates
   //vector<double> pars;
   //read_params(argv[4],pars);
 
-  // four event types: duplication, deletion, chromosome gain, chromosome loss, wgd
-  // rates are 1/mean
-  vector<double> rate_consts; 
-  rate_consts.push_back( atof(argv[4]) );
-  rate_consts.push_back( atof(argv[5]) );
-  rate_consts.push_back( atof(argv[6]) );
-  rate_consts.push_back( atof(argv[7]) );
-  rate_consts.push_back( atof(argv[8]) );
-
-  // parameters for mean of dup/del size distributions
-  vector<double> var_size; 
-  var_size.push_back( atof(argv[9]) );
-  var_size.push_back( atof(argv[10]) );
-
-  // effective population size
-  double Ne = atof(argv[11]);
-
-  // relative timing difference
-  double delta_t = atof(argv[12]);
-
   cout << "rates:\t" << rate_consts[0] << "\t" << rate_consts[1]  << "\t" << rate_consts[2]  << "\t" << rate_consts[3]  << "\t" << rate_consts[4] << endl;
   cout << "sizes:\t" << var_size[0] << "\t" << var_size[1] << endl;
-  
+
   // simulate coalescent tree and apply SVs
   if(mode == 0){
-    
+
     static const int arr[] = {367, 385, 335, 316, 299, 277, 251, 243, 184, 210, 215, 213, 166, 150, 134, 118, 121, 127, 79, 106, 51, 54};
     vector<int> chr_lengths (arr, arr + sizeof(arr) / sizeof(arr[0]) );
-    
+
     // can specify the germline in a number of different ways
     //genome germline(1,10);
     //genome germline(42,1000);
     //genome germline(chr_lengths);
-    
+
     genome germline(chr_lengths,2);
     germline.mean_dup_size = var_size[0];
     germline.mean_del_size = var_size[1];
-    
+
     vector<int> edges;
     vector<double> lengths;
     vector<double> epoch_times;
@@ -395,9 +450,14 @@ int main (int argc, char ** const argv) {
     stringstream sstm;
     vector<genome> results;
     map<int, vector<mutation> > muts;
+    string orig_prefix = prefix;
     for(int i=0; i<Nsims; ++i){
+      cout << "Simulation " << i+1 << endl;
       //cout << "\n\n###### New sample collection ######" << endl;
- 
+      if(orig_prefix.empty()) {
+          prefix = "sim-data-" + to_string(int(i+1));
+      }
+      cout << "Prefix of output file: " << prefix <<endl;
       generate_coal_tree(Ns, edges, lengths, epoch_times, node_times);
 
       // Scale branch lengths
@@ -423,28 +483,28 @@ int main (int argc, char ** const argv) {
 	}
 	bcount++;
       }
-      
+
       //lengths[0] = lengths[0]*1.25;
       //lengths[1] = lengths[1]*1.25;
-      
+
       evo_tree test_tree(Ns+1, edges, lengths);
       simulate_samples(results, muts, test_tree, germline, rate_consts, false);
 
-      sstm << dir << "sim-data-" << i+1 << "-cn.txt.gz";
+      sstm << dir << prefix << "-cn.txt.gz";
       //ofstream out_cn(sstm.str());
       ogzstream out_cn(sstm.str().c_str());
       for(int j=0; j<test_tree.nleaf; ++j){
 	results[j].write(out_cn);
       }
       out_cn.close();
-      
+
       // re-read the cn data to get the segments
       vector<vector<int> > seg_data = read_data_var_regions(sstm.str().c_str(), Ns, 4);
       int Nchar = seg_data.size();
       cout << "#### Nchar: " << Nchar << endl;
       sstm.str("");
-      
-      sstm << dir << "sim-data-" << i+1 << "-info.txt";
+
+      sstm << dir << prefix << "-info.txt";
       ofstream out_info(sstm.str());
       out_info << "NODE TIMES:";
       out_info << "\tnid\ttime" << endl;
@@ -455,7 +515,7 @@ int main (int argc, char ** const argv) {
 
       out_info << "SEGMENTS: " << Nchar << endl;
       out_info << endl;
-      
+
       for(int i=0; i<test_tree.nleaf; ++i){
 	test_tree.print_ancestral_edges( results[i].node_id, out_info );
       }
@@ -465,8 +525,8 @@ int main (int argc, char ** const argv) {
       }
       out_info.close();
       sstm.str("");
-      
-      sstm << dir << "sim-data-" << i+1 << "-tree.txt";
+
+      sstm << dir << prefix << "-tree.txt";
       ofstream out_tree(sstm.str());
       //test_tree.write(out_tree);
       out_tree << "start\tend\tlength\teid\tnmut" << endl;
@@ -476,8 +536,7 @@ int main (int argc, char ** const argv) {
       }
       out_tree.close();
       sstm.str("");
-      
-      sstm << dir << "sim-data-" << i+1 << "-mut.txt";
+      sstm << dir << prefix << "-mut.txt";
       ofstream out_mut(sstm.str());
       for(int j=0; j<test_tree.nleaf; ++j){
 	for(int i=0; i<results[j].mutations.size(); ++i){
@@ -488,7 +547,7 @@ int main (int argc, char ** const argv) {
       out_mut.close();
       sstm.str("");
 
-      sstm << dir << "sim-data-" << i+1 << "-rel-times.txt";
+      sstm << dir << prefix << "-rel-times.txt";
       double node_min = 1000;
       for(int j=0; j<Ns; ++j){
 	if( test_tree.node_times[j] < node_min ) node_min = test_tree.node_times[j];
@@ -501,17 +560,15 @@ int main (int argc, char ** const argv) {
       out_rel.close();
       sstm.str("");
 
-      
-      
       edges.clear();
       lengths.clear();
       results.clear();
       muts.clear();
       epoch_times.clear();
       node_times.clear();
-      
+
     }
-   
+
   }
 
   /*
@@ -524,12 +581,12 @@ int main (int argc, char ** const argv) {
 
     static const double arr2[] = {5.1,6.3,10.2,9.5,5.2,3.2,5.4,0};
     vector<double> l (arr2, arr2 + sizeof(arr2) / sizeof(arr2[0]) );
-  
+
     evo_tree test_tree(5, e, l);
 
     test_tree.print();
   }
-  
+
   // test out the genome classes and functionality
   if(mode == 2){
 
@@ -548,7 +605,7 @@ int main (int argc, char ** const argv) {
 
       vector<mutation> wgds;
       wgds.push_back( mutation( 0, 4, 0.5, 0 ) );
-    
+
       genome g1(2,10);
       g1.node_id = 0;
       g1.print();
@@ -575,20 +632,20 @@ int main (int argc, char ** const argv) {
       g2d.print_cn();
 
     }
-    
+
     //genome g3 = g2;
     //g3.print();
     //g3.print_cn();
   }
   if(mode == 3){
     stringstream sstm;
-    
+
     int Ns = 4;
     double prc[] = {0.1, 0.1, 0.1, 0.1, 0.05};
     double pvs[] = {30.0, 30.0};
 
     for(int i=0; i<10; ++i){
-    
+
       int* ret = new int[Ns*4401];
       run_sample_set(Ns, prc, pvs, &(ret[0]) );
 
@@ -601,7 +658,7 @@ int main (int argc, char ** const argv) {
       sstm.str("");
       delete[] ret;
     }
-    
+
   }
   */
 }

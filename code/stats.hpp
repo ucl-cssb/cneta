@@ -2,6 +2,7 @@
 #include <gsl/gsl_randist.h>
 #include <gsl/gsl_statistics.h>
 #include <gsl/gsl_multimin.h>
+#include <cstdio>
 
 #include <algorithm>
 #include <vector>
@@ -13,7 +14,7 @@ extern "C" {
   int Ns;
   int Nchar;
 }
-  
+
 const double LARGE_LNL = -1e9;
 
 void setup_rng(int set_seed){
@@ -52,7 +53,7 @@ int fact(int n){
 // wrapper for uniform
 double runiform(gsl_rng* r, double a, double b){
   double myrandom = a + (b-a)*gsl_rng_uniform (r);
- 	
+
   while(myrandom==0){
     myrandom = a + (b-a)*gsl_rng_uniform (r);
   }
@@ -66,17 +67,17 @@ int rchoose(gsl_rng* r, const vector<double>& rates){
   //cout << "rchoose, rates:";
   //for(int i=0; i<rates.size(); ++i) cout << "\t" << rates[i];
   //cout << endl;
-  
+
   vector<double> p;
   double s = accumulate(rates.begin(), rates.end(), 0.0);
-  
+
   for(int i=0; i<rates.size(); ++i){
     p.push_back(rates[i]/s);
   }
 
   vector<double> psum(p.size(),0.0);
   partial_sum(p.begin(),p.end(),psum.begin());
-  
+
   double u = gsl_rng_uniform(r);
   int ret = -1;
   for(int i=0; i<rates.size(); ++i){
@@ -85,7 +86,7 @@ int rchoose(gsl_rng* r, const vector<double>& rates){
       break;
     }
   }
-  
+
   //cout << "u=\t" << u << "\t" << ret << endl;
   return ret;
 }
@@ -96,10 +97,10 @@ int rchoose(gsl_rng* r, const vector<double>& rates){
 // here we directly calculate the edges in the tree
 void generate_coal_tree(const int& nsample, vector<int>& edges, vector<double>& lengths, vector<double>& epoch_times, vector<double>& times){
   //cout << "GENERATING COAL TREE" << endl;
-    
+
   int nlin = nsample;
   vector<int> nodes;
- 
+
   // For compatibility with ape in R, root node must be labelled
   // 0 to nsample-1 are leaf, nsample is germline, nsample+1 is root
   // all other nodes ids start from here
@@ -109,16 +110,16 @@ void generate_coal_tree(const int& nsample, vector<int>& edges, vector<double>& 
   for(int i=0; i<nsample; ++i) nodes.push_back(i);
 
   // create vector of event times
-  // total nodes = 2*(nsample+1) -1 
+  // total nodes = 2*(nsample+1) -1
   for(int i=0; i<(2*nsample+1); ++i) times.push_back(0.0);
-  
+
   double t_tot = 0;
   while(nlin > 1){
     // sample a time from Exp( combinations(k,2) )
     double lambda = fact(nlin)/( 2*fact(nlin-2) );
     double t = gsl_ran_exponential(r, lambda);
     t_tot += t;
-    
+
     // choose two random nodes from available list
     random_shuffle(nodes.begin(), nodes.end(),fp);
 
@@ -135,7 +136,7 @@ void generate_coal_tree(const int& nsample, vector<int>& edges, vector<double>& 
     //cout << "\t" << node_count+1 << "\t" << t_tot << endl;
     epoch_times.push_back(t_tot);
     times[ node_count ] = t_tot;
-    
+
     nodes.pop_back();
     nodes.pop_back();
 
@@ -153,7 +154,7 @@ void generate_coal_tree(const int& nsample, vector<int>& edges, vector<double>& 
   // add in the time for the root and germline nodes
   times[nsample+1] = t_tot;
   times[nsample] = t_tot;
-  
+
   edges.push_back(nsample+1);
   edges.push_back(node_count-1);
   lengths.push_back(t);
@@ -166,7 +167,7 @@ void generate_coal_tree(const int& nsample, vector<int>& edges, vector<double>& 
   for(int i=0; i<times.size(); ++i){
     times[i] = t_tot - times[i];
   }
-  
+
   //cout << "total time of tree: " << t_tot << " : ";
   //for(int i=0; i<epoch_times.size(); ++i) cout << "\t" << epoch_times[i];
   //cout << endl;
@@ -186,10 +187,10 @@ evo_tree generate_coal_tree(const int& nsample){
   vector<double> lengths;
   vector<double> epoch_times;
   vector<double> times;
-  
+
   int nlin = nsample;
   vector<int> nodes;
- 
+
   // For compatibility with ape in R, root node must be labelled
   // 0 to nsample-1 are leaf, nsample is germline, nsample+1 is root
   // all other nodes ids start from here
@@ -199,16 +200,16 @@ evo_tree generate_coal_tree(const int& nsample){
   for(int i=0; i<nsample; ++i) nodes.push_back(i);
 
   // create vector of event times
-  // total nodes = 2*(nsample+1) -1 
+  // total nodes = 2*(nsample+1) -1
   for(int i=0; i<(2*nsample+1); ++i) times.push_back(0.0);
-  
+
   double t_tot = 0;
   while(nlin > 1){
     // sample a time from Exp( combinations(k,2) )
     double lambda = fact(nlin)/( 2*fact(nlin-2) );
     double t = gsl_ran_exponential(r, lambda);
     t_tot += t;
-    
+
     // choose two random nodes from available list
     random_shuffle(nodes.begin(), nodes.end(),fp);
 
@@ -225,7 +226,7 @@ evo_tree generate_coal_tree(const int& nsample){
     //cout << "\t" << node_count+1 << "\t" << t_tot << endl;
     epoch_times.push_back(t_tot);
     times[ node_count ] = t_tot;
-    
+
     nodes.pop_back();
     nodes.pop_back();
 
@@ -243,7 +244,7 @@ evo_tree generate_coal_tree(const int& nsample){
   // add in the time for the root and germline nodes
   times[nsample+1] = t_tot;
   times[nsample] = t_tot;
-  
+
   edges.push_back(nsample+1);
   edges.push_back(node_count-1);
   lengths.push_back(t);
@@ -256,7 +257,7 @@ evo_tree generate_coal_tree(const int& nsample){
   for(int i=0; i<times.size(); ++i){
     times[i] = t_tot - times[i];
   }
-  
+
   //cout << "total time of tree: " << t_tot << " : ";
   //for(int i=0; i<epoch_times.size(); ++i) cout << "\t" << epoch_times[i];
   //cout << endl;
@@ -273,7 +274,7 @@ evo_tree generate_coal_tree(const int& nsample){
 
 //
 // Likelihood and transition probabilities
-// 
+//
 double get_transition_prob(const double& mu, double blength, const int& sk, const int& sj ){
   //if(debug) cout << "\tget_transition_prob" << endl;
 
@@ -283,7 +284,7 @@ double get_transition_prob(const double& mu, double blength, const int& sk, cons
   // pi_0 = pi_1 = pi_2 = pi_3 = pi_4 = 1/5
 
   double prob = 0;
-  
+
   if( sk == sj ){
     prob = exp(-mu*blength) + (1 - exp(-mu*blength))*0.2;
   }else{
@@ -477,7 +478,11 @@ double my_f_cons_mu (const gsl_vector *v, void *params){
   return -1.0*get_likelihood(Ns, Nchar, vobs, new_tree);
 }
 
-
+// Output error informaton without aborting
+void my_err_handler(const char * reason, const char * file, int line, int gsl_errno){
+    fprintf (stderr, "failed, %s, reason: %s, file %s line %d \n", gsl_strerror(gsl_errno), reason, file, line);
+    return;
+}
 
 // given a tree, maximise the branch lengths (and optionally mu) assuming branch lengths are independent or constrained in time
 evo_tree max_likelihood(evo_tree& rtree, double& minL, const double ssize, const double tolerance, const int miter, int cons=0, int maxj=0){
@@ -485,6 +490,8 @@ evo_tree max_likelihood(evo_tree& rtree, double& minL, const double ssize, const
   const gsl_multimin_fminimizer_type *T = gsl_multimin_fminimizer_nmsimplex2;
   gsl_multimin_fminimizer *s = NULL;
   gsl_multimin_function minex_func;
+  /* save original handler, install new handler */
+  gsl_error_handler_t  *old_handler = gsl_set_error_handler (&my_err_handler);
 
   int npar_ne;
   int npar;
@@ -558,11 +565,11 @@ evo_tree max_likelihood(evo_tree& rtree, double& minL, const double ssize, const
   do{
     iter++;
     status = gsl_multimin_fminimizer_iterate(s);
-
     if (status) break;
 
     size = gsl_multimin_fminimizer_size (s);
     status = gsl_multimin_test_size (size, tolerance);
+    // gsl_set_error_handler_off();
 
     if(0){
       printf ("%5lu, %10.3e, %10.3e, f() = %7.3f, size = %.3f\n",
@@ -574,16 +581,15 @@ evo_tree max_likelihood(evo_tree& rtree, double& minL, const double ssize, const
 
     if (status == GSL_SUCCESS){
       if(0){
-	printf ("converged to minimum at\n");
+        	printf ("converged to minimum at\n");
 
-	printf ("%5lu, %10.3e, %10.3e, f() = %7.3f, size = %.3f\n",
-		iter,
-		exp(gsl_vector_get (s->x, 0)),
-		exp(gsl_vector_get (s->x, s->x->size-1)),
-		s->fval, size);
-      }
+        	printf ("%5lu, %10.3e, %10.3e, f() = %7.3f, size = %.3f\n",
+        		iter,
+        		exp(gsl_vector_get (s->x, 0)),
+        		exp(gsl_vector_get (s->x, s->x->size-1)),
+        		s->fval, size);
+        }
     }
-
   }
   while (status == GSL_CONTINUE && iter < miter);
 
@@ -613,6 +619,8 @@ evo_tree max_likelihood(evo_tree& rtree, double& minL, const double ssize, const
     gsl_vector_free(x);
     gsl_vector_free(ss);
     gsl_multimin_fminimizer_free (s);
+    /* restore original handler */
+    gsl_set_error_handler (old_handler);
 
     return new_tree;
 
@@ -638,6 +646,8 @@ evo_tree max_likelihood(evo_tree& rtree, double& minL, const double ssize, const
     gsl_vector_free(x);
     gsl_vector_free(ss);
     gsl_multimin_fminimizer_free (s);
+    /* restore original handler */
+    gsl_set_error_handler (old_handler);
 
     return new_tree;
   }

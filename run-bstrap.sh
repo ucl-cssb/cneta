@@ -31,7 +31,8 @@ do
 done
 
 # Draw the ML tree with bootstapping support
-Rscript ana/plot-consensus.R $bdir $ofile $odir/results-maxL-tree-sim1-bootstap.pdf
+#Rscript ana/plot-consensus.R $bdir $ofile $odir/results-maxL-tree-sim1-bootstap.pdf
+Rscript ana/plot-trees-all.R -s $bdir -f $ofile -o $odir/results-maxL-tree-sim1-bootstap.pdf -t "bootstrap" -p "results-maxL-sim1-btree-*txt"
 
 # Find the number of mutations along edges of the simulated tree
 # less $minfo | sed '1,20d' | grep -v "MUT" | grep -v "eid" | sed '/^$/d' - | awk '{count[$1]++} END{for(e in count) print e, count[e]}' > $odir/sim-data-1-mut-count.txt

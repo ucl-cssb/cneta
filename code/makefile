@@ -3,7 +3,7 @@ all: sveta svtreeml svtreemu
 
 sveta: sveta.cpp
 	cd gzstream/ && make
-	g++ -std=gnu++11 sveta.cpp -o sveta -L/usr/local/lib/ -lgsl -lgslcblas -L./gzstream -lgzstream -lz -I/usr/local/include -I./gzstream
+	g++ -std=gnu++11 sveta.cpp -o sveta -L/usr/local/lib/ -lboost_program_options -lgsl -lgslcblas -L./gzstream -lgzstream -lz -I/usr/local/include -I./gzstream
 
 svtreeml: svtreeml.cpp
 	cd gzstream/ && make
