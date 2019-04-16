@@ -2,6 +2,7 @@
 library(ggtree)
 library(ape)
 library(tools)
+library(ggplot2)
 
 if(!require(optparse)){
     install.packages("optparse")
@@ -60,7 +61,7 @@ plot.tree.xlim <- function(tree) {
 }
 
 
-plot.tree.bootstrap <- function(tree){
+plot.tree.bootstrap <- function(tree, with_title, mut_rate){
   p <- ggtree(tree) #+ geom_rootedge()
   # support <- character(length(tree$node.label))
   # #The following three lines define your labeling scheme.
@@ -73,10 +74,14 @@ plot.tree.bootstrap <- function(tree){
   edge = data.frame(tree$edge, edge_num = 1:nrow(tree$edge), edge_len = tree$edge.length)
   colnames(edge)=c("parent", "node", "edge_num", "edge_len")
   p <- p %<+% edge + geom_text(aes(x = branch, label = edge_len), nudge_y = 0.1)
+  if(with_title == 1){
+    title <- paste0("mutation rate ", mut_rate)
+    p <- p + ggtitle(title)
+  }
   print(p)
 }
 
-print.tree <- function(tree_file, tree_style, out_file="", branch_num = 0, bstrap_dir="", pattern="", labels = NA) {
+print.tree <- function(tree_file, tree_style, out_file = "", branch_num = 0, bstrap_dir = "", pattern = "", labels = NA, with_title = 0, mut_rate = 0.025) {
   dd <- read.table(tree_file, header = T)
   dir <- dirname(tree_file)
   stub <- file_path_sans_ext(basename(tree_file))
@@ -84,7 +89,13 @@ print.tree <- function(tree_file, tree_style, out_file="", branch_num = 0, bstra
     fout <- out_file
   }
   else{
-    fout <- file.path(dir, paste("plot-",stub,".pdf",sep=""))
+    if(branch_num == 1) {
+      mfix = paste0(stub, "-mnum")
+    }
+    else{
+      mfix = stub
+    }
+    fout <- file.path(dir, paste("plot-",mfix,".pdf",sep=""))
   }
   cat("\n\nrunning over", stub, fout, "\n", sep = "\t")
 
@@ -117,7 +128,7 @@ print.tree <- function(tree_file, tree_style, out_file="", branch_num = 0, bstra
     clad <- prop.clades(mytree, btrees, rooted = TRUE)
     clad[is.na(clad)] = 0
     mytree$node.label = clad * 100 / length(files)
-    plot.tree.bootstrap(mytree)
+    plot.tree.bootstrap(mytree, with_title, mut_rate)
   }
   dev.off()
   # ggsave(file.out, width = 11.69, height = 8.27, units="in", limitsize = FALSE)
@@ -147,7 +158,11 @@ option_list = list(
   make_option(c("-p", "--pattern"), type="character", default="",
               help="The naming pattern of tree files [default=%default]", metavar="character"),
 	make_option(c("-b", "--branch_num"), type="integer", default = 0,
-              help="The type of values on branches (0: branch length, 1: mutation number) [default=%default]", metavar="integer"),
+              help="The type of values on branches (0: time in year, 1: mutation number) [default=%default]", metavar="integer"),
+  make_option(c("-m", "--mut_rate"), type="numeric", default = 0.025,
+              help="The mutation rate of somatic chromosomal aberrations [default=%default]", metavar="numeric"),
+  make_option(c("-w", "--with_title"), type="integer", default = 0,
+              help="Showing title or not (0: without title, 1: with title) [default=%default]", metavar="integer"),
   make_option(c("-t", "--plot_type"), type="character", default="single",
               help="The type of plot, including: all (plotting all tree files in a directory), single (plotting a single tree file), and bootstrap (plotting a single tree file with bootstrapping support) [default=%default]", metavar="character"),
   make_option(c("-l", "--tree_style"), type="character", default="simple",
@@ -166,6 +181,8 @@ bstrap_dir = opt$bstrap_dir
 tree_style = opt$tree_style
 annot_file = opt$annot_file
 branch_num = opt$branch_num
+mut_rate = opt$mut_rate
+with_title =  opt$with_title
 
 # cat("Parameters used here:\n")
 # cat("tree_file:", tree_file, "\n")
@@ -203,5 +220,5 @@ if (plot_type == "bootstrap"){
   cat(paste0("Plotting bootstrap values for the tree in ", tree_file))
   tree_style = "bootstrap"
   labels = get.labels(annot_file)
-  print.tree(tree_file, tree_style, out_file = out_file, branch_num = branch_num, bstrap_dir = bstrap_dir, pattern = pattern, labels = labels)
+  print.tree(tree_file, tree_style, out_file = out_file, branch_num = branch_num, bstrap_dir = bstrap_dir, pattern = pattern, labels = labels, with_title = with_title, mut_rate = mut_rate)
 }

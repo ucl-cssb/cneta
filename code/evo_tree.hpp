@@ -19,7 +19,7 @@ public:
   int e_in;
   vector<int> e_ot;
   vector<int> daughters;
-  
+
   node(const int& _id, const int& _isRoot, const int& _isLeaf){
     id = _id;
     isRoot = _isRoot;
@@ -50,7 +50,7 @@ public:
   double length;
   int parent;
   int nmuts;
-  
+
   edge(const int& _id, const int& _start, const int& _end, const double& _length){
     id = _id;
     start = _start;
@@ -81,36 +81,29 @@ public:
   vector<double> lengths;
   vector<node>   nodes;
   vector<double> node_times;
-
   // pointers to internal edges
   vector<edge*> intedges;
-  
   int root_node_id;
-
   vector<vector<int> > chars;
-
   vector<double> tobs;
-  
   double score;
-
   double mu;
 
-  
-  
   evo_tree(){}
   evo_tree(const int& _nleaf, const vector<int>& _edges, const vector<double>& _lengths, int gen_node = 1);
   evo_tree(const int& _nleaf, const vector<edge>& _edges, int gen_node = 1);
 
   // reparameterized tree: expects terminal edges to all have length 0
   evo_tree(const int& _nleaf, const vector<edge>& _edges, const double& total_time, const vector<double>& _tobs);
-  
+
   evo_tree(const evo_tree& _t2);
 
   void   generate_nodes();
   void   calculate_node_times();
   void   generate_int_edges();
-  double get_total_time(){ return *max_element(node_times.begin(), node_times.end()); }
-  
+  // The time from beginning to the time of first sample
+  double get_total_time(){ return *max_element(node_times.begin(), node_times.end()) - *max_element(tobs.begin(), tobs.end()); }
+
   vector<int> get_ancestral_nodes(const int& node_id) const {
     vector<int> ret;
     //cout << "\tnode_id " << node_id+1 << " :";
@@ -142,7 +135,7 @@ public:
 
     return ret;
   }
-  
+
   void print(){
     cout << "EDGES:" << endl;
     cout << "\tid\tstart\tend\tlength" << endl;
@@ -159,7 +152,7 @@ public:
       else{
         cout << "\t0\t0";
       }
-      
+
       cout << "\t" << nodes[i].isLeaf  << "\t" << nodes[i].isRoot << "\t" << nodes[i].e_in+1;
       if(nodes[i].e_ot.size() == 2){
         cout<< "\t" << nodes[i].e_ot[0]+1 << "\t" << nodes[i].e_ot[1]+1;
@@ -170,7 +163,7 @@ public:
       cout << "\t" << node_times[i];
       cout << endl;
     }
-    
+
   }
 
   void write(ofstream& of){
@@ -205,7 +198,7 @@ evo_tree::evo_tree(const int& _nleaf, const vector<int>& _edges, const vector<do
   nedge = 2*nleaf - 2;
   ntotn = 2*nleaf - 1; // all nodes
   nintedge = nedge - nleaf;
-  
+
   // create list of edges
   int count = 0;
   for(int i=0; i<nedge; ++i){
@@ -227,7 +220,7 @@ evo_tree::evo_tree(const int& _nleaf, const vector<edge>& _edges, int gen_node){
   nedge = 2*nleaf - 2;
   ntotn = 2*nleaf - 1; // all nodes
   nintedge = nedge - nleaf;
-  
+
   edges.clear();
   edges.insert(edges.end(), _edges.begin(), _edges.end() );
 
@@ -240,13 +233,14 @@ evo_tree::evo_tree(const int& _nleaf, const vector<edge>& _edges, int gen_node){
 }
 
 evo_tree::evo_tree(const int& _nleaf, const vector<edge>& _edges, const double& total_time, const vector<double>& _tobs){
+  int debug = 0;
   //cout << "creating constrained tree" << endl;
   nleaf = _nleaf;
   nnode = nleaf - 1; // internal nodes
   nedge = 2*nleaf - 2;
   ntotn = 2*nleaf - 1; // all nodes
   nintedge = nedge - nleaf;
-  
+
   edges.clear();
   edges.insert(edges.end(), _edges.begin(), _edges.end() );
 
@@ -254,25 +248,26 @@ evo_tree::evo_tree(const int& _nleaf, const vector<edge>& _edges, const double& 
   generate_nodes();
 
   tobs = _tobs;
-  
+
   // Fill external edge lengths by looping over nodes
   for(int i=0; i<nleaf-1; ++i){
     vector<int> es = get_ancestral_edges( nodes[i].id );
     reverse(es.begin(),es.end());
-    
-    //cout << "node id / edges: \t" << nodes[i].id+1 << " : ";
-    //for(int j=0; j<es.size(); ++j){
-      //cout << "\t" << edges[es[j]].id+1;
-    //}
-    //cout << endl;
 
+    if(debug){
+        cout << "node id / edges: \t" << nodes[i].id+1 << " : ";
+        for(int j=0; j<es.size(); ++j){
+          cout << "\t" << edges[es[j]].id+1;
+        }
+        cout << endl;
+        cout << "edge " << es.back() << "; tip " <<  nodes[i].id+1 <<  "; total time " << total_time << "; offset " << tobs[ nodes[i].id ] << endl;
+    }
     edges[ es.back() ].length = total_time + tobs[ nodes[i].id ];
     for(int j=0; j<es.size()-1; ++j){
       edges[ es.back() ].length -= edges[es[j]].length;
     }
-
   }
-    
+
   calculate_node_times();
   generate_int_edges();
 
@@ -299,7 +294,7 @@ void evo_tree::generate_nodes(){
       nodes.push_back( node(i,0,0));
     }
   }
-  
+
   // fill in node details
   for(int i=0; i<nedge; ++i){
     nodes[ edges[i].end ].parent = edges[i].start;
@@ -329,20 +324,20 @@ void evo_tree::calculate_node_times(){
     node_times.clear();
     for(int i=0; i<nodes.size(); ++i){
       node_times.push_back(0);
-      
+
       if( nodes[i].id != root_node_id){
-	vector<int> aedges = get_ancestral_edges(i);
-	reverse(aedges.begin(),aedges.end());
-	double time = 0;
-	for(int j=0; j<aedges.size(); ++j){
-	  time += edges[aedges[j]].length;
-	}
-	node_times[ nodes[i].id ] = time;
+        vector<int> aedges = get_ancestral_edges(i);
+        reverse(aedges.begin(),aedges.end());
+        double time = 0;
+        for(int j=0; j<aedges.size(); ++j){
+           time += edges[aedges[j]].length;
+        }
+        node_times[ nodes[i].id ] = time;
       }
       else{
-	node_times[ nodes[i].id ] = 0;
+	    node_times[ nodes[i].id ] = 0;
       }
-      //cout << "node times:" << nodes[i].id+1  << "\t" << node_times[i] << endl;
+      // cout << "node times:" << nodes[i].id+1  << "\t" << node_times[i] << endl;
     }
   }
 
@@ -352,12 +347,12 @@ evo_tree::evo_tree(const evo_tree& _t2) {
   nedge = _t2.nedge;
   ntotn = _t2.ntotn;
   nintedge = _t2.nintedge;
-  
+
   root_node_id = _t2.root_node_id;
   score = _t2.score;
   tobs = _t2.tobs;
   mu = _t2.mu;
-  
+
   edges.clear();
   edges.insert(edges.end(), _t2.edges.begin(), _t2.edges.end() );
   lengths.clear();

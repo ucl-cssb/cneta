@@ -27,7 +27,9 @@ Ne=2.0
 dt=10
 
 mkdir $dir
-code/sveta -o $dir -r $Ns -n $Nsim --dup_rate $r1 --del_rate $r2 --chr_gain $r3 --chr_loss $r4 --wgd $r5 --dup_size $s1 --del_size $s2 -e $Ne -t $dt
+code/sveta -o $dir -r $Ns -n $Nsim --dup_rate $r1 --del_rate $r2 --chr_gain $r3 --chr_loss $r4 --wgd $r5 --dup_size $s1 --del_size $s2 -e $Ne -t $dt > ./test/std_test_sveta
 #Rscript ana/plot-trees.R $dir 0 >& /dev/null
 Rscript ana/plot-trees-all.R -d $dir -b 0 -t "all" # >& /dev/null
+# Plot simulated tree with the number of mutations on the branch
+Rscript ana/plot-trees-all.R -d $dir -b 1 -t "all" # >& /dev/null
 Rscript ana/plot-cns.R -d $dir -b ana/bin_locations_4401.Rdata # >& /dev/null

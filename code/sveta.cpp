@@ -380,31 +380,15 @@ int main (int argc, char ** const argv) {
 
     try {
         po::store(po::command_line_parser(argc, argv).options(cmdline_options).run(), vm);
-
         if(vm.count("help")){
             cout << cmdline_options << endl;
             return 1;
         }
-
         if(vm.count("version")){
             cout << "sveta [version 0.1], a program to simulate structural variations along a phylogenetic tree" << endl;
             return 1;
         }
-
         po::notify(vm);
-
-        dir = vm["odir"].as<string>();
-        Ns = vm["nregion"].as<int>();
-        Nsims = vm["nsim"].as<int>();
-        dup_rate = vm["dup_rate"].as<double>();
-        del_rate = vm["del_rate"].as<double>();
-        chr_gain = vm["chr_gain"].as<double>();
-        chr_loss = vm["chr_loss"].as<double>();
-        wgd = vm["wgd"].as<double>();
-        dup_size = vm["dup_size"].as<double>();
-        del_size = vm["del_size"].as<double>();
-        Ne = vm["epop"].as<double>();
-        delta_t = vm["tdiff"].as<double>();
     } catch (const std::exception& e) {
           std::cerr << e.what() << std::endl;
           return 1;

@@ -44,7 +44,7 @@ const int CN_MAX = 4;
 //int Nchar;
 
 int main (int argc, char ** const argv) {
-  int miter, nmax;
+  int miter, nmax, seed;
   double tolerance, ssize, mu_0, vlnorm;
   string datafile, timefile, treefile, ofile;
 
@@ -58,7 +58,7 @@ int main (int argc, char ** const argv) {
   required.add_options()
      ("cfile,c", po::value<string>(&datafile)->required(), "input copy number profile file")
      ("tfile,t", po::value<string>(&timefile)->required(), "input time information file")
-     ("pfile,p", po::value<string>(&timefile)->required(), "input tree information file")
+     ("pfile,p", po::value<string>(&treefile)->required(), "input tree file")
      ;
   po::options_description optional("Optional parameters");
   optional.add_options()
@@ -70,6 +70,8 @@ int main (int argc, char ** const argv) {
     ("ofile,o", po::value<string>(&ofile)->default_value("results-maxL-mu-tree.txt"), "output tree file")
     ("mu,x", po::value<double>(&mu_0)->default_value(1.0), "initial mutation rate estimate (SCA/locus/time)")
     ("vlnorm,l", po::value<double>(&vlnorm)->default_value(1.0), "scale of lognorm for initial value sampling")
+    ("model,d", po::value<int>(&model)->default_value(0), "model of evolution (0: JC69, 1: 1-step bounded)")
+    ("seed", po::value<int>(&seed)->default_value(0), "seed used for generating random numbers")
     ;
 
   po::options_description cmdline_options;
@@ -78,50 +80,32 @@ int main (int argc, char ** const argv) {
 
   try {
       po::store(po::command_line_parser(argc, argv).options(cmdline_options).run(), vm);
-
       if(vm.count("help")){
           cout << cmdline_options << endl;
           return 1;
       }
-
       if(vm.count("version")){
           cout << "svtreeml [version 0.1], a program to build a phylogenetic tree from copy number profile" << endl;
           return 1;
       }
-
       po::notify(vm);
-
-      datafile = vm["cfile"].as<string>();
-      timefile = vm["tfile"].as<string>();
-      treefile = vm["pfile"].as<string>();
-      Ns = vm["nsample"].as<int>();
-      tolerance = vm["tolerance"].as<double>();
-      miter = vm["miter"].as<int>();
-      ssize = vm["ssize"].as<double>();
-      // cout << "Input: " << endl;
-      // cout << " Data file: " << datafile << endl;
-      // cout << " Time file: " << timefile << endl;
-      // cout << " Number of samples: " << Ns << endl;
-      // cout << " Number of population: " << Npop << endl;
-      // cout << " Number of generation: " << Ngen << endl;
-      // cout << " Tolerance value: " << tolerance << endl;
   } catch (const std::exception& e) {
         std::cerr << e.what() << std::endl;
         return 1;
   }
 
-  setup_rng(0);
+  setup_rng(seed);
 
-
-  vector<vector<int> > data = read_data_var_regions(datafile, Ns, CN_MAX);
+  vector<vector<int>> data = read_data_var_regions(datafile, Ns, CN_MAX);
   Nchar = data.size();
 
   // tobs already defined globally
-  tobs = read_time_info(timefile,Ns);
-  
+  tobs = read_time_info(timefile, Ns, age);
+  cout << "The age of patient at the first sampling time: " << age << endl;
+
   // read in mle tree
-  evo_tree test_tree = read_tree_info(treefile,Ns);
-  
+  evo_tree test_tree = read_tree_info(treefile, Ns);
+
   //vector<vector<int> > vobs; // already defined globally
   for(int nc=0; nc<Nchar; ++nc){
     vector<int> obs;
@@ -130,21 +114,21 @@ int main (int argc, char ** const argv) {
     }
     vobs.push_back( obs );
   }
-  
+
   // estimate mutation rate
   //test_tree.print();
   test_tree.tobs = tobs;
   test_tree.mu = mu_0;
-  
+
   //double Ls = get_likelihood(Ns, Nchar, vobs, test_tree);
   //cout << "\nOriginal tree -ve likelihood: " << -Ls << endl;
 
   cout << "\n\n### Running optimisation: branches constrained, mu free" << endl;
   cout << "vlnorm: " << vlnorm << endl;
-  
+
   double minL = -1*LARGE_LNL;
-  evo_tree min_tree_mu;
-  
+  evo_tree min_tree_mu(test_tree);
+
   for(int i=0; i<nmax; ++i){
     double Lf = 0;
     double mu_g;
@@ -154,27 +138,27 @@ int main (int argc, char ** const argv) {
       mu_g = gsl_ran_lognormal(r, log(mu_0), vlnorm);
     }
     test_tree.mu = mu_g;
-    
+
     //evo_tree min_tree = max_likelihood(test_tree, Lf, 1, 1);
     evo_tree min_tree = max_likelihood(test_tree, Lf, ssize, tolerance, miter, 1, 1);
     cout << "Testing mu_g / -lnL / mu: " << mu_g << " / " << Lf << " / " << min_tree.mu << endl;
-    
+
     if(Lf < minL){
       minL = Lf;
       min_tree_mu = min_tree;
-      //cout << "\nMinimised tree likelihood / mu : " << Lf << "\t" << min_tree_mu.mu*Nchar <<endl;      
+      //cout << "\nMinimised tree likelihood / mu : " << Lf << "\t" << min_tree_mu.mu*Nchar <<endl;
       //min_tree_mu.print();
     }
-    
+
   }
 
   cout << "\nMinimised tree likelihood / Nchar / mu (SCA/locus/time): " << minL << " / " << Nchar << " / " <<  min_tree_mu.mu << endl;
   min_tree_mu.print();
-  
+
   stringstream sstm;
   ofstream out_tree;
   out_tree.open(ofile);
   min_tree_mu.write(out_tree);
   out_tree.close();
-  sstm.str("");  
+  sstm.str("");
 }

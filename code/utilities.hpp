@@ -1,9 +1,11 @@
 // collection of functions for reading/writing
 extern int debug;
 
-vector<double> read_time_info(const string& filename, const int& Ns){
+// Read the samping time and patient age of each sample
+vector<double> read_time_info(const string& filename, const int& Ns, int& age){
   if(debug) cout << "\tread_time_info" << endl;
   vector<double> t_info;
+  vector<int> ages;
   ifstream infile (filename.c_str());
   if (infile.is_open()){
     std::string line;
@@ -15,9 +17,17 @@ vector<double> read_time_info(const string& filename, const int& Ns){
       stringstream ss(line);
       while (ss >> buf) split.push_back(buf);
 
-      int dt = atof(split[1].c_str());
+      double dt = atof(split[1].c_str());
       //cout << "read dt: " << dt << endl;
       t_info.push_back(dt);
+
+      if(split.size()>2){
+          int a = atoi(split[2].c_str());
+          ages.push_back(a);
+      }
+    }
+    if(ages.size()>0){
+        age = *min_element(ages.begin(), ages.end());
     }
   }else{
     std::cerr << "Error: open of time data unsuccessful: " <<  filename << std::endl;

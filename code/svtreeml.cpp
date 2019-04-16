@@ -145,15 +145,12 @@ evo_tree perturb_tree( const int& Ns, const int& Nchar, vector<evo_tree> trees )
 
     // generate a new tree
     evo_tree ttree = perturb_tree( Ns, Nchar, trees[ind] );
-
     string tstring = order_tree_string( create_tree_string( ttree ) );
 
     if ( searched_trees.find(tstring) == searched_trees.end() ) {
       // add the tree
       searched_trees[ tstring ] = 1;
-
       return ttree;
-
     }
     else {
       //cout << "Tree already present" << endl;
@@ -166,11 +163,9 @@ evo_tree perturb_tree( const int& Ns, const int& Nchar, vector<evo_tree> trees )
       return ttree;
     }
   }
-
 }
 
-evo_tree do_evolutionary_algorithm(const int& Npop, const int& Ngen, const int& max_static, const double& mu, const double ssize, const double tolerance, const int miter, int cons=0, int maxj=0){
-
+evo_tree do_evolutionary_algorithm(const int& Npop, const int& Ngen, const int& max_static, const double& mu, const double ssize, const double tolerance, const int miter, const int optim, const int cons, const int maxj){
   //cout << "Running evolutionary algorithm" << endl;
 
   // create initial population of trees. Sample from coalescent trees
@@ -178,7 +173,7 @@ evo_tree do_evolutionary_algorithm(const int& Npop, const int& Ngen, const int& 
 
   vector<double> lnLs(2*Npop,0);
   for(int i=0; i<Npop; ++i){
-    evo_tree rtree = generate_coal_tree(Ns);
+    evo_tree rtree = generate_coal_tree(Ns, cons);
     rtree.mu = mu;
     rtree.tobs = tobs;
     trees.push_back( rtree );
@@ -199,52 +194,60 @@ evo_tree do_evolutionary_algorithm(const int& Npop, const int& Ngen, const int& 
 
     if( g == 0 ){
       for(int i=0; i<Npop; ++i){
-	new_trees.push_back( trees[i] );
+	         new_trees.push_back( trees[i] );
       }
 
       for(int i=0; i<Npop; ++i){
-	//new_trees.push_back( perturb_tree(Ns, Nchar, trees[i]) );
-	new_trees.push_back( perturb_tree(Ns, Nchar, trees) );
+    	//new_trees.push_back( perturb_tree(Ns, Nchar, trees[i]) );
+    	new_trees.push_back( perturb_tree(Ns, Nchar, trees) );
       }
 
       // Selection: score the trees
       for(int i=0; i<2*Npop; ++i){
-	evo_tree otree = max_likelihood(new_trees[i], Lf, ssize, tolerance, miter, cons, maxj);
-	otree.score = Lf;
-	lnLs[i] = Lf;
-	opt_trees.push_back( otree );
-	//cout << "g/i/lnL:\t" << g << "\t" << i << "\t" << lnLs[i] << endl;
+        evo_tree otree;
+        if(optim == 0){
+          otree = max_likelihood(new_trees[i], Lf, ssize, tolerance, miter, cons, maxj);
+        }
+        if(optim == 1){
+          otree = max_likelihood_BFGS(new_trees[i], model, Lf, tolerance, miter, cons, maxj);
+        }
+        otree.score = Lf;
+        lnLs[i] = Lf;
+        opt_trees.push_back( otree );
+        //cout << "g/i/lnL:\t" << g << "\t" << i << "\t" << lnLs[i] << endl;
       }
     }else{
+          // Leave this subpopulation unchanged
+          for(int i=0; i<Npop; ++i){
+        	new_trees.push_back( trees[i] );
+        	opt_trees.push_back( trees[i] );
+        	lnLs[i] = new_trees[i].score;
+          }
 
-      // Leave this subpopulation unchanged
-      for(int i=0; i<Npop; ++i){
-	new_trees.push_back( trees[i] );
-	opt_trees.push_back( trees[i] );
-	lnLs[i] = new_trees[i].score;
-      }
-
-      // Perturb this subpopulation
-      for(int i=0; i<Npop; ++i){
-	//new_trees.push_back( perturb_tree(Ns, Nchar, trees[i]) );       // trees is of size Npop
-
-	new_trees.push_back( perturb_tree(Ns, Nchar, trees) );
-
-	evo_tree otree = max_likelihood(new_trees[Npop + i], Lf, ssize, tolerance, miter, cons, maxj);     // new_trees of size 2 Npop
-	otree.score = Lf;
-	lnLs[Npop + i] = Lf;
-	opt_trees.push_back( otree );
-	//cout << "g/i/lnL:\t" << g << "\t" << Npop+i << "\t" << lnLs[i] << endl;
-      }
-
+          // Perturb this subpopulation
+          for(int i=0; i<Npop; ++i){
+        	//new_trees.push_back( perturb_tree(Ns, Nchar, trees[i]) );       // trees is of size Npop
+        	new_trees.push_back( perturb_tree(Ns, Nchar, trees) );
+            // new_trees of size 2 Npop
+            evo_tree otree;
+            if(optim == 0){
+        	    otree = max_likelihood(new_trees[Npop + i], Lf, ssize, tolerance, miter, cons, maxj);
+            }
+            if(optim == 1){
+                otree = max_likelihood_BFGS(new_trees[Npop + i], model, Lf, tolerance, miter, cons, maxj);
+            }
+        	otree.score = Lf;
+        	lnLs[Npop + i] = Lf;
+        	opt_trees.push_back( otree );
+        	//cout << "g/i/lnL:\t" << g << "\t" << Npop+i << "\t" << lnLs[i] << endl;
+        }
       // Randomly sample again?
-
     }
 
     vector<int> index(2*Npop);
     int x=0;
     iota( index.begin(), index.end(), x++);
-    sort( index.begin(), index.end(), [&](int i,int j){return lnLs[i]<lnLs[j];} );
+    sort( index.begin(), index.end(), [&](int i,int j){ return lnLs[i]<lnLs[j];} );
 
     // Selection: calculate mean fitness of top half of population
     double meand = 0;
@@ -322,8 +325,8 @@ vector<edge> create_edges_from_nodes( const vector<node>& nodes, const vector<do
 */
 
 int main (int argc, char ** const argv) {
-  int Npop, Ngen, max_static, miter, bootstrap;
-  double tolerance, ssize, mu;
+  int Npop, Ngen, max_static, miter, bootstrap, seed, cons, maxj, optim;
+  double tolerance, ssize, mu, dup, del;
   string datafile, timefile, ofile;
 
   namespace po = boost::program_options;
@@ -349,6 +352,13 @@ int main (int argc, char ** const argv) {
     ("bootstrap,b", po::value<int>(&bootstrap)->default_value(0), "doing bootstrap or not")
     ("ofile,o", po::value<string>(&ofile)->default_value("results-maxL-tree.txt"), "output tree file")
     ("mu,x", po::value<double>(&mu)->default_value(0.025), "mutation rate (SCA/locus/time)")
+    ("dup", po::value<double>(&dup)->default_value(0.02), "duplication rate (duplication/locus/time)")
+    ("del", po::value<double>(&del)->default_value(0.01), "deletion rate (deletion/locus/time)")
+    ("model,d", po::value<int>(&model)->default_value(0), "model of evolution (0: JC69, 1: 1-step bounded)")
+    ("constrained", po::value<int>(&cons)->default_value(1), "constraints on branch length (0: none, 1: fixed total time)")
+    ("fixm", po::value<int>(&maxj)->default_value(0), "estimation of mutation rate (0: mutation rate fixed to be the given value, 1: estimating mutation rate)")
+    ("optim", po::value<int>(&optim)->default_value(1), "method of optimization (0: simplex, 1: L-BFGS-B)")
+    ("seed", po::value<int>(&seed)->default_value(0), "seed used for generating random numbers")
     ;
 
   po::options_description cmdline_options;
@@ -357,47 +367,30 @@ int main (int argc, char ** const argv) {
 
   try {
       po::store(po::command_line_parser(argc, argv).options(cmdline_options).run(), vm);
-
       if(vm.count("help")){
           cout << cmdline_options << endl;
           return 1;
       }
-
       if(vm.count("version")){
           cout << "svtreeml [version 0.1], a program to build a phylogenetic tree from copy number profile" << endl;
           return 1;
       }
-
       po::notify(vm);
-
-      datafile = vm["cfile"].as<string>();
-      timefile = vm["tfile"].as<string>();
-      Ns = vm["nsample"].as<int>();
-      Npop = vm["npop"].as<int>();
-      Ngen = vm["ngen"].as<int>();
-      max_static = vm["nstop"].as<int>();
-      tolerance = vm["tolerance"].as<double>();
-      miter = vm["miter"].as<int>();
-      ssize = vm["ssize"].as<double>();
-      // cout << "Input: " << endl;
-      // cout << " Data file: " << datafile << endl;
-      // cout << " Time file: " << timefile << endl;
-      // cout << " Number of samples: " << Ns << endl;
-      // cout << " Number of population: " << Npop << endl;
-      // cout << " Number of generation: " << Ngen << endl;
-      // cout << " Tolerance value: " << tolerance << endl;
   } catch (const std::exception& e) {
         std::cerr << e.what() << std::endl;
         return 1;
   }
 
-  setup_rng(0);
+  setup_rng(seed);
 
   vector<vector<int> > data = read_data_var_regions(datafile, Ns, CN_MAX);
   Nchar = data.size();
 
   // tobs already defined globally
-  tobs = read_time_info(timefile,Ns);
+  tobs = read_time_info(timefile, Ns, age);
+  if(cons){
+      cout << "The age of patient at the first sampling time: " << age << endl;
+  }
 
   //vector<vector<int> > vobs; // already defined globally
   for(int nc=0; nc<Nchar; ++nc){
@@ -444,12 +437,12 @@ int main (int argc, char ** const argv) {
     test_tree.mu = 1.0/Nchar;
     double Ls = 0.0;
 
-    Ls = get_likelihood(Ns, Nchar, vobs, test_tree);
+    Ls = get_likelihood(Ns, Nchar, vobs, test_tree, model, 0);
     cout << "\nOriginal tree -ve likelihood: " << -Ls << endl;
 
     //for(int i=0; i<10; ++i){
     //double mu_p = mu + (i-5)*0.01*mu;
-    //Ls = get_likelihood(Ns, Nchar, vobs, test_tree, mu_p );
+    //Ls = get_likelihood(Ns, Nchar, vobs, test_tree, mu_p, model, 0);
     //cout << "\n -ve likelihood: " << mu_p << "\t" << -Ls << endl;
     //}
 
@@ -511,15 +504,28 @@ int main (int argc, char ** const argv) {
   }
 
   if(1){
-    cout << "Assuming mu (SCA/locus/time):  " << mu << endl;
-    evo_tree min_lnL_tree = do_evolutionary_algorithm(Npop, Ngen, max_static,mu, ssize, tolerance, miter, 1, 0);
-
+    if (maxj==0){
+        cout << "Assuming mu (SCA/locus/time):  " << mu << endl;
+    }
+    else{
+        cout << "Estimating mu (SCA/locus/time)" << endl;
+    }
+    evo_tree min_lnL_tree = do_evolutionary_algorithm(Npop, Ngen, max_static, mu, ssize, tolerance, miter, optim, cons, maxj);
+    if(maxj==1){
+        cout << "Estimated mu (SCA/locus/time):  " << min_lnL_tree.mu << endl;
+    }
     // Write out the top tree
     //cout << "Best fitting tree, -ve lnL = " << global_min << endl;
     min_lnL_tree.print();
+
+    // Check the validity of the tree
+    if(cons==1){
+        if(!is_tree_valid(min_lnL_tree, cons)){
+            cout << "The final tree is not valid!" << endl;
+        }
+    }
     ofstream out_tree(ofile);
     min_lnL_tree.write(out_tree);
     out_tree.close();
   }
-
 }
