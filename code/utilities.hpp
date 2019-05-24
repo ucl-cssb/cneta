@@ -118,6 +118,8 @@ vector<vector<int> > read_data_var_regions(const string& filename, const int& Ns
     //}
   cout << "\tSuccessfully read input file" << endl;
 
+  // Find the number of invariable sites for each character (state)
+  
   // Loop over and output only the regions that have varied
   vector<int> var_bins(4401,0);
   for(int k=0; k<4401; ++k){

@@ -6,8 +6,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <algorithm>
+#include <stack>
+
+#include <boost/format.hpp>
+#include <boost/algorithm/string.hpp>
 
 using namespace std;
+
 
 class node {
 public:
@@ -88,6 +93,10 @@ public:
   vector<double> tobs;
   double score;
   double mu;
+  double dup_rate;
+  double del_rate;
+  double tree_height;
+  double total_time;
 
   evo_tree(){}
   evo_tree(const int& _nleaf, const vector<int>& _edges, const vector<double>& _lengths, int gen_node = 1);
@@ -98,11 +107,16 @@ public:
 
   evo_tree(const evo_tree& _t2);
 
+  void   get_nodes_preorder(node* root, vector<node*>& nodes_preorder);
+  string make_newick(int precision);
+  void   write_nexus(int precision, ofstream& fout);
+  void   scale_time(double ratio);
   void   generate_nodes();
   void   calculate_node_times();
   void   generate_int_edges();
   // The time from beginning to the time of first sample
   double get_total_time(){ return *max_element(node_times.begin(), node_times.end()) - *max_element(tobs.begin(), tobs.end()); }
+  double get_tree_height(){ return *max_element(node_times.begin(), node_times.end()); }
 
   vector<int> get_ancestral_nodes(const int& node_id) const {
     vector<int> ret;
@@ -201,8 +215,10 @@ evo_tree::evo_tree(const int& _nleaf, const vector<int>& _edges, const vector<do
 
   // create list of edges
   int count = 0;
+  lengths.clear();
   for(int i=0; i<nedge; ++i){
     edges.push_back( edge(i,_edges[count], _edges[count+1], _lengths[i]) );
+    lengths.push_back(_lengths[i]);
     count = count + 2;
   }
 
@@ -223,6 +239,10 @@ evo_tree::evo_tree(const int& _nleaf, const vector<edge>& _edges, int gen_node){
 
   edges.clear();
   edges.insert(edges.end(), _edges.begin(), _edges.end() );
+  lengths.clear();
+  for(int i=0; i<nedge; ++i){
+      lengths.push_back(_edges[i].length);
+  }
 
   if(gen_node){
     generate_nodes();
@@ -271,6 +291,24 @@ evo_tree::evo_tree(const int& _nleaf, const vector<edge>& _edges, const double& 
   calculate_node_times();
   generate_int_edges();
 
+  lengths.clear();
+  for(int i=0; i<nedge; ++i){
+      lengths.push_back(edges[i].length);
+  }
+}
+
+void evo_tree::scale_time (double ratio) {
+    // Scale the tree height and times so that it is less than the age of the patient
+    // cout << "Current age of patient " << curr_age << endl;
+    for(int i=0; i < edges.size(); i++)
+    {
+        // cout << "Previous length: " << lengths[i] << endl;
+        edges[i].length = edges[i].length * ratio;
+        lengths[i] = lengths[i] * ratio;
+        node_times[i] = node_times[i] * ratio;
+        // cout << "Scaled length: " << lengths[i] << endl;
+        // change the time of tip node to reflect the sampling point?
+    }
 }
 
 void evo_tree::generate_int_edges(){
@@ -352,6 +390,8 @@ evo_tree::evo_tree(const evo_tree& _t2) {
   score = _t2.score;
   tobs = _t2.tobs;
   mu = _t2.mu;
+  dup_rate = _t2.dup_rate;
+  del_rate = _t2.del_rate;
 
   edges.clear();
   edges.insert(edges.end(), _t2.edges.begin(), _t2.edges.end() );
@@ -368,6 +408,126 @@ evo_tree::evo_tree(const evo_tree& _t2) {
   intedges.clear();
   generate_int_edges();
 }
+
+// Find the preorder of nodes in the tree
+void evo_tree::get_nodes_preorder(node* root, vector<node*>& nodes_preorder){
+    nodes_preorder.push_back(root);
+    for(int j=0; j<root->daughters.size();j++){
+            get_nodes_preorder(&nodes[root->daughters[j]], nodes_preorder);
+    }
+}
+
+
+string evo_tree::make_newick(int precision){
+    string newick;
+    const boost::format tip_node_format(boost::str(boost::format("%%d:%%.%df") % precision));
+    const boost::format internal_node_format(boost::str(boost::format(")%%d:%%.%df") % precision));
+    const boost::format root_node_format(boost::str(boost::format(")%%d")));
+    stack<node*> node_stack;
+    vector<node*> nodes_preorder;
+    node* root;
+
+    for(int i=0; i<nodes.size(); ++i){
+      if(nodes[i].isRoot){
+          root = &nodes[i];
+          break;
+      }
+    }
+    // cout << "root " << root->id + 1 << endl;
+    get_nodes_preorder(root, nodes_preorder);
+
+    // Traverse nodes in preorder
+    for (int i = 0; i<nodes_preorder.size(); i++)
+    {
+        node* nd = nodes_preorder[i];
+        // cout << nd->id + 1 << endl;
+        if (nd->daughters.size()>0) // internal nodes
+        {
+            newick += "(";
+            node_stack.push(nd);
+        }
+        else
+        {
+            newick += boost::str(boost::format(tip_node_format) % (nd->id + 1) % lengths[nd->e_in]);
+            if (nd->id == nodes[nd->parent].daughters[0])   //left child
+                newick += ",";
+            else
+            {
+                node* popped = (node_stack.empty() ? 0 : node_stack.top());
+                while (popped && popped->parent>0 && popped->id == nodes[popped->parent].daughters[1]) // right sibling of the previous node
+                {
+                    node_stack.pop();
+                    newick += boost::str(boost::format(internal_node_format) % (popped->id + 1) % lengths[popped->e_in]);
+                    popped = node_stack.top();
+                }
+                if (popped && popped->parent>0 && popped->id == nodes[popped->parent].daughters[0]) // left child, with another sibling
+                {
+                    node_stack.pop();
+                    newick += boost::str(boost::format(internal_node_format) % (popped->id + 1) % lengths[popped->e_in]);
+                    newick += ",";
+                }
+                if (node_stack.empty())
+                {
+                    newick += ")";
+                }
+            }
+        }
+    }
+    newick +=  boost::str(boost::format(root_node_format) % (root->id + 1));
+    return newick;
+}
+
+// Print the tree in nexus format to be used in other tools for downstream analysis
+void evo_tree::write_nexus(int precision, ofstream& fout){
+    fout << "#nexus" << endl;
+    fout << "begin trees;" << endl;
+    string newick = make_newick(precision);
+    fout << "tree 1 = " << newick << ";" << endl;
+    fout << "end;" << endl;
+}
+
+
+string create_tree_string( evo_tree tree ){
+  stringstream sstm;
+  for(int i=0; i<tree.ntotn; ++i){
+    sstm << tree.nodes[i].id+1;
+    if(tree.nodes[i].daughters.size() == 2){
+      sstm << ";" << tree.nodes[i].daughters[0]+1 << ";" << tree.nodes[i].daughters[1]+1;
+    }
+    sstm << ":";
+  }
+  return sstm.str();
+}
+
+string order_tree_string( string tree ){
+  stringstream sstm;
+
+  vector<string> split1;
+  boost::split(split1, tree, [](char c){return c == ':';});
+
+  for(int i=0; i<split1.size()-1; ++ i){     // split creates an empty string at the end
+    //sstm << split1[i];
+    //cout << "\t" << split1[i] << endl;
+
+    vector<string> split2;
+    boost::split(split2, split1[i], [](char c){return c == ';';});
+
+    if( split2.size() == 1){
+      sstm << split1[i];
+    }
+    else{
+      sstm << split2[0] << ";"; //  << split2[1] << ";" << split2[2];
+      if( atoi(split2[1].c_str() ) < atoi(split2[2].c_str() ) ){
+	sstm << split2[1] << ";" << split2[2];
+      }else{
+	sstm << split2[2] << ";" << split2[1];
+      }
+    }
+    sstm << ":";
+  }
+  return sstm.str();
+}
+
 
 void test_evo_tree(const evo_tree& tree){
   // generate the list of ancestral nodes belonging to leaf nodes

@@ -13,6 +13,7 @@ using namespace std;
 
 //enum mutation_type {duplication, deletion, chr_loss, chr_gain, wgd };
 int n_mut_type = 5;
+const int CN_MAX = 4;
 
 class mutation {
 public:
@@ -20,7 +21,7 @@ public:
   double btime;
   double gtime;
   int edge_id;
-  
+
   mutation(const int& _eid, const int& _type, const double& _btime, const double& _gtime){
     type = _type;
     btime = _btime;
@@ -32,7 +33,7 @@ public:
     //cout << "\t" << type << "\t" << chr << "\t" << loc << "\t" << size << fixed << setprecision(3) << "\t" << time << endl;
     cout << "\t" << type << fixed << setprecision(3) << "\t" << btime << "\t" << gtime << endl;
   }
-  
+
 };
 
 class segment{
@@ -44,7 +45,7 @@ public:
     chr    = _chr;
     seg_id = _seg_id;
   }
-  
+
   segment(const segment& _s2){
     chr    = _s2.chr;
     seg_id = _s2.seg_id;
@@ -54,7 +55,7 @@ public:
 class genome {
 public:
   vector<int> chr_lengths;
-  vector<vector<segment> > chrs;
+  vector<vector<segment>> chrs;
   int node_id;
 
   // map [chr][seg_id][count]
@@ -64,11 +65,11 @@ public:
   vector<int> nmuts;
   // store mutations
   vector<mutation> mutations;
-  
+
   // mean of exp size distributions
   double mean_dup_size;
   double mean_del_size;
-  
+
   genome(){};
 
   genome(const genome& _g2) {
@@ -81,12 +82,12 @@ public:
 
     cn_profile.clear();
     cn_profile = _g2.cn_profile;
-    
+
     map<int, map<int,int> >::iterator nit1;
     map<int,int>::iterator nit2;
     for(nit1 = cn_profile.begin(); nit1 != cn_profile.end(); ++nit1){
       for(nit2 = nit1->second.begin(); nit2 != nit1->second.end(); ++nit2){
-	nit2->second = 0;
+          nit2->second = 0;
       }
     }
 
@@ -95,7 +96,7 @@ public:
 
     mutations.clear();
     for(int i=0; i<_g2.mutations.size(); ++i) mutations.push_back(_g2.mutations[i]);
-    
+
     mean_dup_size = _g2.mean_dup_size;
     mean_del_size = _g2.mean_del_size;
   }
@@ -104,11 +105,11 @@ public:
   genome(const int& _nchr, const int& _nseg){
     for(int i=0; i<_nchr; ++i){
       chr_lengths.push_back(_nseg);
-      
+
       vector<segment> chr;
       for(int j=0; j < _nseg; ++j){
-	chr.push_back( segment(i,j) );
-	cn_profile[i][j] = 0;
+        chr.push_back( segment(i,j) );
+        cn_profile[i][j] = 0;
       }
       //fill_n (std::back_inserter(chrs), 1, chr);
       chrs.push_back(chr);
@@ -121,11 +122,11 @@ public:
   genome(const vector<int>& _chr_lens){
     for(int i=0; i<_chr_lens.size(); ++i){
       chr_lengths.push_back(_chr_lens[i]);
-      
+
       vector<segment> chr;
       for(int j=0; j < _chr_lens[i]; ++j){
-	chr.push_back( segment(i,j) );
-	cn_profile[i][j] = 0;
+        chr.push_back( segment(i,j) );
+        cn_profile[i][j] = 0;
       }
       chrs.push_back(chr);
     }
@@ -138,20 +139,20 @@ public:
 
     for( int p=0; p<ploidy; ++p){
       for(int i=0; i<_chr_lens.size(); ++i){
-	chr_lengths.push_back(_chr_lens[i]);
-      
-	vector<segment> chr;
-	for(int j=0; j < _chr_lens[i]; ++j){
-	  chr.push_back( segment(i,j) );
-	  cn_profile[i][j] = 0;
-	}
-	chrs.push_back(chr);
+        chr_lengths.push_back(_chr_lens[i]);
+
+        vector<segment> chr;
+        for(int j=0; j < _chr_lens[i]; ++j){
+          chr.push_back( segment(i,j) );
+          cn_profile[i][j] = 0;
+        }
+        chrs.push_back(chr);
       }
     }
-      
+
     for(int i=0; i<n_mut_type; ++i) nmuts.push_back(0);
   }
-  
+
 
   void calculate_cn(){
 
@@ -159,7 +160,7 @@ public:
     map<int,int>::iterator nit2;
     for(nit1 = cn_profile.begin(); nit1 != cn_profile.end(); ++nit1){
       for(nit2 = nit1->second.begin(); nit2 != nit1->second.end(); ++nit2){
-	nit2->second = 0;
+          nit2->second = 0;
       }
     }
 
@@ -181,12 +182,11 @@ public:
 
     // here chrs stores the segments that are currently in the genome
     // the cn profile is calculated wrt to the original unmutated genome
-    
     for(int i=0; i<chrs.size(); ++i){
       for(int j=0; j<chrs[i].size(); ++j){
-	segment s = chrs[i][j];
-	//cout << "#####:" << "\t" << s.chr << "\t" << s.seg_id << endl;
-	cn_profile[s.chr][s.seg_id]++;
+        segment s = chrs[i][j];
+        //cout << "#####:" << "\t" << s.chr << "\t" << s.seg_id << endl;
+        cn_profile[s.chr][s.seg_id]++;
       }
     }
   }
@@ -197,7 +197,7 @@ public:
     cout << endl;
     //cout << "\t";
     //for(int i=0; i< mutations.size(); ++i) cout << "\t" << mutations[i].edge_id+1 << "," << mutations[i].type << "," << mutations[i].btime << "," << mutations[i].gtime;
-    //cout << endl;					     
+    //cout << endl;
   }
 
   void print_muts(ostream& stream){
@@ -207,22 +207,22 @@ public:
     stype.push_back("crl");
     stype.push_back("crg");
     stype.push_back("wgd");
-    
+
     stream << "MUTATIONS   (" << node_id+1 << ")  dup, deln, crl, crg, wgd:";
     for(int i=0; i< nmuts.size(); ++i) stream << "\t" << nmuts[i];
     stream << endl;
-    stream << "\teid\ttype\ttime" << endl; 
+    stream << "\teid\ttype\ttime" << endl;
     for(int i=0; i< mutations.size(); ++i){
       stream << "\t" << mutations[i].edge_id+1 << "\t" << stype[mutations[i].type] << "\t" << mutations[i].btime << "\t" << mutations[i].gtime << endl;
     }
-      stream << endl;					     
+      stream << endl;
   }
-  
+
   void print_cn(){
     calculate_cn();
 
     // cn is stored as [chr][seg_id][count]
-    
+
     map<int, map<int,int> >::const_iterator it1;
     map<int,int>::const_iterator it2;
     cout << "\tCOPY NUMBER (" << node_id+1 << "):" << endl;
@@ -237,14 +237,14 @@ public:
       cout << endl;
     }
   }
-  
+
   void print(){
     cout << "\tGENOME (node): " << node_id+1 << endl;
     for(int i=0; i<chrs.size(); ++i){
       cout << "\t\tchr / nsegs: " << i << "\t" << chrs[i].size() << endl;
       cout << "\t";
       for(int j=0; j<chrs[i].size(); ++j){
-	cout << "\t" << chrs[i][j].chr << "_" << chrs[i][j].seg_id;
+    cout << "\t" << chrs[i][j].chr << "_" << chrs[i][j].seg_id;
       }
       cout << endl;
     }
@@ -252,7 +252,7 @@ public:
 
   void write(ofstream& of){
     calculate_cn();
-    
+
     map<int, map<int,int> >::const_iterator it1;
     map<int,int>::const_iterator it2;
     for(it1 = cn_profile.begin(); it1 != cn_profile.end(); ++it1){
@@ -264,7 +264,7 @@ public:
 
   void write(ogzstream& of){
     calculate_cn();
-    
+
     map<int, map<int,int> >::const_iterator it1;
     map<int,int>::const_iterator it2;
     for(it1 = cn_profile.begin(); it1 != cn_profile.end(); ++it1){
@@ -277,12 +277,12 @@ public:
   vector<int> get_cn_vector(){
     calculate_cn();
     vector<int> cns;
-  
+
     map<int, map<int,int> >::const_iterator it1;
     map<int,int>::const_iterator it2;
     for(it1 = cn_profile.begin(); it1 != cn_profile.end(); ++it1){
       for(it2 = it1->second.begin(); it2 != it1->second.end(); ++it2){
-        cns.push_back(it2->second);	
+        cns.push_back(it2->second);
       }
     }
     return cns;

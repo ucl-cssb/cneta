@@ -35,7 +35,6 @@
 using namespace std;
 
 int debug = 0;
-const int CN_MAX = 4;
 
 // global values for gsl function minimization
 //vector<vector<int> > vobs;

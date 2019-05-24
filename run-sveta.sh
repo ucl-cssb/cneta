@@ -1,35 +1,58 @@
-
+#!/usr/bin/bash
 
 # output directory
 dir="./test/"
+mkdir $dir
+
+# seed=111
 
 # number of regions. Output will be Nr+1 including germline
 Ns=5
-
 # number of samples. Number of tumours to simulate
-Nsim=2
+Nsim=1
+# Whether the tree is constrained by age or not
+cons=1
+# Model of evolution. 1: bounded model, 0: JC69 model
+model=1
+# Age of the patient
+age=50
 
 # rates of duplication, deletion, chromosome gain, chromosome loss, wgd
-r1=0.5
-r2=0.5
+r1=0.00006
+r2=0.00003
 r3=0 #0.1
 r4=0 #0.1
 r5=0 #0.001
 
-# average size of duplications and deletions in bins: L ~ Exp(s)
-s1=30
-s2=30
+# average size of duplications and deletions in bins
+s1=1
+s2=1
 
 # effective population size
-Ne=2.0
-
+Ne=1.0
 # observed time step
-dt=10
+dt=0.5
 
-mkdir $dir
-code/sveta -o $dir -r $Ns -n $Nsim --dup_rate $r1 --del_rate $r2 --chr_gain $r3 --chr_loss $r4 --wgd $r5 --dup_size $s1 --del_size $s2 -e $Ne -t $dt > ./test/std_test_sveta
-#Rscript ana/plot-trees.R $dir 0 >& /dev/null
+# Whether or not to print debug information
+verbose=0
+
+# Prefix of output file
+prefix=""
+# prefix=sim-data-N${Ns}-cons${cons}-model${model}-1
+
+
+code/sveta -o $dir -r $Ns -n $Nsim --dup_rate $r1 --del_rate $r2 --chr_gain $r3 --chr_loss $r4 --wgd $r5 --dup_size $s1 --del_size $s2 -e $Ne -t $dt --verbose $verbose --constrained $cons --model $model -p "$prefix" --age $age > $dir/std_test_sveta_cons"$cons"_model"$model"
+
+# Plot all simulated trees
+Rscript ana/plot-trees.R $dir 0 >& /dev/null
 Rscript ana/plot-trees-all.R -d $dir -b 0 -t "all" # >& /dev/null
 # Plot simulated tree with the number of mutations on the branch
 Rscript ana/plot-trees-all.R -d $dir -b 1 -t "all" # >& /dev/null
 Rscript ana/plot-cns.R -d $dir -b ana/bin_locations_4401.Rdata # >& /dev/null
+
+# Plot a single tree
+# ofile=$dir/"$prefix"-tree.txt
+# Rscript ana/plot-trees-all.R -f $ofile -b 0 -t "single" -l "xlim" # >& /dev/null
+# # Plot simulated tree with the number of mutations on the branch
+# Rscript ana/plot-trees-all.R -f $ofile -b 1 -t "single"  # >& /dev/null
+# Rscript ana/plot-cns.R -d $dir -b ana/bin_locations_4401.Rdata -p "${prefix}-cn.txt.gz" # >& /dev/null

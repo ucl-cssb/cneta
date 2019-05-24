@@ -75,13 +75,19 @@ plot.tree.bootstrap <- function(tree, with_title, mut_rate){
   colnames(edge)=c("parent", "node", "edge_num", "edge_len")
   p <- p %<+% edge + geom_text(aes(x = branch, label = edge_len), nudge_y = 0.1)
   if(with_title == 1){
-    title <- paste0("mutation rate ", mut_rate)
+    title <- ""
+    if(mut_rate>0){
+        title <- paste0("mutation rate ", mut_rate)
+    }
+    if(dup_rate>0){
+        title <- paste0("duplication rate ", dup_rate,"\ndeletion rate ", del_rate)
+    }
     p <- p + ggtitle(title)
   }
   print(p)
 }
 
-print.tree <- function(tree_file, tree_style, out_file = "", branch_num = 0, bstrap_dir = "", pattern = "", labels = NA, with_title = 0, mut_rate = 0.025) {
+print.tree <- function(tree_file, tree_style, out_file = "", branch_num = 0, bstrap_dir = "", pattern = "", labels = NA, with_title = 0, mut_rate = 0, dup_rate = 0, del_rate = 0) {
   dd <- read.table(tree_file, header = T)
   dir <- dirname(tree_file)
   stub <- file_path_sans_ext(basename(tree_file))
@@ -127,7 +133,7 @@ print.tree <- function(tree_file, tree_style, out_file = "", branch_num = 0, bst
     }
     clad <- prop.clades(mytree, btrees, rooted = TRUE)
     clad[is.na(clad)] = 0
-    mytree$node.label = clad * 100 / length(files)
+    mytree$node.label = as.integer(clad * 100 / length(files))
     plot.tree.bootstrap(mytree, with_title, mut_rate)
   }
   dev.off()
@@ -159,8 +165,12 @@ option_list = list(
               help="The naming pattern of tree files [default=%default]", metavar="character"),
 	make_option(c("-b", "--branch_num"), type="integer", default = 0,
               help="The type of values on branches (0: time in year, 1: mutation number) [default=%default]", metavar="integer"),
-  make_option(c("-m", "--mut_rate"), type="numeric", default = 0.025,
+  make_option(c("-m", "--mut_rate"), type="numeric", default = 0,
               help="The mutation rate of somatic chromosomal aberrations [default=%default]", metavar="numeric"),
+  make_option(c("-u", "--dup_rate"), type="numeric", default = 0,
+              help="The segment duplication rate of somatic chromosomal aberrations [default=%default]", metavar="numeric"),
+  make_option(c("-e", "--del_rate"), type="numeric", default = 0,
+              help="The segment deletion rate of somatic chromosomal aberrations [default=%default]", metavar="numeric"),
   make_option(c("-w", "--with_title"), type="integer", default = 0,
               help="Showing title or not (0: without title, 1: with title) [default=%default]", metavar="integer"),
   make_option(c("-t", "--plot_type"), type="character", default="single",
@@ -182,6 +192,8 @@ tree_style = opt$tree_style
 annot_file = opt$annot_file
 branch_num = opt$branch_num
 mut_rate = opt$mut_rate
+dup_rate = opt$dup_rate
+del_rate = opt$del_rate
 with_title =  opt$with_title
 
 # cat("Parameters used here:\n")
@@ -196,7 +208,7 @@ if (plot_type == "all"){
   dir <- tree_dir
   cat(paste0("Plotting all trees in directory ", dir, "\n"))
   if(pattern == ""){
-    files <- list.files(dir, "^sim\\-data\\-\\d+\\-tree")
+    files <- list.files(dir, "^sim\\-data\\-\\d+\\-tree.txt")
   }
   else{
     files <- list.files(dir, pattern = glob2rx(pattern))
@@ -220,5 +232,5 @@ if (plot_type == "bootstrap"){
   cat(paste0("Plotting bootstrap values for the tree in ", tree_file))
   tree_style = "bootstrap"
   labels = get.labels(annot_file)
-  print.tree(tree_file, tree_style, out_file = out_file, branch_num = branch_num, bstrap_dir = bstrap_dir, pattern = pattern, labels = labels, with_title = with_title, mut_rate = mut_rate)
+  print.tree(tree_file, tree_style, out_file = out_file, branch_num = branch_num, bstrap_dir = bstrap_dir, pattern = pattern, labels = labels, with_title = with_title, mut_rate = mut_rate, dup_rate = dup_rate, del_rate = del_rate)
 }

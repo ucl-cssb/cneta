@@ -92,11 +92,12 @@ if (plot_type == "all"){
     files <- list.files(dir,"^sim\\-data\\-\\d+\\-cn")
   }
   else{
-    files <- list.files(dir, pattern = glob2rx(pattern))
+    files <- list.files(dir, pattern = pattern)
   }
-  #print(files)
+  print(files)
   for(f in files){
     fname = file.path(dir, f)
+    cat(paste0("Plotting file ", fname, "\n"))
     print.cn(fname, out.file)
   }
 }
