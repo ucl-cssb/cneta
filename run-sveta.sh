@@ -4,7 +4,7 @@
 dir="./test/"
 mkdir $dir
 
-# seed=111
+# seed=165873033
 
 # number of regions. Output will be Nr+1 including germline
 Ns=5
@@ -18,15 +18,15 @@ model=1
 age=50
 
 # rates of duplication, deletion, chromosome gain, chromosome loss, wgd
-r1=0.00006
-r2=0.00003
-r3=0 #0.1
-r4=0 #0.1
-r5=0 #0.001
+r1=0.00004
+r2=0.00002
+r3=0.00001
+r4=0.00001
+r5=0.000001
 
-# average size of duplications and deletions in bins
-s1=1
-s2=1
+# mean of exponential distributions of duplication and deletion size in bins
+s1=20
+s2=20
 
 # effective population size
 Ne=1.0
@@ -42,9 +42,9 @@ prefix=""
 
 
 code/sveta -o $dir -r $Ns -n $Nsim --dup_rate $r1 --del_rate $r2 --chr_gain $r3 --chr_loss $r4 --wgd $r5 --dup_size $s1 --del_size $s2 -e $Ne -t $dt --verbose $verbose --constrained $cons --model $model -p "$prefix" --age $age > $dir/std_test_sveta_cons"$cons"_model"$model"
+# --seed $seed
 
 # Plot all simulated trees
-Rscript ana/plot-trees.R $dir 0 >& /dev/null
 Rscript ana/plot-trees-all.R -d $dir -b 0 -t "all" # >& /dev/null
 # Plot simulated tree with the number of mutations on the branch
 Rscript ana/plot-trees-all.R -d $dir -b 1 -t "all" # >& /dev/null

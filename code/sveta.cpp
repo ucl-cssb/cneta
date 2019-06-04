@@ -130,9 +130,17 @@ void site2chr(int site, int& chr, int& seg){
             }
         }
     }
-    if(debug){
-        cout << "site " << site << " is at chr " << chr + 1 << " pos " << seg << endl;
+}
+
+// Find the number of a specific chromosme
+int get_ploidy_at_chr(genome& g, int c){
+    int ploidy_at_c = 0;
+    for(int i=0; i<g.chrs.size(); i++){
+        if(i%22 == c){
+            ploidy_at_c += 1;
+        }
     }
+    return ploidy_at_c;
 }
 
 // Simulate mutations under different models
@@ -169,11 +177,16 @@ vector<mutation> generate_mutation_by_model(genome& g, const int& edge_id, const
     site2chr(site, c, loc);
     // Randomly choose a haplotype
     double x = runiform(r, 0, 1);
-    if(x > 0.5){
-        c += 22;
+    // Find the number of possible haplotype of this chromosme
+    int ploidy_at_c = get_ploidy_at_chr(g, c);
+    int haplotype = myrng(ploidy_at_c);
+    if(debug){
+        cout << "There are " << g.chrs.size() << " chromosomes now" << endl;
+        cout << "site " << site << " is at chr " << c << " pos " << loc << " haplotype " << haplotype << " ploidy " << ploidy_at_c << endl;
     }
+    c += 22 * haplotype;
 
-    if(debug) cout << "mut times, tevent, total time, time/branch len, event, chr, loc\t" << tevent << "\t" << time << "\t" << blength << "\t" << e << "\t" << c+1 << "\t" << loc << endl;
+    if(debug) cout << "mut times, tevent, total time, time/branch len, event, chr, loc\t" << tevent << "\t" << time << "\t" << blength << "\t" << e << "\t" << c << "\t" << loc << endl;
 
     // Generate the mutation
     mutation mut(edge_id, e, time/blength, node_time+time);
@@ -184,31 +197,31 @@ vector<mutation> generate_mutation_by_model(genome& g, const int& edge_id, const
     if(e == 0){   //duplications
       if(debug){
         cout << "GENOME BEFORE duplication " << endl;
-        //g.print();
-        //g.print_cn();
+        g.print();
+        g.print_cn();
       }
 
       if( g.chrs[c].size() > 0 && loc < g.chrs[c].size()){
         bool done = false;
         while( done == false ){
-          // int len = gsl_ran_exponential(r, mdup);
-          int len = 0;
+          int len = gsl_ran_exponential(r, mdup);
+          // int len = 0;
           if(debug){
-              cout << "before dup, Chr " << c+1 << " has " << g.chrs[c].size() << " segments" << endl;
-              // for(int i=0; i<g.chrs[c].size(); i++){
-              //     cout << "\t" << g.chrs[c][i].seg_id;
-              // }
-              // cout << endl;
-              // cout << "dup len:" << len << endl;
+              cout << "before dup, Chr " << c << " has " << g.chrs[c].size() << " segments" << endl;
+              for(int i=0; i<g.chrs[c].size(); i++){
+                  cout << "\t" << g.chrs[c][i].seg_id;
+              }
+              cout << endl;
+              cout << "dup len:" << len << endl;
           }
 
-          if( len < g.chrs[c].size() ){
+          if( loc + len < g.chrs[c].size() ){
             if(debug) cout << "\tSV: duplicating segment, chr, start, len: " << c << "\t" << loc << "\t" << len+1 << endl;
             //cout << "SV: insert: " << loc+len+1 << "\t" << loc << "\t" << loc+len+1 << endl;
             // Find the number of copies
             int state = g.cn_profile[c%22][g.chrs[c][loc].seg_id];
             vector<int> possible_states;
-            if(model == 0 ){
+            if(model == 0){
                 for (int i = state + 1; i <= CN_MAX; i++){
                     possible_states.push_back(i);
                 }
@@ -248,19 +261,20 @@ vector<mutation> generate_mutation_by_model(genome& g, const int& edge_id, const
             if(model == 1){
                 int state = g.cn_profile[c%22][g.chrs[c][loc].seg_id];
                 if(state < CN_MAX ){
+                    // tandom duplication
                     g.chrs[c].insert(g.chrs[c].begin()+loc+len+1, g.chrs[c].begin()+loc, g.chrs[c].begin()+loc+len+1);
                 }
             }
-            // Update copy number profile
-            g.calculate_cn();
+
             if(debug){
+                g.calculate_cn();
                 cout << "Previous state: " << state << endl;
                 cout << "Current state: " << g.cn_profile[c%22][g.chrs[c][loc].seg_id] << endl;
                 set<double> segs;
                 for(int i=0; i<g.chrs[c].size(); i++){
                     segs.insert(g.chrs[c][i].seg_id);
                 }
-                cout << "After duplication, Chr " << c+1 << " has " << g.chrs[c].size() << " segments (unique: " << segs.size() << ")" << endl;
+                cout << "After duplication, Chr " << c << " has " << g.chrs[c].size() << " segments (unique: " << segs.size() << ")" << endl;
             }
             done = true;
           }
@@ -269,55 +283,52 @@ vector<mutation> generate_mutation_by_model(genome& g, const int& edge_id, const
          if(debug) cout << "\tSV: duplication failed:" << endl;
      }
 
-      if( debug){
+      if(debug){
         cout << "GENOME AFTER duplication " << endl;
-        //g.print();
-        //g.print_cn();
+        g.print();
+        g.print_cn();
       }
     }
     else if( e == 1 ){   //deletions
       if(debug){
         cout << "GENOME BEFORE deletion " << endl;
-        //g.print();
-        //g.print_cn();
+        g.print();
+        g.print_cn();
       }
       // make sure a deletion somewhere is possible
       if( g.chrs[c].size() > 0 && loc < g.chrs[c].size()){
         bool done = false;
         while( done == false ){
-          // int len = (int) gsl_ran_exponential(r, mdel);
-          int len = 0;
-          //int len =  1 + gsl_ran_poisson (r, ldel);
+          int len = (int) gsl_ran_exponential(r, mdel);
+          // int len = 0;
           if(debug){
-              cout << "before del, Chr " << c+1 << " has " << g.chrs[c].size() << " segments" << endl;
-              // for(int i=0; i<g.chrs[c].size(); i++){
-              //     cout << "\t" << g.chrs[c][i].seg_id;
-              // }
-              // cout << endl;
-              // cout << "del len:" << len << endl;
+              cout << "before del, Chr " << c << " has " << g.chrs[c].size() << " segments" << endl;
+              for(int i=0; i<g.chrs[c].size(); i++){
+                  cout << "\t" << g.chrs[c][i].seg_id;
+              }
+              cout << endl;
+              cout << "del len:" << len << endl;
           }
 
-          if( len < g.chrs[c].size() ){
+          if( len + loc < g.chrs[c].size() ){
             // Find the segment ID
             int state = g.cn_profile[c%22][g.chrs[c][loc].seg_id];
-            // Find the number of segments in another haplotype
+            // Find the number of segments in other haplotypes
             int hap_state = 0;
-            int hap = c;
-            int nchr = 22;
-            if(c>=nchr){
-                hap = c - nchr;
-            }
-            else{
-                hap = c + nchr;
-            }
-            for(int i=0; i<g.chrs[hap].size();i++){
-                if(g.chrs[hap][i].seg_id == loc)
-                {
-                    hap_state++;
+            // cout << "Ploidy at " << c << " is " << ploidy_at_c << endl;
+            for(int j=0; j<ploidy_at_c; j++){
+                if(j == c/22) continue;
+                int hap = c % 22 + j * 22;
+                // cout << "Alternative haplotype " << hap << endl;
+                for(int i=0; i<g.chrs[hap].size();i++){
+                    if(g.chrs[hap][i].seg_id == loc)
+                    {
+                        hap_state++;
+                    }
                 }
             }
             if(debug){
-                cout << "Copies in another haplotype: " << hap_state << endl;
+                cout << "Copies in other haplotypes: " << hap_state << endl;
                 cout << "\tSV: deleting segment, chrs, start, len: " << c << "\t" << loc << "\t" << len+1 << endl;
             }
             vector<int> possible_states;
@@ -367,47 +378,76 @@ vector<mutation> generate_mutation_by_model(genome& g, const int& edge_id, const
             } // model == 0
             if(model == 1){
                 int state = g.cn_profile[c%22][g.chrs[c][loc].seg_id];
-                if(state > 0 ){
+                if(state > 0){
                     g.chrs[c].erase(g.chrs[c].begin()+loc, g.chrs[c].begin()+loc+len+1);
                 }
             }
-            // Update copy number profile
-            g.calculate_cn();
+
             if(debug){
+                g.calculate_cn();   // Update copy number profile
                 cout << "Previous state: " << state << endl;
                 cout << "Current state: " << g.cn_profile[c%22][g.chrs[c][loc].seg_id] << endl;
                 set<double> segs;
                 for(int i=0; i<g.chrs[c].size(); i++){
                     segs.insert(g.chrs[c][i].seg_id);
                 }
-                cout << "After deletion, Chr " << c+1 << " has " << g.chrs[c].size() << " segments (unique: " << segs.size() << ")" << endl;
+                cout << "After deletion, Chr " << c << " has " << g.chrs[c].size() << " segments (unique: " << segs.size() << ")" << endl;
             }
             done = true;
           }
         }
       }else{
-          if( debug) cout << "\tSV: deletion failed:" << endl;
+          if(debug) cout << "\tSV: deletion failed:" << endl;
       }
 
-      if( debug){
+      if(debug){
         cout << "GENOME AFTER deletion " << endl;
-        //g.print();
-        //g.print_cn();
+        g.print();
+        g.print_cn();
       }
     }
     else if( e == 2 ){   //chr loss
       if( g.chrs.size() > 0 ){
-        g.chrs.erase(g.chrs.begin()+c);
+        int orig_num_chr = g.chrs.size();
+        // Delete the segments in the chromosme, but keep the chromosme ID so that it can be remapped by 22
+        g.chrs[c].erase(g.chrs[c].begin(), g.chrs[c].end());
+        if(debug){
+            cout << "Chromosome loss in " << c << endl;
+            cout << "There are " << orig_num_chr << " chromosomes before chr loss" << endl;
+            cout << "There are " << g.chrs.size() << " chromosomes now" << endl;
+            g.print_cn();
+        }
       }
     }
     else if( e == 3 ){   //chr gain
-      if( g.chrs.size() > 0 ){
+      if( g.chrs.size() > 0 && g.chrs[c].size() > 0){
+        int orig_num_chr = g.chrs.size();
         g.chrs.insert(g.chrs.end(), g.chrs.begin()+c, g.chrs.begin()+c+1);
+        g.chrs[orig_num_chr].insert(g.chrs[orig_num_chr].begin(), g.chrs[c].begin(), g.chrs[c].end());
+        if(debug){
+            cout << "Chromosome gain in " << c << endl;
+            cout << "There are " << orig_num_chr << " chromosomes before chr gain" << endl;
+            cout << "There are " << g.chrs.size() << " chromosomes now" << endl;
+            g.print_cn();
+            g.print_cn();
+        }
       }
     }
     else if( e == 4 ){   // whole genome duplication
       if( g.chrs.size() > 0 ){
+          int orig_num_chr = g.chrs.size();
           g.chrs.insert(g.chrs.end(), g.chrs.begin(), g.chrs.end());
+          // replicate the segments for each chromosme
+          for(int i=0; i<orig_num_chr; i++){
+               g.chrs[i + orig_num_chr].insert(g.chrs[i + orig_num_chr].begin(), g.chrs[i].begin(), g.chrs[i].end());
+          }
+          if(debug){
+              cout << "Whole genome doubling" << endl;
+              cout << "There are " << orig_num_chr << " chromosomes before WGD" << endl;
+              cout << "There are " << g.chrs.size() << " chromosomes now" << endl;
+              g.print_cn();
+              // g.print();
+          }
       }
     }
     else{
@@ -468,7 +508,7 @@ void apply_mutations( const vector<mutation>& muts, genome& g, bool print = fals
       if(print == true){
         cout << "GENOME BEFORE duplication " << endl;
         //g.print();
-        //g.print_cn();
+        g.print_cn();
       }
 
       // make sure a duplication somewhere is possible
@@ -502,14 +542,14 @@ void apply_mutations( const vector<mutation>& muts, genome& g, bool print = fals
       if(print == true){
         cout << "GENOME AFTER duplication " << endl;
         //g.print();
-        //g.print_cn();
+        g.print_cn();
       }
     }
     else if( muts[i].type == 1){   //deletions
       if(print == true){
         cout << "GENOME BEFORE deletion " << endl;
         //g.print();
-        //g.print_cn();
+        g.print_cn();
       }
 
       // make sure a deletion somewhere is possible
@@ -540,25 +580,33 @@ void apply_mutations( const vector<mutation>& muts, genome& g, bool print = fals
       if(print == true){
         cout << "GENOME AFTER deletion " << endl;
         //g.print();
-        //g.print_cn();
+        g.print_cn();
       }
     }
     else if( muts[i].type == 2){   //chr loss
       if( g.chrs.size() > 0 ){
         int c = gsl_rng_uniform_int(r, g.chrs.size() );
-        g.chrs.erase(g.chrs.begin()+c);
+        // g.chrs.erase(g.chrs.begin()+c);
+        g.chrs[c].erase(g.chrs[c].begin(), g.chrs[c].end());
       }
 
     }
     else if( muts[i].type == 3){   //chr gain
       if( g.chrs.size() > 0 ){
         int c = gsl_rng_uniform_int(r, g.chrs.size() );
+        int orig_num_chr = g.chrs.size();
         g.chrs.insert(g.chrs.end(), g.chrs.begin()+c, g.chrs.begin()+c+1);
+        g.chrs[orig_num_chr].insert(g.chrs[orig_num_chr].begin(), g.chrs[c].begin(), g.chrs[c].end());
       }
     }
     else if( muts[i].type == 4){   // whole genome duplication
       if( g.chrs.size() > 0 ){
+          int orig_num_chr = g.chrs.size();
           g.chrs.insert(g.chrs.end(), g.chrs.begin(), g.chrs.end());
+          // replicate the segments for each chromosme
+          for(int i=0; i<orig_num_chr; i++){
+               g.chrs[i + orig_num_chr].insert(g.chrs[i + orig_num_chr].begin(), g.chrs[i].begin(), g.chrs[i].end());
+          }
       }
     }
     else{
@@ -581,9 +629,14 @@ void traverse_tree_mutating(const int& node_id, const evo_tree& tree, const vect
     int edge_id = tree.nodes[node_id].e_in;
     vector<mutation> muts;
     if( tree.edges[edge_id].length > 0 ){
-      // muts = generate_mutation_times(edge_id, tree.edges[edge_id].length, tree.node_times[ tree.nodes[node_id].parent ], rate_constants);
-      // apply_mutations( muts, genomes[ node_id ] );
-      muts = generate_mutation_by_model(genomes[ node_id ], edge_id, tree.edges[edge_id].length, tree.node_times[ tree.nodes[node_id].parent], rate_constants, model);
+        if(model == 2){
+            muts = generate_mutation_times(edge_id, tree.edges[edge_id].length, tree.node_times[ tree.nodes[node_id].parent ], rate_constants);
+            apply_mutations( muts, genomes[ node_id ] );
+        }
+        else{
+            muts = generate_mutation_by_model(genomes[ node_id ], edge_id, tree.edges[edge_id].length, tree.node_times[ tree.nodes[node_id].parent], rate_constants, model);
+        }
+
       if(debug){
           cout << "Generating mutations for node " << node_id << endl;
       }
@@ -741,21 +794,24 @@ int main (int argc, char ** const argv) {
        ;
     po::options_description optional("Optional parameters");
     optional.add_options()
-      ("model,d", po::value<int>(&model)->default_value(0), "model of evolution (0: JC69, 1: 1-step bounded)")
-      ("prefix,p", po::value<string>(&prefix)->default_value(""), "prefix of output file (it will be sim-data-N if not specified")
-      ("nregion,r", po::value<int>(&Ns)->default_value(5), "number of regions")
-      ("nsim,n", po::value<int>(&Nsims)->default_value(1), "number of multi-region samples")
+      ("model,d", po::value<int>(&model)->default_value(0), "model of evolution (0: JC69, 1: 1-step bounded, 2: Poisson)")
       ("age,a", po::value<int>(&age)->default_value(100), "age of the patient to simulate")
-      ("dup_rate", po::value<double>(&dup_rate)->default_value(0.01), "duplication rate")
-      ("del_rate", po::value<double>(&del_rate)->default_value(0.01), "deletion rate")
-      ("chr_gain", po::value<double>(&chr_gain)->default_value(0), "chromosome gain rate")
-      ("chr_loss", po::value<double>(&chr_loss)->default_value(0), "chromosome loss rate")
-      ("wgd", po::value<double>(&wgd)->default_value(0), "WGD (whole genome doubling) rate")
-      ("dup_size", po::value<double>(&dup_size)->default_value(30), "mean of duplication size distributions")
-      ("del_size", po::value<double>(&del_size)->default_value(30), "mean of deletion size distributions")
       ("epop,e", po::value<double>(&Ne)->default_value(2), "effective population size")
       ("tdiff,t", po::value<double>(&delta_t)->default_value(1), "relative timing difference")
       ("constrained", po::value<int>(&cons)->default_value(1), "constraints on branch length (0: none, 1: fixed total time)")
+
+      ("nregion,r", po::value<int>(&Ns)->default_value(5), "number of regions")
+      ("nsim,n", po::value<int>(&Nsims)->default_value(1), "number of multi-region samples")
+      ("prefix,p", po::value<string>(&prefix)->default_value(""), "prefix of output file (it will be sim-data-N if not specified")
+
+      ("dup_rate", po::value<double>(&dup_rate)->default_value(0.0005), "duplication rate (allele/locus/year)")
+      ("del_rate", po::value<double>(&del_rate)->default_value(0.01), "deletion rate (allele/locus/year)")
+      ("chr_gain", po::value<double>(&chr_gain)->default_value(0), "chromosome gain rate (haplotype/chr/year)")
+      ("chr_loss", po::value<double>(&chr_loss)->default_value(0), "chromosome loss rate (haplotype/chr/year)")
+      ("wgd", po::value<double>(&wgd)->default_value(0), "WGD (whole genome doubling) rate (year)")
+      ("dup_size", po::value<double>(&dup_size)->default_value(30), "mean of duplication size distributions")
+      ("del_size", po::value<double>(&del_size)->default_value(30), "mean of deletion size distributions")
+
       ("seed", po::value<int>(&seed)->default_value(0), "seed used for generating random numbers")
       ("verbose", po::value<int>(&debug)->default_value(0), "verbose level (0: default, 1: debug)")
       ;
@@ -809,9 +865,9 @@ int main (int argc, char ** const argv) {
     germline.mean_dup_size = var_size[0];
     germline.mean_del_size = var_size[1];
 
-    if(model==1){
-        cout << "Under this model, the mean duplication/deletion size is currently fixed to be 1" << endl;
-    }
+    // if(model==1){
+    //     cout << "Under this model, the mean duplication/deletion size is currently fixed to be 1" << endl;
+    // }
 
     vector<int> edges;
     vector<double> lengths;

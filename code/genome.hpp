@@ -250,17 +250,6 @@ public:
     }
   }
 
-  void write(ofstream& of){
-    calculate_cn();
-
-    map<int, map<int,int> >::const_iterator it1;
-    map<int,int>::const_iterator it2;
-    for(it1 = cn_profile.begin(); it1 != cn_profile.end(); ++it1){
-      for(it2 = it1->second.begin(); it2 != it1->second.end(); ++it2){
-        of << node_id+1 << "\t" << it1->first+1 << "\t" << it2->first << "\t" << it2->second << endl;
-      }
-    }
-  }
 
   void write(ogzstream& of){
     calculate_cn();
