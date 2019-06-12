@@ -95,6 +95,9 @@ public:
   double mu;
   double dup_rate;
   double del_rate;
+  double chr_gain_rate;
+  double chr_loss_rate;
+  double wgd_rate;
   double tree_height;
   double total_time;
 
@@ -392,6 +395,9 @@ evo_tree::evo_tree(const evo_tree& _t2) {
   mu = _t2.mu;
   dup_rate = _t2.dup_rate;
   del_rate = _t2.del_rate;
+  chr_gain_rate = _t2.chr_gain_rate;
+  chr_loss_rate = _t2.chr_loss_rate;
+  wgd_rate = _t2.wgd_rate;
 
   edges.clear();
   edges.insert(edges.end(), _t2.edges.begin(), _t2.edges.end() );
