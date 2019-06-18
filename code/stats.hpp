@@ -616,7 +616,7 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, evo_tree& rtree, 
     int debug = 0;
     int nstate = CN_MAX + 1;
 
-    double logL = 0;
+    double logL = 0;    // for all chromosmes
     double chr_gain = rtree.chr_gain_rate;
     double chr_loss = rtree.chr_loss_rate;
     if(debug){
@@ -627,6 +627,8 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, evo_tree& rtree, 
 
     for(int nchr=1; nchr<=vobs.size(); nchr++){
       // cout << "Chr " << nchr << endl;
+      double chr_logL = 0;  // for one chromosme
+      double chr_logL_normal = 0, chr_logL_gain = 0, chr_logL_loss = 0;
       double site_logL = 0;   // log likelihood for all sites on a chromosme
       int z = 0;    // no chr gain/loss
       // cout << " chromosme number change is " << 0 << endl;
@@ -671,10 +673,11 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, evo_tree& rtree, 
          }
       }
 
-      logL += log(1 - chr_gain - chr_loss) + site_logL;
+      chr_logL_normal = log(1 - chr_gain - chr_loss) + site_logL;
+      chr_logL += chr_logL_normal;
       if(debug){
           cout << "\nSite Likelihood for " << nchr << " is "  << site_logL << endl;
-          cout << "\nLikelihood without chr gain/loss: " << logL << endl;
+          cout << "\nLikelihood without chr gain/loss: " << chr_logL_normal << endl;
       }
 
       if(abs(chr_loss-0) > SMALL_PROB){
@@ -722,11 +725,11 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, evo_tree& rtree, 
               }
           } // for all sites on a chromosme
 
-          logL += log(chr_loss) + site_logL;
-
+          chr_logL_loss = log(chr_loss) + site_logL;
+          chr_logL +=  log(1 + exp(chr_logL_loss-chr_logL_normal));
           if(debug){
               cout << "\nLikelihood before chr loss for " << nchr << " is " << site_logL << endl;
-              cout << "\nLikelihood after chr loss: " << logL << endl;
+              cout << "\nLikelihood after chr loss: " << chr_logL_loss << endl;
           }
       } // for all chromosme loss
 
@@ -775,13 +778,28 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, evo_tree& rtree, 
               }
           } // for all sites on a chromosme
 
-          logL += log(chr_gain) + site_logL;
+          chr_logL_gain = log(chr_gain) + site_logL;
+          if(chr_logL_loss > 0){
+              chr_logL += log(1 + 1 / (exp(chr_logL_normal-chr_logL_gain) + exp(chr_logL_loss-chr_logL_gain)));
+          }
+          else{
+              chr_logL += log(1 + exp(chr_logL_gain-chr_logL_normal));
+          }
+
           if(debug){
               cout << "\nLikelihood before chr gain for " << nchr << " is " << site_logL << endl;
-              cout << "\nLikelihood after chr gain: " << logL << endl;
+              cout << "\nLikelihood after chr gain: " << chr_logL_gain << endl;
           }
       } // for all chromosme loss
+      // chr_logL = chr_logL_normal + log(1 + exp(chr_logL_loss-chr_logL_normal)) + log(1 + 1 / (exp(chr_logL_normal-chr_logL_gain) + exp(chr_logL_loss-chr_logL_gain)));
+      if(debug){
+          cout << "\nLikelihood with chr gain/loss for one chromosme: " << logL << endl;
+      }
+      logL += chr_logL;
     } // for each chromosme
+    if(debug){
+        cout << "\nLikelihood with chr gain/loss for all chromosmes: " << logL << endl;
+    }
     return logL;
 }
 

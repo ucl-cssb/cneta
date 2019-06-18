@@ -804,8 +804,8 @@ int main (int argc, char ** const argv) {
       ("nsim,n", po::value<int>(&Nsims)->default_value(1), "number of multi-region samples")
       ("prefix,p", po::value<string>(&prefix)->default_value(""), "prefix of output file (it will be sim-data-N if not specified")
 
-      ("dup_rate", po::value<double>(&dup_rate)->default_value(0.0005), "duplication rate (allele/locus/year)")
-      ("del_rate", po::value<double>(&del_rate)->default_value(0.01), "deletion rate (allele/locus/year)")
+      ("dup_rate", po::value<double>(&dup_rate)->default_value(0.0001), "duplication rate (allele/locus/year)")
+      ("del_rate", po::value<double>(&del_rate)->default_value(0.0002), "deletion rate (allele/locus/year)")
       ("chr_gain", po::value<double>(&chr_gain)->default_value(0), "chromosome gain rate (haplotype/chr/year)")
       ("chr_loss", po::value<double>(&chr_loss)->default_value(0), "chromosome loss rate (haplotype/chr/year)")
       ("wgd", po::value<double>(&wgd)->default_value(0), "WGD (whole genome doubling) rate (year)")
@@ -892,7 +892,7 @@ int main (int argc, char ** const argv) {
           test_tree0.print();
       }
 
-      // Scale branch lengths
+      // Scale branch lengths by Ne
       for(int l=0; l<lengths.size(); ++l) lengths[l] = lengths[l]*Ne;
 
       // randomly assign leaf edges to time points t0, t1, t2, t3
@@ -900,6 +900,7 @@ int main (int argc, char ** const argv) {
       cout << "assigning temporal structure" << endl;
       bool assign0 = false;
       int bcount = 0;
+      tobs.clear(); // clear the sample time differences
       for(int l=1; l<edges.size(); l=l+2){
         	if( edges[l] < Ns){
         	  int ind = 0;
@@ -910,8 +911,8 @@ int main (int argc, char ** const argv) {
         	  else{
         	    ind = gsl_rng_uniform_int(r, 4);
         	  }
-        	  cout << "\t sample / time point:" << edges[l]+1 << "\t" << ind << endl;
               double stime = ind*delta_t;
+        	  cout << "\t sample / time point:" << edges[l]+1 << "\t" << ind << "\t" << stime << endl;
         	  lengths[bcount] = lengths[bcount] + stime;
               // Store the sampling time for time scaling by the age of a patient
               tobs.push_back(stime);
@@ -920,6 +921,8 @@ int main (int argc, char ** const argv) {
       }
 
       evo_tree test_tree(Ns+1, edges, lengths);
+      // Ensure that the rescaled tree by age has a height smaller than the age of last sample
+      // Need tobs to get the miminmal tree height
       if(cons){
           double min_height = *max_element(tobs.begin(), tobs.end());
           double max_height = age + min_height;
