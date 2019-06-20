@@ -609,6 +609,9 @@ int main (int argc, char ** const argv) {
     if(model==1){
         rates.push_back(dup_rate);
         rates.push_back(del_rate);
+        rates.push_back(chr_gain_rate);
+        rates.push_back(chr_loss_rate);
+        rates.push_back(wgd_rate);
     }
     evo_tree min_lnL_tree = do_evolutionary_algorithm(Npop, Ngen, max_static, rates, ssize, tolerance, miter, optim, model, cons, maxj, correct_bias);
     if(maxj==1){

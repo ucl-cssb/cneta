@@ -170,24 +170,27 @@ vector<mutation> generate_mutation_by_model(genome& g, const int& edge_id, const
     int e = rchoose(r, rate_constants);
 
     // assign the event to a site with probabilities proportional to the rates at the site
-    int site = rchoose(r,  site_rates);
+    int site = 0;
     // Convert the site position back to chromosome ID and segment ID
     int c = 0;
     int loc = 0;
-    site2chr(site, c, loc);
-    // Randomly choose a haplotype
-    double x = runiform(r, 0, 1);
-    // Find the number of possible haplotype of this chromosme
-    int ploidy_at_c = get_ploidy_at_chr(g, c);
-    int haplotype = myrng(ploidy_at_c);
-    if(debug){
-        cout << "There are " << g.chrs.size() << " chromosomes now" << endl;
-        cout << "site " << site << " is at chr " << c << " pos " << loc << " haplotype " << haplotype << " ploidy " << ploidy_at_c << endl;
+    int ploidy_at_c = 0;
+    if(e == 0 || e == 1){
+        site = rchoose(r,  site_rates);
+        site2chr(site, c, loc);
+        // Randomly choose a haplotype
+        double x = runiform(r, 0, 1);
+        // Find the number of possible haplotype of this chromosme
+        ploidy_at_c = get_ploidy_at_chr(g, c);
+        int haplotype = myrng(ploidy_at_c);
+        if(debug){
+            cout << "There are " << g.chrs.size() << " chromosomes now" << endl;
+            cout << "site " << site << " is at chr " << c << " pos " << loc << " haplotype " << haplotype << " ploidy " << ploidy_at_c << endl;
+        }
+        c += 22 * haplotype;
+
+        if(debug) cout << "mut times, tevent, total time, time/branch len, event, chr, loc\t" << tevent << "\t" << time << "\t" << blength << "\t" << e << "\t" << c << "\t" << loc << endl;
     }
-    c += 22 * haplotype;
-
-    if(debug) cout << "mut times, tevent, total time, time/branch len, event, chr, loc\t" << tevent << "\t" << time << "\t" << blength << "\t" << e << "\t" << c << "\t" << loc << endl;
-
     // Generate the mutation
     mutation mut(edge_id, e, time/blength, node_time+time);
     ret.push_back(mut);
@@ -408,6 +411,7 @@ vector<mutation> generate_mutation_by_model(genome& g, const int& edge_id, const
     }
     else if( e == 2 ){   //chr loss
       if( g.chrs.size() > 0 ){
+        int c = gsl_rng_uniform_int(r, g.chrs.size() );
         int orig_num_chr = g.chrs.size();
         // Delete the segments in the chromosme, but keep the chromosme ID so that it can be remapped by 22
         g.chrs[c].erase(g.chrs[c].begin(), g.chrs[c].end());
@@ -420,18 +424,21 @@ vector<mutation> generate_mutation_by_model(genome& g, const int& edge_id, const
       }
     }
     else if( e == 3 ){   //chr gain
-      if( g.chrs.size() > 0 && g.chrs[c].size() > 0){
-        int orig_num_chr = g.chrs.size();
-        g.chrs.insert(g.chrs.end(), g.chrs.begin()+c, g.chrs.begin()+c+1);
-        g.chrs[orig_num_chr].insert(g.chrs[orig_num_chr].begin(), g.chrs[c].begin(), g.chrs[c].end());
-        if(debug){
-            cout << "Chromosome gain in " << c << endl;
-            cout << "There are " << orig_num_chr << " chromosomes before chr gain" << endl;
-            cout << "There are " << g.chrs.size() << " chromosomes now" << endl;
-            g.print_cn();
-            g.print_cn();
-        }
-      }
+      if( g.chrs.size() > 0 ){
+          int c = gsl_rng_uniform_int(r, g.chrs.size() );
+          if( g.chrs[c].size() > 0){
+            int orig_num_chr = g.chrs.size();
+            g.chrs.insert(g.chrs.end(), g.chrs.begin()+c, g.chrs.begin()+c+1);
+            g.chrs[orig_num_chr].insert(g.chrs[orig_num_chr].begin(), g.chrs[c].begin(), g.chrs[c].end());
+            if(debug){
+                cout << "Chromosome gain in " << c << endl;
+                cout << "There are " << orig_num_chr << " chromosomes before chr gain" << endl;
+                cout << "There are " << g.chrs.size() << " chromosomes now" << endl;
+                g.print_cn();
+                g.print_cn();
+            }
+          }
+       }
     }
     else if( e == 4 ){   // whole genome duplication
       if( g.chrs.size() > 0 ){

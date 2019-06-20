@@ -27,12 +27,15 @@ extern "C" {
   int model;
   int correct_bias;
   int age;
+  int has_wgd;
+  int has_chr_gain;
+  int has_chr_loss;
 }
 
 const double LARGE_LNL = -1e9;
 const double SMALL_LNL = -1e20;
 const double ERROR_X = 1.0e-4;
-const double SMALL_PROB = 1.0e-6;
+const double SMALL_PROB = 1.0e-20;
 
 void setup_rng(int set_seed){
   gsl_rng_env_setup();
@@ -107,6 +110,20 @@ int rchoose(gsl_rng* r, const vector<double>& rates){
   return ret;
 }
 
+
+int get_num_params(){
+    int num = 2;
+    if (has_wgd == 0){
+        num +=1;
+    }
+    if (has_chr_gain == 0){
+        num +=1;
+    }
+    if (has_chr_loss == 0){
+        num +=1;
+    }
+    return num;
+}
 
 // generate neutral coalescent trees
 // here nsample is the number of cancer samples (not including germline node)
@@ -372,7 +389,12 @@ void get_transition_matrix_bounded(double* q, double* p, double t){
     }
     double* res = r8mat_expm1(n, tmp);
     for(int i=0; i<n*n; i++){
+        // if(res[i]<SMALL_PROB){
+        //     p[i] = 0;
+        // }
+        // else{
         p[i] = res[i];
+        // }
     }
 
     if(debug){
@@ -673,11 +695,20 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, evo_tree& rtree, 
          }
       }
 
-      chr_logL_normal = log(1 - chr_gain - chr_loss) + site_logL;
+      double chr_normal = 1;
+      if(abs(chr_loss-0) > SMALL_PROB){
+         chr_normal -= chr_loss;
+      }
+      if(abs(chr_gain-0) > SMALL_PROB){
+         chr_normal -= chr_gain;
+      }
+
+      chr_logL_normal = log(chr_normal) + site_logL;
       chr_logL += chr_logL_normal;
       if(debug){
-          cout << "\nSite Likelihood for " << nchr << " is "  << site_logL << endl;
-          cout << "\nLikelihood without chr gain/loss: " << chr_logL_normal << endl;
+          cout << "Likelihood without chr gain/loss for " << nchr << " is "  << chr_normal << endl;
+          cout << "Site Likelihood for " << nchr << " is "  << site_logL << endl;
+          cout << "Likelihood without chr gain/loss: " << chr_logL_normal << endl;
       }
 
       if(abs(chr_loss-0) > SMALL_PROB){
@@ -792,10 +823,10 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, evo_tree& rtree, 
           }
       } // for all chromosme loss
       // chr_logL = chr_logL_normal + log(1 + exp(chr_logL_loss-chr_logL_normal)) + log(1 + 1 / (exp(chr_logL_normal-chr_logL_gain) + exp(chr_logL_loss-chr_logL_gain)));
+      logL += chr_logL;
       if(debug){
           cout << "\nLikelihood with chr gain/loss for one chromosme: " << logL << endl;
       }
-      logL += chr_logL;
     } // for each chromosme
     if(debug){
         cout << "\nLikelihood with chr gain/loss for all chromosmes: " << logL << endl;
@@ -990,6 +1021,9 @@ double my_f (const gsl_vector *v, void *params){
   if(model==1){
       new_tree.dup_rate = tree->dup_rate;
       new_tree.del_rate = tree->del_rate;
+      new_tree.chr_gain_rate = tree->chr_gain_rate;
+      new_tree.chr_loss_rate = tree->chr_loss_rate;
+      new_tree.wgd_rate = tree->wgd_rate;
   }
 
   // return -1.0*get_likelihood(Ns, Nchar, vobs, new_tree, model, 0);
@@ -1015,6 +1049,9 @@ double my_f_mu (const gsl_vector *v, void *params){
   if(model==1){
       new_tree.dup_rate = exp( gsl_vector_get(v,tree->nedge-1) );
       new_tree.del_rate = exp( gsl_vector_get(v,tree->nedge) );
+      new_tree.chr_gain_rate = exp( gsl_vector_get(v,tree->nedge+1) );
+      new_tree.chr_loss_rate = exp( gsl_vector_get(v,tree->nedge+2) );
+      new_tree.wgd_rate = exp( gsl_vector_get(v,tree->nedge+3) );
   }
 
   // return -1.0*get_likelihood(Ns, Nchar, vobs, new_tree, model, 0);
@@ -1048,6 +1085,9 @@ double my_f_cons (const gsl_vector *v, void *params){
   if(model==1){
       new_tree.dup_rate = tree->dup_rate;
       new_tree.del_rate = tree->del_rate;
+      new_tree.chr_gain_rate = tree->chr_gain_rate;
+      new_tree.chr_loss_rate = tree->chr_loss_rate;
+      new_tree.wgd_rate = tree->wgd_rate;
   }
 
   // return -1.0*get_likelihood(Ns, Nchar, vobs, new_tree, model, 1);
@@ -1081,6 +1121,9 @@ double my_f_cons_mu (const gsl_vector *v, void *params){
   if(model==1){
       new_tree.dup_rate = exp( gsl_vector_get(v,count+1) );
       new_tree.del_rate = exp( gsl_vector_get(v,count+2) );
+      new_tree.chr_gain_rate = exp( gsl_vector_get(v,count+3) );
+      new_tree.chr_loss_rate = exp( gsl_vector_get(v,count+4) );
+      new_tree.wgd_rate = exp( gsl_vector_get(v,count+5) );
   }
 
   // return -1.0*get_likelihood(Ns, Nchar, vobs, new_tree, model, 1);
@@ -1115,7 +1158,10 @@ void get_variables(evo_tree& rtree, int model, int cons, int maxj, double *x){
           if(model == 1){
               new_tree.dup_rate = rtree.dup_rate;
               new_tree.del_rate = rtree.del_rate;
-              new_tree.mu = new_tree.dup_rate + new_tree.del_rate;
+              new_tree.chr_gain_rate = rtree.chr_gain_rate;
+              new_tree.chr_loss_rate = rtree.chr_loss_rate;
+              new_tree.wgd_rate = rtree.wgd_rate;
+              new_tree.mu = new_tree.dup_rate + new_tree.del_rate + new_tree.chr_gain_rate + new_tree.chr_loss_rate + new_tree.wgd_rate;
           }
       }else{
           if(model == 0){
@@ -1128,11 +1174,17 @@ void get_variables(evo_tree& rtree, int model, int cons, int maxj, double *x){
           if(model == 1){
               new_tree.dup_rate = x[rtree.nedge];
               new_tree.del_rate = x[rtree.nedge+1];
-              new_tree.mu = new_tree.dup_rate + new_tree.del_rate;
+              new_tree.chr_gain_rate = x[rtree.nedge+2];
+              new_tree.chr_loss_rate = x[rtree.nedge+3];
+              new_tree.wgd_rate = x[rtree.nedge+4];
+              new_tree.mu = new_tree.dup_rate + new_tree.del_rate + new_tree.chr_gain_rate + new_tree.chr_loss_rate + new_tree.wgd_rate;
               if(debug){
                   for(int i=0; i<rtree.nedge+2; i++){ cout << x[i] << '\n';}
                   cout << "dup_rate value so far: " << new_tree.dup_rate << endl;
                   cout << "del_rate value so far: " << new_tree.del_rate << endl;
+                  cout << "chr_gain_rate value so far: " << new_tree.chr_gain_rate << endl;
+                  cout << "chr_loss_rate value so far: " << new_tree.chr_loss_rate << endl;
+                  cout << "wgd_rate value so far: " << new_tree.wgd_rate << endl;
               }
           }
       }
@@ -1158,7 +1210,10 @@ void get_variables(evo_tree& rtree, int model, int cons, int maxj, double *x){
         if(model == 1){
             new_tree.dup_rate = rtree.dup_rate;
             new_tree.del_rate = rtree.del_rate;
-            new_tree.mu = new_tree.dup_rate + new_tree.del_rate;
+            new_tree.chr_gain_rate = rtree.chr_gain_rate;
+            new_tree.chr_loss_rate = rtree.chr_loss_rate;
+            new_tree.wgd_rate = rtree.wgd_rate;
+            new_tree.mu = new_tree.dup_rate + new_tree.del_rate + new_tree.chr_gain_rate + new_tree.chr_loss_rate + new_tree.wgd_rate;
         }
       }else{
         if(model == 0){
@@ -1171,11 +1226,17 @@ void get_variables(evo_tree& rtree, int model, int cons, int maxj, double *x){
         if(model == 1){
             new_tree.dup_rate = x[rtree.nintedge+2];
             new_tree.del_rate = x[rtree.nintedge+3];
-            new_tree.mu = new_tree.dup_rate + new_tree.del_rate;
+            new_tree.chr_gain_rate = x[rtree.nintedge+4];
+            new_tree.chr_loss_rate = x[rtree.nintedge+5];
+            new_tree.wgd_rate = x[rtree.nintedge+6];
+            new_tree.mu = new_tree.dup_rate + new_tree.del_rate + new_tree.chr_gain_rate + new_tree.chr_loss_rate + new_tree.wgd_rate;
             if(debug){
-                for(int i=0; i<=rtree.nintedge+3; i++){ cout << x[i] << '\n';}
+                for(int i=0; i<=rtree.nintedge+6; i++){ cout << x[i] << '\n';}
                 cout << "dup_rate value so far: " << new_tree.dup_rate << endl;
                 cout << "del_rate value so far: " << new_tree.del_rate << endl;
+                cout << "chr_gain_rate value so far: " << new_tree.chr_gain_rate << endl;
+                cout << "chr_loss_rate value so far: " << new_tree.chr_loss_rate << endl;
+                cout << "wgd_rate value so far: " << new_tree.wgd_rate << endl;
             }
          }
       }
@@ -1420,7 +1481,7 @@ evo_tree max_likelihood_BFGS(evo_tree& rtree, int model, double& minL, const dou
               ndim = npar_ne + 1;
           }
           if(model==1){
-              ndim = npar_ne + 2;
+              ndim = npar_ne + 5;
           }
       }
       variables = new double[ndim+1];
@@ -1449,6 +1510,21 @@ evo_tree max_likelihood_BFGS(evo_tree& rtree, int model, double& minL, const dou
               variables[i+1] = rtree.del_rate;
               lower_bound[i+1] = 0;
               upper_bound[i+1] = 1;
+
+              i = npar_ne+2;
+              variables[i+1] = rtree.chr_gain_rate;
+              lower_bound[i+1] = 0;
+              upper_bound[i+1] = 1;
+
+              i = npar_ne+3;
+              variables[i+1] = rtree.chr_loss_rate;
+              lower_bound[i+1] = 0;
+              upper_bound[i+1] = 1;
+
+              i = npar_ne+4;
+              variables[i+1] = rtree.wgd_rate;
+              lower_bound[i+1] = 0;
+              upper_bound[i+1] = 1;
           }
       }
     }else{
@@ -1460,7 +1536,7 @@ evo_tree max_likelihood_BFGS(evo_tree& rtree, int model, double& minL, const dou
             ndim = npar_ne + 1;
         }
         if(model==1){
-            ndim = npar_ne + 2;
+            ndim = npar_ne + 5;
         }
       }
       // initialise with internal edges
@@ -1469,16 +1545,22 @@ evo_tree max_likelihood_BFGS(evo_tree& rtree, int model, double& minL, const dou
       lower_bound = new double[ndim+1];
 
       // initialise the best guess branch length and mu if required
+      // rtree.print();
       for(i=0; i< rtree.nintedge; ++i){
         variables[i+1] = rtree.intedges[i]->length;
         lower_bound[i+1] = 0;
-        upper_bound[i+1] = age + *max_element(rtree.tobs.begin(), rtree.tobs.end());
+        // upper_bound[i+1] = age + *max_element(rtree.tobs.begin(), rtree.tobs.end());
+        upper_bound[i+1] = age;
       }
 
       // initialise with current total tree time until first sample
       i = rtree.nintedge;
       variables[i+1] = rtree.get_total_time();
-      lower_bound[i+1] = *max_element(rtree.tobs.begin(), rtree.tobs.end());
+      // cout << "total time: " << variables[i+1] << endl;
+      vector<int> internal_lens = rtree.get_internal_lengths();
+      double max_ilen =  *max_element(internal_lens.begin(), internal_lens.end());
+      // lower_bound[i+1] = *max_element(rtree.tobs.begin(), rtree.tobs.end());
+      lower_bound[i+1] = max_ilen;
       upper_bound[i+1] = age;
 
       if(maxj==1){
@@ -1496,6 +1578,21 @@ evo_tree max_likelihood_BFGS(evo_tree& rtree, int model, double& minL, const dou
 
               i = npar_ne+1;
               variables[i+1] = rtree.del_rate;
+              lower_bound[i+1] = 0;
+              upper_bound[i+1] = 1;
+
+              i = npar_ne+2;
+              variables[i+1] = rtree.chr_gain_rate;
+              lower_bound[i+1] = 0;
+              upper_bound[i+1] = 1;
+
+              i = npar_ne+3;
+              variables[i+1] = rtree.chr_loss_rate;
+              lower_bound[i+1] = 0;
+              upper_bound[i+1] = 1;
+
+              i = npar_ne+4;
+              variables[i+1] = rtree.wgd_rate;
               lower_bound[i+1] = 0;
               upper_bound[i+1] = 1;
           }
@@ -1540,7 +1637,7 @@ evo_tree max_likelihood(evo_tree& rtree, int model, double& minL, const double s
           npar = npar_ne + 1;
       }
       if(model==1){
-          npar = npar_ne + 2;
+          npar = npar_ne + 5;
       }
     }
 
@@ -1556,6 +1653,9 @@ evo_tree max_likelihood(evo_tree& rtree, int model, double& minL, const double s
         if(model==1){
             gsl_vector_set (x, npar_ne, log(rtree.dup_rate) );
             gsl_vector_set (x, npar_ne+1, log(rtree.del_rate) );
+            gsl_vector_set (x, npar_ne+2, log(rtree.chr_gain_rate) );
+            gsl_vector_set (x, npar_ne+3, log(rtree.chr_loss_rate) );
+            gsl_vector_set (x, npar_ne+4, log(rtree.wgd_rate) );
         }
     }
 
@@ -1574,7 +1674,7 @@ evo_tree max_likelihood(evo_tree& rtree, int model, double& minL, const double s
             npar = npar_ne + 1;
         }
         if(model==1){
-            npar = npar_ne + 2;
+            npar = npar_ne + 5;
         }
     }
 
@@ -1593,6 +1693,9 @@ evo_tree max_likelihood(evo_tree& rtree, int model, double& minL, const double s
         if(model==1){
             gsl_vector_set (x, npar_ne, log(rtree.dup_rate) );
             gsl_vector_set (x, npar_ne+1, log(rtree.del_rate) );
+            gsl_vector_set (x, npar_ne+2, log(rtree.chr_gain_rate) );
+            gsl_vector_set (x, npar_ne+3, log(rtree.chr_loss_rate) );
+            gsl_vector_set (x, npar_ne+4, log(rtree.wgd_rate) );
         }
     }
 
@@ -1673,7 +1776,10 @@ evo_tree max_likelihood(evo_tree& rtree, int model, double& minL, const double s
         if(model==1){
             new_tree.dup_rate = rtree.dup_rate;
             new_tree.del_rate = rtree.del_rate;
-            new_tree.mu = new_tree.dup_rate + new_tree.del_rate;
+            new_tree.chr_gain_rate = rtree.chr_gain_rate;
+            new_tree.chr_loss_rate = rtree.chr_loss_rate;
+            new_tree.wgd_rate = rtree.wgd_rate;
+            new_tree.mu = new_tree.dup_rate + new_tree.del_rate + new_tree.chr_gain_rate + new_tree.chr_loss_rate + new_tree.wgd_rate;
         }
     }else{
         if(model==0){
@@ -1682,7 +1788,10 @@ evo_tree max_likelihood(evo_tree& rtree, int model, double& minL, const double s
         if(model==1){
             new_tree.dup_rate = exp(gsl_vector_get(s->x, npar_ne));
             new_tree.del_rate = exp(gsl_vector_get(s->x, npar_ne+1));
-            new_tree.mu = new_tree.dup_rate + new_tree.del_rate;
+            new_tree.chr_gain_rate = exp(gsl_vector_get(s->x, npar_ne+2));
+            new_tree.chr_loss_rate = exp(gsl_vector_get(s->x, npar_ne+3));
+            new_tree.wgd_rate = exp(gsl_vector_get(s->x, npar_ne+4));
+            new_tree.mu = new_tree.dup_rate + new_tree.del_rate + new_tree.chr_gain_rate + new_tree.chr_loss_rate + new_tree.wgd_rate;
         }
     }
 
@@ -1714,7 +1823,10 @@ evo_tree max_likelihood(evo_tree& rtree, int model, double& minL, const double s
         if(model==1){
             new_tree.dup_rate = rtree.dup_rate;
             new_tree.del_rate = rtree.del_rate;
-            new_tree.mu = new_tree.dup_rate + new_tree.del_rate;
+            new_tree.chr_gain_rate = rtree.chr_gain_rate;
+            new_tree.chr_loss_rate = rtree.chr_loss_rate;
+            new_tree.wgd_rate = rtree.wgd_rate;
+            new_tree.mu = new_tree.dup_rate + new_tree.del_rate + new_tree.chr_gain_rate + new_tree.chr_loss_rate + new_tree.wgd_rate;
         }
     }else{
         if(model==0){
@@ -1723,7 +1835,10 @@ evo_tree max_likelihood(evo_tree& rtree, int model, double& minL, const double s
         if(model==1){
             new_tree.dup_rate = exp(gsl_vector_get(s->x, npar_ne));
             new_tree.del_rate = exp(gsl_vector_get(s->x, npar_ne+1));
-            new_tree.mu = new_tree.dup_rate + new_tree.del_rate;
+            new_tree.chr_gain_rate = exp(gsl_vector_get(s->x, npar_ne+2));
+            new_tree.chr_loss_rate = exp(gsl_vector_get(s->x, npar_ne+3));
+            new_tree.wgd_rate = exp(gsl_vector_get(s->x, npar_ne+4));
+            new_tree.mu = new_tree.dup_rate + new_tree.del_rate + new_tree.chr_gain_rate + new_tree.chr_loss_rate + new_tree.wgd_rate;
         }
     }
 

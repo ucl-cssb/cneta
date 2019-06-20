@@ -117,6 +117,7 @@ public:
   void   generate_nodes();
   void   calculate_node_times();
   void   generate_int_edges();
+  vector<int> get_internal_lengths();
   // The time from beginning to the time of first sample
   double get_total_time(){ return *max_element(node_times.begin(), node_times.end()) - *max_element(tobs.begin(), tobs.end()); }
   double get_tree_height(){ return *max_element(node_times.begin(), node_times.end()); }
@@ -300,7 +301,8 @@ evo_tree::evo_tree(const int& _nleaf, const vector<edge>& _edges, const double& 
   }
 }
 
-void evo_tree::scale_time (double ratio) {
+// Scale all the branches (easy to implement)
+void evo_tree::scale_time(double ratio) {
     // Scale the tree height and times so that it is less than the age of the patient
     // cout << "Current age of patient " << curr_age << endl;
     for(int i=0; i < edges.size(); i++)
@@ -314,6 +316,23 @@ void evo_tree::scale_time (double ratio) {
     }
 }
 
+
+// Scale non-tip nodes only
+// Node times starts with 0 (root)
+// void evo_tree::scale_time_internal (double ratio) {
+//     // Scale the tree height and times so that it is less than the age of the patient
+//     // cout << "Current age of patient " << curr_age << endl;
+//     for(int i=0; i < edges.size(); i++)
+//     {
+//         // cout << "Previous length: " << lengths[i] << endl;
+//         edges[i].length = edges[i].length * ratio;
+//         lengths[i] = lengths[i] * ratio;
+//         node_times[i] = node_times[i] * ratio;
+//         // cout << "Scaled length: " << lengths[i] << endl;
+//         // change the time of tip node to reflect the sampling point?
+//     }
+// }
+
 void evo_tree::generate_int_edges(){
   //cout << "generate_int_edges" << endl;
   for(int i=0; i<nedge; ++i){
@@ -322,6 +341,34 @@ void evo_tree::generate_int_edges(){
       //cout << "internal edge: " << (intedges.back()->id)+1 << endl;
     }
   }
+}
+
+// Find the sum of internal lengths along the path to each tip to get more constrained optimisation
+vector<int> evo_tree::get_internal_lengths(){
+    int debug = 0;
+    vector<int> internal_lens;
+    // Fill external edge lengths by looping over nodes
+    for(int i=0; i<nleaf-1; ++i){
+      double len = 0;
+      vector<int> es = get_ancestral_edges( nodes[i].id );
+      // reverse(es.begin(),es.end());
+
+      // Exclude the terminal edge
+      for(int j=1; j<es.size(); ++j){
+        len += edges[es[j]].length;
+      }
+
+      if(debug){
+          cout << "node id / edges: \t" << nodes[i].id+1 << " : " << len << endl;
+          for(int j=0; j<es.size(); ++j){
+            cout << "\t" << edges[es[j]].id+1;
+          }
+          cout << endl;
+          cout << "edge " << es.back() << "; tip " <<  nodes[i].id+1 <<  "; offset " << tobs[ nodes[i].id ] << endl;
+      }
+      internal_lens.push_back(len);
+    }
+    return internal_lens;
 }
 
 
