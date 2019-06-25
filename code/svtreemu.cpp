@@ -95,8 +95,11 @@ int main (int argc, char ** const argv) {
 
   setup_rng(seed);
 
-  vector<vector<int>> data = read_data_var_regions(datafile, Ns, CN_MAX);
-  Nchar = data.size();
+  // vector<vector<int>> data = read_data_var_regions(datafile, Ns, CN_MAX);
+  // Nchar = data.size();
+  int num_invar_bins = 0;
+  Nchar = 0;
+  map<int, vector<vector<int>>> data = read_data_var_regions_by_chr(datafile, Ns, CN_MAX, num_invar_bins);
 
   // tobs already defined globally
   tobs = read_time_info(timefile, Ns, age);
@@ -106,12 +109,26 @@ int main (int argc, char ** const argv) {
   evo_tree test_tree = read_tree_info(treefile, Ns);
 
   //vector<vector<int> > vobs; // already defined globally
-  for(int nc=0; nc<Nchar; ++nc){
-    vector<int> obs;
-    for(int i=0; i<Ns; ++i){
-      obs.push_back( data[nc][i+3] );
+  // for(int nc=0; nc<Nchar; ++nc){
+  //   vector<int> obs;
+  //   for(int i=0; i<Ns; ++i){
+  //     obs.push_back( data[nc][i+3] );
+  //   }
+  //   vobs.push_back( obs );
+  // }
+
+  // Construct the CN matrix by chromosme
+  for(int nchr=1; nchr<=data.size(); nchr++){
+    vector<vector<int>> obs_chr;
+    Nchar += data[nchr].size();
+    for(int nc=0; nc<data[nchr].size(); ++nc){
+        vector<int> obs;
+        for(int i=0; i<Ns; ++i){
+          obs.push_back( data[nchr][nc][i+3] );
+        }
+        obs_chr.push_back( obs );
     }
-    vobs.push_back( obs );
+    vobs[nchr] = obs_chr;
   }
 
   // estimate mutation rate

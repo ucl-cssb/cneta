@@ -301,151 +301,9 @@ vector<edge> create_edges_from_nodes( const vector<node>& nodes, const vector<do
 }
 */
 
-int main (int argc, char ** const argv) {
-  int Npop, Ngen, max_static, miter, bootstrap, seed, cons, maxj, optim, correct_bias;
-  double tolerance, ssize, mu, dup_rate, del_rate, chr_gain_rate, chr_loss_rate, wgd_rate;
-  string datafile, timefile, ofile;
 
-  int test = 0; // Whether or not to run test mode
-
-  namespace po = boost::program_options;
-  po::options_description generic("Generic options");
-  generic.add_options()
-    ("version,v", "print version string")
-    ("help,h", "produce help message")
-    ;
-  po::options_description required("Required parameters");
-  required.add_options()
-     ("cfile,c", po::value<string>(&datafile)->required(), "input copy number profile file")
-     ("tfile,t", po::value<string>(&timefile)->required(), "input time information file")
-     ;
-  po::options_description optional("Optional parameters");
-  optional.add_options()
-    ("nsample,s", po::value<int>(&Ns)->default_value(5), "number of samples or regions")
-    ("ofile,o", po::value<string>(&ofile)->default_value("results-maxL-tree.txt"), "output tree file")
-
-    ("npop,p", po::value<int>(&Npop)->default_value(100), "number of population")
-    ("ngen,g", po::value<int>(&Ngen)->default_value(50), "number of generation")
-    ("nstop,e", po::value<int>(&max_static)->default_value(3), "stop condition")
-    ("tolerance,r", po::value<double>(&tolerance)->default_value(1e-2), "tolerance value")
-    ("miter,m", po::value<int>(&miter)->default_value(2000), "maximum number of iterations in maximization")
-    ("ssize,z", po::value<double>(&ssize)->default_value(0.01), "initial step size")
-
-    ("mu,x", po::value<double>(&mu)->default_value(0.025), "mutation rate (allele/locus/year)")
-    ("dup_rate", po::value<double>(&dup_rate)->default_value(0.01), "duplication rate (allele/locus/year)")
-    ("del_rate", po::value<double>(&del_rate)->default_value(0.01), "deletion rate (allele/locus/year)")
-    ("chr_gain_rate", po::value<double>(&chr_gain_rate)->default_value(0), "chromosome gain rate")
-    ("chr_loss_rate", po::value<double>(&chr_loss_rate)->default_value(0), "chromosome loss rate")
-    ("wgd_rate", po::value<double>(&wgd_rate)->default_value(0), "WGD (whole genome doubling) rate")
-
-    ("model,d", po::value<int>(&model)->default_value(0), "model of evolution (0: JC69, 1: 1-step bounded)")
-    ("constrained", po::value<int>(&cons)->default_value(1), "constraints on branch length (0: none, 1: fixed total time)")
-    ("fixm", po::value<int>(&maxj)->default_value(0), "estimation of mutation rate (0: mutation rate fixed to be the given value, 1: estimating mutation rate)")
-    ("optim", po::value<int>(&optim)->default_value(1), "method of optimization (0: simplex, 1: L-BFGS-B)")
-    ("correct_bias", po::value<int>(&correct_bias)->default_value(0), "correct ascertainment bias")
-
-    ("bootstrap,b", po::value<int>(&bootstrap)->default_value(0), "doing bootstrap or not")
-    ("verbose", po::value<int>(&debug)->default_value(0), "verbose level (0: default, 1: debug)")
-    ("seed", po::value<int>(&seed)->default_value(0), "seed used for generating random numbers")
-    ;
-
-  po::options_description cmdline_options;
-  cmdline_options.add(generic).add(required).add(optional);
-  po::variables_map vm;
-
-  try {
-      po::store(po::command_line_parser(argc, argv).options(cmdline_options).run(), vm);
-      if(vm.count("help")){
-          cout << cmdline_options << endl;
-          return 1;
-      }
-      if(vm.count("version")){
-          cout << "svtreeml [version 0.1], a program to build a phylogenetic tree from copy number profile" << endl;
-          return 1;
-      }
-      po::notify(vm);
-  } catch (const std::exception& e) {
-        std::cerr << e.what() << std::endl;
-        return 1;
-  }
-
-  setup_rng(seed);
-
-  int num_invar_bins = 0;
-  Nchar = 0;
-  vector<vector<int>> data0 = read_data_var_regions(datafile, Ns, CN_MAX);
-  map<int, vector<vector<int>>> data = read_data_var_regions_by_chr(datafile, Ns, CN_MAX, num_invar_bins);
-  // Nchar = data.size();
-
-  // tobs already defined globally
-  tobs = read_time_info(timefile, Ns, age);
-  if(cons){
-      cout << "The age of patient at the first sampling time: " << age << endl;
-  }
-
-  // Construct the CN matrix
-  vector<vector<int>> vobs0;
-  for(int nc=0; nc<data0.size(); ++nc){
-    vector<int> obs;
-    for(int i=0; i<Ns; ++i){
-      obs.push_back( data0[nc][i+3] );
-    }
-    vobs0.push_back( obs );
-  }
-  // cout << "The number of sites used: " << data0.size() << endl;
-
-
-  // Construct the CN matrix by chromosme
-  for(int nchr=1; nchr<=data.size(); nchr++){
-    vector<vector<int>> obs_chr;
-    Nchar += data[nchr].size();
-    for(int nc=0; nc<data[nchr].size(); ++nc){
-        vector<int> obs;
-        for(int i=0; i<Ns; ++i){
-          obs.push_back( data[nchr][nc][i+3] );
-        }
-        obs_chr.push_back( obs );
-    }
-    vobs[nchr] = obs_chr;
-  }
-
-  // cout << "The number of sites used after grouping by chromosme: " << Nchar << endl;
-  // Do a bootstrap replicate
-  // if(bootstrap){
-  //     // create a copy of vobs to resample
-  //     vector<vector<int> > vobs_copy = vobs;
-  //     vobs.clear();
-  //     // cout << "rows selected: ";
-  //     for(int nc=0; nc<Nchar; ++nc){
-  //         // randomly select a site
-  //        int i = gsl_rng_uniform_int(r, Nchar);
-  //        // cout << i << "\t";
-  //        vobs.push_back(vobs_copy[i]);
-  //     }
-  //     // cout << endl;
-  // }
-
-  if(bootstrap){
-      // create a copy of vobs to resample
-      map<int, vector<vector<int>>> vobs_copy = vobs;
-      vobs.clear();
-      for(int nchr=1; nchr<=data.size(); nchr++){
-        vector<vector<int>> obs_chr;
-        for(int nc=0; nc<data[nchr].size(); ++nc){
-              // randomly select a site
-             int i = gsl_rng_uniform_int(r, data[nchr].size());
-             // cout << i << "\t";
-             obs_chr.push_back(vobs_copy[nchr][i]);
-        }
-        vobs[nchr] = obs_chr;
-     }
-      // cout << endl;
-  }
-
-
-  if(test){
+void run_test(const string& tree_file, int Ns, int Nchar, int model, vector<double> tobs, vector<double> rates, double ssize, double tolerance, double miter){
     // MLE testing
-
     //static const int arr1[] = {8,5, 8,1, 9,2, 9,3, 10,9, 10,8, 11,4, 11,10, 7,11, 7,6 };
     //vector<int> e (arr1, arr1 + sizeof(arr1) / sizeof(arr1[0]) );
     //for(int i=0; i<e.size();++i) e[i] = e[i] - 1;
@@ -457,8 +315,15 @@ int main (int argc, char ** const argv) {
     //test_tree.tobs = tobs;
     //test_tree.print();
 
+    // string tree_file = "./test/sim-data-1-tree.txt";
+    double dup_rate = rates[0];
+    double del_rate = rates[1];
+    double chr_gain_rate = rates[2];
+    double chr_loss_rate = rates[3];
+    double wgd_rate = rates[4];
+
     // read in true tree
-    evo_tree test_tree = read_tree_info("./test/sim-data-1-tree.txt",Ns);
+    evo_tree test_tree = read_tree_info(tree_file, Ns);
     test_tree.print();
     if(model==0){
         test_tree.mu = 1.0/Nchar;
@@ -472,8 +337,8 @@ int main (int argc, char ** const argv) {
 
     double Ls = 0.0;
 
-    Ls = get_likelihood(Ns, Nchar, vobs0, test_tree, model, 0);
-    cout << "\nOriginal tree -ve likelihood: " << -Ls << endl;
+    // Ls = get_likelihood(Ns, Nchar, vobs0, test_tree, model, 0);
+    // cout << "\nOriginal tree -ve likelihood without incorporating chr gain/loss and WGD: " << -Ls << endl;
 
     Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, test_tree, model, 0);
     cout << "\nOriginal tree -ve likelihood with revised method: " << -Ls << endl;
@@ -499,7 +364,7 @@ int main (int argc, char ** const argv) {
     out_tree.close();
     sstm.str("");
 
-    test_tree = read_tree_info("./test/sim-data-1-tree.txt",Ns);
+    test_tree = read_tree_info(tree_file, Ns);
     test_tree.dup_rate = dup_rate;
     test_tree.del_rate = del_rate;
     test_tree.mu = dup_rate + del_rate;
@@ -515,7 +380,7 @@ int main (int argc, char ** const argv) {
 
     cout << "\n\n### Running optimisation: branches free, mu free" << endl;
 
-    test_tree = read_tree_info("./test/sim-data-1-tree.txt",Ns);
+    test_tree = read_tree_info(tree_file, Ns);
     evo_tree min_tree_mu = max_likelihood(test_tree, model, Lf, ssize, tolerance, miter, 0, 1);
     cout << "\nMinimised tree likelihood / mu : " << Lf << "\t" << min_tree_mu.mu << endl;
     min_tree_mu.print();
@@ -526,7 +391,7 @@ int main (int argc, char ** const argv) {
     out_tree.close();
     sstm.str("");
 
-    test_tree = read_tree_info("./test/sim-data-1-tree.txt",Ns);
+    test_tree = read_tree_info(tree_file, Ns);
     min_tree_mu = max_likelihood_BFGS(test_tree, model, Lf, tolerance, miter, 0, 1);
     cout << "\nMinimised tree likelihood / mu by BFGS : " << Lf << "\t" << min_tree_mu.dup_rate << "\t" << min_tree_mu.del_rate << endl;
     min_tree_mu.print();
@@ -539,7 +404,7 @@ int main (int argc, char ** const argv) {
 
 
     cout << "\n\n### Running optimisation: branches constrained, mu fixed" << endl;
-    test_tree = read_tree_info("./test/sim-data-1-tree.txt",Ns);
+    test_tree = read_tree_info(tree_file, Ns);
     test_tree.tobs = tobs;
     test_tree.mu = 1.0/Nchar;
     evo_tree min_tree2 = max_likelihood(test_tree, model, Lf, ssize, tolerance, miter, 1, 0);
@@ -552,7 +417,7 @@ int main (int argc, char ** const argv) {
     out_tree.close();
     sstm.str("");
 
-    test_tree = read_tree_info("./test/sim-data-1-tree.txt",Ns);
+    test_tree = read_tree_info(tree_file, Ns);
     test_tree.tobs = tobs;
     test_tree.dup_rate = dup_rate;
     test_tree.del_rate = del_rate;
@@ -569,7 +434,7 @@ int main (int argc, char ** const argv) {
 
 
     cout << "\n\n### Running optimisation: branches constrained, mu free" << endl;
-    test_tree = read_tree_info("./test/sim-data-1-tree.txt",Ns);
+    test_tree = read_tree_info(tree_file, Ns);
     test_tree.tobs = tobs;
     evo_tree min_tree2_mu = max_likelihood(test_tree, model, Lf, ssize, tolerance, miter, 1, 1);
     cout << "\nMinimised tree likelihood / mu : " << Lf << "\t" << min_tree2_mu.mu*Nchar <<endl;
@@ -581,7 +446,7 @@ int main (int argc, char ** const argv) {
     out_tree.close();
     sstm.str("");
 
-    test_tree = read_tree_info("./test/sim-data-1-tree.txt",Ns);
+    test_tree = read_tree_info(tree_file, Ns);
     test_tree.tobs = tobs;
     min_tree2_mu = max_likelihood_BFGS(test_tree, model, Lf, tolerance, miter, 1, 1);
     cout << "\nMinimised tree likelihood / mu by BFGS : " << Lf << "\t" << min_tree2_mu.dup_rate << "\t" << min_tree2_mu.del_rate << endl;
@@ -592,52 +457,293 @@ int main (int argc, char ** const argv) {
     min_tree2_mu.write(out_tree);
     out_tree.close();
     sstm.str("");
-  }
+}
 
-  if(!test){
-    if (maxj==0){
-        cout << "Assuming mutation rate (allele/locus/year) is fixed " << endl;
-    }
-    else{
-        cout << "Estimating mutation rate (allele/locus/year)" << endl;
-    }
+void compute_maximum_tree(const string& tree_file, string format){
 
-    vector<double> rates;
+}
+
+// Compute the likelihood of a tree given the observed copy number profile
+double compute_tree_likelihood(const string& tree_file, int Ns, int Nchar, int num_invar_bins, map<int, vector<vector<int>>>& vobs, vector<double>& tobs, vector<double>& rates, int model, int cons){
+    evo_tree tree;
+    string format = tree_file.substr(tree_file.find_last_of(".") + 1);
+    cout << "Format of the input tree file is " << format << endl;
+
+    // if (format == "txt"){
+        tree = read_tree_info(tree_file, Ns);
+        tree.print();
+        tree.tobs = tobs;
+    // }
+    // if (format == "nex"){
+    //     tree = read_nexus(tree_file);
+    // }
+
     if(model==0){
-        rates.push_back(mu);
+        tree.mu = 1.0/Nchar;
     }
     if(model==1){
-        rates.push_back(dup_rate);
-        rates.push_back(del_rate);
-        rates.push_back(chr_gain_rate);
-        rates.push_back(chr_loss_rate);
-        rates.push_back(wgd_rate);
+        tree.dup_rate = rates[0];
+        tree.del_rate = rates[1];
+        tree.chr_gain_rate = rates[2];
+        tree.chr_loss_rate = rates[3];
+        tree.wgd_rate = rates[4];
+        tree.mu = accumulate(rates.begin(), rates.end(), 0.0);
     }
-    evo_tree min_lnL_tree = do_evolutionary_algorithm(Npop, Ngen, max_static, rates, ssize, tolerance, miter, optim, model, cons, maxj, correct_bias);
-    if(maxj==1){
-        if(model==0){
-            cout << "Estimated mutation rate (allele/locus/year):  " << min_lnL_tree.mu << endl;
-        }
-        if(model==1){
-            cout << "Estimated duplication rate (allele/locus/year):  " << min_lnL_tree.dup_rate << endl;
-            cout << "Estimated deletion rate (allele/locus/year):  " << min_lnL_tree.del_rate << endl;
-            cout << "Estimated chromosme gain rate (year):  " << min_lnL_tree.chr_gain_rate << endl;
-            cout << "Estimated chromosme loss rate (year):  " << min_lnL_tree.chr_loss_rate << endl;
-            cout << "Estimated whole genome doubling rate (year):  " << min_lnL_tree.wgd_rate << endl;
-        }
-    }
-    // Write out the top tree
-    //cout << "Best fitting tree, -ve lnL = " << global_min << endl;
-    min_lnL_tree.print();
 
-    // Check the validity of the tree
-    if(cons==1){
-        if(!is_tree_valid(min_lnL_tree, cons)){
-            cout << "The final tree is not valid!" << endl;
-        }
+    double Ls = 0.0;
+    Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, tree, model, cons);
+
+    return Ls;
+}
+
+double maximize_tree_likelihood(const string& tree_file, const string& ofile, int Ns, int Nchar, vector<double>& tobs, vector<double>& rates, double ssize, double tolerance, int miter, int model, int optim, int cons, int maxj){
+    evo_tree tree;
+    string format = tree_file.substr(tree_file.find_last_of(".") + 1);
+    cout << "Format of the input tree file is " << format << endl;
+
+    // if (format == "txt"){
+        tree = read_tree_info(tree_file, Ns);
+        tree.print();
+        tree.tobs = tobs;
+    // }
+    // if (format == "nex"){
+    //     tree = read_nexus(tree_file);
+    // }
+
+    if(model==0){
+        tree.mu = 1.0/Nchar;
     }
+    if(model==1){
+        tree.dup_rate = rates[0];
+        tree.del_rate = rates[1];
+        tree.chr_gain_rate = rates[2];
+        tree.chr_loss_rate = rates[3];
+        tree.wgd_rate = rates[4];
+        tree.mu = accumulate(rates.begin(), rates.end(), 0.0);
+    }
+
+    double Lf = 0;
+    evo_tree min_tree;
+    if(optim == 1){
+        min_tree = max_likelihood_BFGS(tree, model, Lf, tolerance, miter, cons, maxj);
+    }
+    if(optim == 0){
+        min_tree = max_likelihood(tree, model, Lf, ssize, tolerance, miter, cons, maxj);
+    }
+    cout << "\nMinimised tree likelihood: " << Lf << endl;
+    if(maxj == 1){
+        cout << "Estimated mutation rates: " << endl;
+        cout << "\t" << min_tree.dup_rate << "\t" << min_tree.del_rate << "\t" << min_tree.chr_gain_rate << "\t" << min_tree.chr_loss_rate << "\t" << min_tree.wgd_rate << endl;
+    }
+    min_tree.print();
+
     ofstream out_tree(ofile);
-    min_lnL_tree.write(out_tree);
+    min_tree.write(out_tree);
     out_tree.close();
+}
+
+
+int main (int argc, char ** const argv) {
+  int Npop, Ngen, max_static, miter, bootstrap, seed, cons, maxj, optim, correct_bias, mode;
+  double tolerance, ssize, mu, dup_rate, del_rate, chr_gain_rate, chr_loss_rate, wgd_rate;
+  string datafile, timefile, ofile, tree_file;
+
+  int test = 0; // Whether or not to run test mode
+
+  namespace po = boost::program_options;
+  po::options_description generic("Generic options");
+  generic.add_options()
+    ("version,v", "print version string")
+    ("help,h", "produce help message")
+    ;
+  po::options_description required("Required parameters");
+  required.add_options()
+     ("cfile,c", po::value<string>(&datafile)->required(), "input copy number profile file")
+     ("tfile,t", po::value<string>(&timefile)->required(), "input time information file")
+     ;
+  po::options_description optional("Optional parameters");
+  optional.add_options()
+    ("nsample,s", po::value<int>(&Ns)->default_value(5), "number of samples or regions")
+    ("ofile,o", po::value<string>(&ofile)->default_value("results-maxL-tree.txt"), "output tree file with maximum likelihood")
+    ("tree_file", po::value<string>(&tree_file)->default_value(""), "input tree file ")
+
+    ("npop,p", po::value<int>(&Npop)->default_value(100), "number of population")
+    ("ngen,g", po::value<int>(&Ngen)->default_value(50), "number of generation")
+    ("nstop,e", po::value<int>(&max_static)->default_value(3), "stop condition")
+    ("tolerance,r", po::value<double>(&tolerance)->default_value(1e-2), "tolerance value")
+    ("miter,m", po::value<int>(&miter)->default_value(2000), "maximum number of iterations in maximization")
+    ("ssize,z", po::value<double>(&ssize)->default_value(0.01), "initial step size")
+
+    ("mu,x", po::value<double>(&mu)->default_value(0.025), "mutation rate (allele/locus/year)")
+    ("dup_rate", po::value<double>(&dup_rate)->default_value(0.01), "duplication rate (allele/locus/year)")
+    ("del_rate", po::value<double>(&del_rate)->default_value(0.01), "deletion rate (allele/locus/year)")
+    ("chr_gain_rate", po::value<double>(&chr_gain_rate)->default_value(0), "chromosome gain rate")
+    ("chr_loss_rate", po::value<double>(&chr_loss_rate)->default_value(0), "chromosome loss rate")
+    ("wgd_rate", po::value<double>(&wgd_rate)->default_value(0), "WGD (whole genome doubling) rate")
+
+    ("model,d", po::value<int>(&model)->default_value(0), "model of evolution (0: JC69, 1: 1-step bounded)")
+    ("constrained", po::value<int>(&cons)->default_value(1), "constraints on branch length (0: none, 1: fixed total time)")
+    ("fixm", po::value<int>(&maxj)->default_value(0), "estimation of mutation rate (0: mutation rate fixed to be the given value, 1: estimating mutation rate)")
+    ("optim", po::value<int>(&optim)->default_value(1), "method of optimization (0: Simplex, 1: L-BFGS-B)")
+    ("correct_bias", po::value<int>(&correct_bias)->default_value(0), "correct ascertainment bias")
+
+    ("bootstrap,b", po::value<int>(&bootstrap)->default_value(0), "doing bootstrap or not")
+    ("mode", po::value<int>(&mode)->default_value(1), "running mode of the program (0: Test on example data; 1: Compute maximum likelihood tree from copy number profile; 2: Compute the likelihood of a given tree with branch length; 3: Compute the maximum likelihood of a given tree)")
+    ("verbose", po::value<int>(&debug)->default_value(0), "verbose level (0: default, 1: debug)")
+    ("seed", po::value<int>(&seed)->default_value(0), "seed used for generating random numbers")
+    ;
+
+  po::options_description cmdline_options;
+  cmdline_options.add(generic).add(required).add(optional);
+  po::variables_map vm;
+
+  try {
+      po::store(po::command_line_parser(argc, argv).options(cmdline_options).run(), vm);
+      if(vm.count("help")){
+          cout << cmdline_options << endl;
+          return 1;
+      }
+      if(vm.count("version")){
+          cout << "svtreeml [version 0.1], a program to build a maximum likelihood phylogenetic tree from copy number profile" << endl;
+          cout << "This program can also be used to compute the likelihood of a tree with fixed branch lengths or maximum likelihood of a tree with fixed topology (and/or mutation rates), given the copy number profile." << endl;
+          return 1;
+      }
+      po::notify(vm);
+  } catch (const std::exception& e) {
+        std::cerr << e.what() << std::endl;
+        return 1;
+  }
+
+  setup_rng(seed);
+
+  int num_invar_bins = 0;
+  Nchar = 0;
+  map<int, vector<vector<int>>> data = read_data_var_regions_by_chr(datafile, Ns, CN_MAX, num_invar_bins);
+  // vector<vector<int>> data0 = read_data_var_regions(datafile, Ns, CN_MAX);
+  // Nchar = data.size();
+
+  // tobs already defined globally
+  tobs = read_time_info(timefile, Ns, age);
+  if(cons){
+      cout << "The age of patient at the first sampling time: " << age << endl;
+  }
+
+  vector<double> rates;
+  if(model==0){
+      rates.push_back(mu);
+  }
+  if(model==1){
+      rates.push_back(dup_rate);
+      rates.push_back(del_rate);
+      rates.push_back(chr_gain_rate);
+      rates.push_back(chr_loss_rate);
+      rates.push_back(wgd_rate);
+  }
+  // Construct the CN matrix
+  // vector<vector<int>> vobs0;
+  // for(int nc=0; nc<data0.size(); ++nc){
+  //   vector<int> obs;
+  //   for(int i=0; i<Ns; ++i){
+  //     obs.push_back( data0[nc][i+3] );
+  //   }
+  //   vobs0.push_back( obs );
+  // }
+  // cout << "The number of sites used: " << data0.size() << endl;
+  // Construct the CN matrix by chromosme
+  for(int nchr=1; nchr<=data.size(); nchr++){
+    vector<vector<int>> obs_chr;
+    Nchar += data[nchr].size();
+    for(int nc=0; nc<data[nchr].size(); ++nc){
+        vector<int> obs;
+        for(int i=0; i<Ns; ++i){
+          obs.push_back( data[nchr][nc][i+3] );
+        }
+        obs_chr.push_back( obs );
+    }
+    vobs[nchr] = obs_chr;
+  }
+
+
+  if(mode == 0){
+      run_test(tree_file, Ns, Nchar, model, tobs, rates, ssize, tolerance, miter);
+  }
+
+  if (mode == 1){
+      // cout << "The number of sites used after grouping by chromosme: " << Nchar << endl;
+      // Do a bootstrap replicate
+      // if(bootstrap){
+      //     // create a copy of vobs to resample
+      //     vector<vector<int> > vobs_copy = vobs;
+      //     vobs.clear();
+      //     // cout << "rows selected: ";
+      //     for(int nc=0; nc<Nchar; ++nc){
+      //         // randomly select a site
+      //        int i = gsl_rng_uniform_int(r, Nchar);
+      //        // cout << i << "\t";
+      //        vobs.push_back(vobs_copy[i]);
+      //     }
+      //     // cout << endl;
+      // }
+
+      if(bootstrap){
+          // create a copy of vobs to resample
+          map<int, vector<vector<int>>> vobs_copy = vobs;
+          vobs.clear();
+          for(int nchr=1; nchr<=data.size(); nchr++){
+            vector<vector<int>> obs_chr;
+            for(int nc=0; nc<data[nchr].size(); ++nc){
+                  // randomly select a site
+                 int i = gsl_rng_uniform_int(r, data[nchr].size());
+                 // cout << i << "\t";
+                 obs_chr.push_back(vobs_copy[nchr][i]);
+            }
+            vobs[nchr] = obs_chr;
+         }
+          // cout << endl;
+      }
+
+      if (maxj==0){
+          cout << "Assuming mutation rate (allele/locus/year) is fixed " << endl;
+      }
+      else{
+          cout << "Estimating mutation rate (allele/locus/year)" << endl;
+      }
+
+
+      evo_tree min_lnL_tree = do_evolutionary_algorithm(Npop, Ngen, max_static, rates, ssize, tolerance, miter, optim, model, cons, maxj, correct_bias);
+      if(maxj==1){
+          if(model==0){
+              cout << "Estimated mutation rate (allele/locus/year):  " << min_lnL_tree.mu << endl;
+          }
+          if(model==1){
+              cout << "Estimated duplication rate (allele/locus/year):  " << min_lnL_tree.dup_rate << endl;
+              cout << "Estimated deletion rate (allele/locus/year):  " << min_lnL_tree.del_rate << endl;
+              cout << "Estimated chromosme gain rate (year):  " << min_lnL_tree.chr_gain_rate << endl;
+              cout << "Estimated chromosme loss rate (year):  " << min_lnL_tree.chr_loss_rate << endl;
+              cout << "Estimated whole genome doubling rate (year):  " << min_lnL_tree.wgd_rate << endl;
+          }
+      }
+      // Write out the top tree
+      //cout << "Best fitting tree, -ve lnL = " << global_min << endl;
+      min_lnL_tree.print();
+
+      // Check the validity of the tree
+      if(cons==1){
+          if(!is_tree_valid(min_lnL_tree, cons)){
+              cout << "The final tree is not valid!" << endl;
+          }
+      }
+      ofstream out_tree(ofile);
+      min_lnL_tree.write(out_tree);
+      out_tree.close();
+  }
+
+  if(mode == 2){
+      double Lf = compute_tree_likelihood(tree_file, Ns, Nchar, num_invar_bins, vobs, tobs, rates, model, cons);
+      cout << "The negative log likelihood of the input tree is " << -Lf << endl;
+  }
+
+  if(mode == 3){
+      maximize_tree_likelihood(tree_file, ofile, Ns, Nchar, tobs, rates, ssize, tolerance, miter, model, optim, cons, maxj);
   }
 }

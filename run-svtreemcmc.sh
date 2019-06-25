@@ -9,6 +9,7 @@ prefix=sim-data-1
 input=./test/"$prefix"-cn.txt.gz
 times=./test/"$prefix"-rel-times.txt
 rtree=./test/"$prefix"-tree.txt
+nsample=3
 
 odir=./test/mcmc
 mkdir -p $odir
@@ -23,5 +24,5 @@ do
   echo $i
   trace_param_file=$odir/trace-mcmc-params_"$suffix"_${i}.txt
   trace_tree_file=$odir/trace-mcmc-trees_"$suffix"_${i}.txt
-  code/svtreemcmc -c $input -t $times --rtree $rtree --trace_param_file $trace_param_file --trace_tree_file $trace_tree_file --config_file $config_file > $odir/std_mcmc_"$suffix"_${i}
+  code/svtreemcmc --nsample $nsample -c $input -t $times --rtree $rtree --trace_param_file $trace_param_file --trace_tree_file $trace_tree_file --config_file $config_file > $odir/std_mcmc_"$suffix"_${i}
 done
