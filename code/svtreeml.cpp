@@ -34,6 +34,7 @@ using namespace std;
 
 // The number of trees to search before terminating
 const int MAX_TREE = 100;
+const double MAX_NLNL = 1e20;
 int debug = 0;
 
 // global values for gsl function minimization
@@ -126,21 +127,23 @@ evo_tree perturb_tree( const int& Ns, vector<evo_tree> trees ){
 
 evo_tree do_evolutionary_algorithm(const int& Npop, const int& Ngen, const int& max_static, const vector<double>& rates, const double ssize, const double tolerance, const int miter, const int optim, const int model, const int cons, const int maxj, const int correct_bias){
   //cout << "Running evolutionary algorithm" << endl;
-
   // create initial population of trees. Sample from coalescent trees
   vector<evo_tree> trees;
 
   vector<double> lnLs(2*Npop,0);
   for(int i=0; i<Npop; ++i){
     evo_tree rtree = generate_coal_tree(Ns);
+    rtree.tobs = tobs;
+    double tree_height = rtree.get_tree_height();
+    double min_height = *max_element(tobs.begin(), tobs.end());
     if(cons){
-        double min_height = *max_element(tobs.begin(), tobs.end());
         double max_height = age + min_height;
-        double tree_height = runiform(r, min_height, max_height);
-        double old_tree_height = rtree.get_tree_height();
-        double ratio = tree_height/old_tree_height;
-        rtree.scale_time(ratio);
+        double new_tree_height = runiform(r, min_height, max_height);
+        double ratio = new_tree_height/tree_height;
+        rtree.scale_time_internal(ratio);
+        tree_height = new_tree_height;
     }
+
     if(rates.size()>1){
         rtree.dup_rate = rates[0];
         rtree.del_rate = rates[1];
@@ -152,13 +155,15 @@ evo_tree do_evolutionary_algorithm(const int& Npop, const int& Ngen, const int& 
     else{
         rtree.mu = rates[0];
     }
-    rtree.tobs = tobs;
+
+    // double curr_ttime = rtree.get_total_time();
+    // evo_tree rtree_adjusted(rtree.nleaf, rtree.edges, curr_ttime, tobs);
     trees.push_back( rtree );
 
     string tstring = order_tree_string( create_tree_string( rtree ) );
     searched_trees[ tstring ] = 1;
   }
-  double min_lnL = 1e20;
+  double min_lnL = MAX_NLNL;
   evo_tree min_lnL_tree;
   double Lf = 0;
   int count_static = 0;
@@ -189,6 +194,7 @@ evo_tree do_evolutionary_algorithm(const int& Npop, const int& Ngen, const int& 
           otree = max_likelihood_BFGS(new_trees[i], model, Lf, tolerance, miter, cons, maxj, correct_bias);
         }
         otree.score = Lf;
+        // cout << "otree tobs " << otree.tobs[0] << endl;
         lnLs[i] = Lf;
         opt_trees.push_back( otree );
         //cout << "g/i/lnL:\t" << g << "\t" << i << "\t" << lnLs[i] << endl;
@@ -214,6 +220,7 @@ evo_tree do_evolutionary_algorithm(const int& Npop, const int& Ngen, const int& 
                 otree = max_likelihood_BFGS(new_trees[Npop + i], model, Lf, tolerance, miter, cons, maxj, correct_bias);
             }
         	otree.score = Lf;
+            // cout << "otree tobs " << otree.tobs[0] << endl;
         	lnLs[Npop + i] = Lf;
         	opt_trees.push_back( otree );
         	//cout << "g/i/lnL:\t" << g << "\t" << Npop+i << "\t" << lnLs[i] << endl;
@@ -466,8 +473,8 @@ void compute_maximum_tree(const string& tree_file, string format){
 // Compute the likelihood of a tree given the observed copy number profile
 double compute_tree_likelihood(const string& tree_file, int Ns, int Nchar, int num_invar_bins, map<int, vector<vector<int>>>& vobs, vector<double>& tobs, vector<double>& rates, int model, int cons){
     evo_tree tree;
-    string format = tree_file.substr(tree_file.find_last_of(".") + 1);
-    cout << "Format of the input tree file is " << format << endl;
+    // string format = tree_file.substr(tree_file.find_last_of(".") + 1);
+    // cout << "Format of the input tree file is " << format << endl;
 
     // if (format == "txt"){
         tree = read_tree_info(tree_file, Ns);
@@ -498,8 +505,8 @@ double compute_tree_likelihood(const string& tree_file, int Ns, int Nchar, int n
 
 double maximize_tree_likelihood(const string& tree_file, const string& ofile, int Ns, int Nchar, vector<double>& tobs, vector<double>& rates, double ssize, double tolerance, int miter, int model, int optim, int cons, int maxj){
     evo_tree tree;
-    string format = tree_file.substr(tree_file.find_last_of(".") + 1);
-    cout << "Format of the input tree file is " << format << endl;
+    // string format = tree_file.substr(tree_file.find_last_of(".") + 1);
+    // cout << "Format of the input tree file is " << format << endl;
 
     // if (format == "txt"){
         tree = read_tree_info(tree_file, Ns);
@@ -581,11 +588,11 @@ int main (int argc, char ** const argv) {
     ("chr_loss_rate", po::value<double>(&chr_loss_rate)->default_value(0), "chromosome loss rate")
     ("wgd_rate", po::value<double>(&wgd_rate)->default_value(0), "WGD (whole genome doubling) rate")
 
-    ("model,d", po::value<int>(&model)->default_value(0), "model of evolution (0: JC69, 1: 1-step bounded)")
+    ("model,d", po::value<int>(&model)->default_value(1), "model of evolution (0: JC69, 1: 1-step bounded)")
     ("constrained", po::value<int>(&cons)->default_value(1), "constraints on branch length (0: none, 1: fixed total time)")
     ("fixm", po::value<int>(&maxj)->default_value(0), "estimation of mutation rate (0: mutation rate fixed to be the given value, 1: estimating mutation rate)")
     ("optim", po::value<int>(&optim)->default_value(1), "method of optimization (0: Simplex, 1: L-BFGS-B)")
-    ("correct_bias", po::value<int>(&correct_bias)->default_value(0), "correct ascertainment bias")
+    ("correct_bias", po::value<int>(&correct_bias)->default_value(1), "correct ascertainment bias")
 
     ("bootstrap,b", po::value<int>(&bootstrap)->default_value(0), "doing bootstrap or not")
     ("mode", po::value<int>(&mode)->default_value(1), "running mode of the program (0: Test on example data; 1: Compute maximum likelihood tree from copy number profile; 2: Compute the likelihood of a given tree with branch length; 3: Compute the maximum likelihood of a given tree)")
@@ -631,6 +638,7 @@ int main (int argc, char ** const argv) {
   vector<double> rates;
   if(model==0){
       rates.push_back(mu);
+      cout << "Assuming JC69 model " << endl;
   }
   if(model==1){
       rates.push_back(dup_rate);
@@ -638,7 +646,37 @@ int main (int argc, char ** const argv) {
       rates.push_back(chr_gain_rate);
       rates.push_back(chr_loss_rate);
       rates.push_back(wgd_rate);
+      cout << "Assuming Bounded model " << endl;
   }
+
+  if (cons==0){
+      cout << "Assuming the tree is unconstrained " << endl;
+  }
+  else{
+      cout << "Assuming the tree is constrained by age " << endl;
+  }
+
+  if (maxj==0){
+      cout << "Assuming mutation rate (allele/locus/year) is fixed " << endl;
+  }
+  else{
+      cout << "Estimating mutation rate (allele/locus/year)" << endl;
+  }
+
+  if (optim==0){
+      cout << "Using Simplex method for optimization " << endl;
+  }
+  else{
+      cout << "Using L-BFGS-B method for optimization" << endl;
+  }
+
+  if (correct_bias==0){
+      cout << "Not correcting acquisition bias in likelihood computation " << endl;
+  }
+  else{
+      cout << "Correcting acquisition bias in likelihood computation " << endl;
+  }
+
   // Construct the CN matrix
   // vector<vector<int>> vobs0;
   // for(int nc=0; nc<data0.size(); ++nc){
@@ -665,6 +703,7 @@ int main (int argc, char ** const argv) {
 
 
   if(mode == 0){
+      cout << "Running test " << endl;
       run_test(tree_file, Ns, Nchar, model, tobs, rates, ssize, tolerance, miter);
   }
 
@@ -684,7 +723,7 @@ int main (int argc, char ** const argv) {
       //     }
       //     // cout << endl;
       // }
-
+      cout << "Building maximum likelihood tree from copy number profile " << endl;
       if(bootstrap){
           // create a copy of vobs to resample
           map<int, vector<vector<int>>> vobs_copy = vobs;
@@ -701,14 +740,6 @@ int main (int argc, char ** const argv) {
          }
           // cout << endl;
       }
-
-      if (maxj==0){
-          cout << "Assuming mutation rate (allele/locus/year) is fixed " << endl;
-      }
-      else{
-          cout << "Estimating mutation rate (allele/locus/year)" << endl;
-      }
-
 
       evo_tree min_lnL_tree = do_evolutionary_algorithm(Npop, Ngen, max_static, rates, ssize, tolerance, miter, optim, model, cons, maxj, correct_bias);
       if(maxj==1){
@@ -739,11 +770,13 @@ int main (int argc, char ** const argv) {
   }
 
   if(mode == 2){
+      cout << "Computing the likelihood of a given tree from copy number profile " << endl;
       double Lf = compute_tree_likelihood(tree_file, Ns, Nchar, num_invar_bins, vobs, tobs, rates, model, cons);
       cout << "The negative log likelihood of the input tree is " << -Lf << endl;
   }
 
   if(mode == 3){
+      cout << "Computing maximum likelihood of a given tree from copy number profile " << endl;
       maximize_tree_likelihood(tree_file, ofile, Ns, Nchar, tobs, rates, ssize, tolerance, miter, model, optim, cons, maxj);
   }
 }

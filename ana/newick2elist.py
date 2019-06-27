@@ -1,4 +1,4 @@
-#!/user/bin/env python
+#!/usr/bin/env python
 
 '''
 This script is used to convert NEWICK trees into the format that can be read by program svtree*.

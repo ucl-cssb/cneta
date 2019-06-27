@@ -114,6 +114,7 @@ public:
   string make_newick(int precision);
   void   write_nexus(int precision, ofstream& fout);
   void   scale_time(double ratio);
+  void   scale_time_internal(double ratio);
   void   generate_nodes();
   void   calculate_node_times();
   void   generate_int_edges();
@@ -319,19 +320,20 @@ void evo_tree::scale_time(double ratio) {
 
 // Scale non-tip nodes only
 // Node times starts with 0 (root)
-// void evo_tree::scale_time_internal (double ratio) {
-//     // Scale the tree height and times so that it is less than the age of the patient
-//     // cout << "Current age of patient " << curr_age << endl;
-//     for(int i=0; i < edges.size(); i++)
-//     {
-//         // cout << "Previous length: " << lengths[i] << endl;
-//         edges[i].length = edges[i].length * ratio;
-//         lengths[i] = lengths[i] * ratio;
-//         node_times[i] = node_times[i] * ratio;
-//         // cout << "Scaled length: " << lengths[i] << endl;
-//         // change the time of tip node to reflect the sampling point?
-//     }
-// }
+void evo_tree::scale_time_internal (double ratio) {
+    // Scale the tree height and times so that it is less than the age of the patient
+    // cout << "Current age of patient " << curr_age << endl;
+    for(int i=0; i<nedge; ++i){
+      if( edges[i].end >= nleaf ){
+          // cout << "Previous length: " << lengths[i] << endl;
+          edges[i].length = edges[i].length * ratio;
+          lengths[i] = lengths[i] * ratio;
+          node_times[i] = node_times[i] * ratio;
+          // cout << "Scaled length: " << lengths[i] << endl;
+          // change the time of tip node to reflect the sampling point?
+      }
+    }
+}
 
 void evo_tree::generate_int_edges(){
   //cout << "generate_int_edges" << endl;
