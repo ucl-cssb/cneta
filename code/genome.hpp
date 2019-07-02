@@ -12,8 +12,8 @@
 using namespace std;
 
 //enum mutation_type {duplication, deletion, chr_loss, chr_gain, wgd };
-int n_mut_type = 5;
-const int CN_MAX = 4;
+const int N_MUT_TYPE = 5;
+
 
 class mutation {
 public:
@@ -115,7 +115,7 @@ public:
       chrs.push_back(chr);
     }
 
-    for(int i=0; i<n_mut_type; ++i) nmuts.push_back(0);
+    for(int i=0; i<N_MUT_TYPE; ++i) nmuts.push_back(0);
   }
 
   // create a genome with varying chromosome sizes
@@ -131,7 +131,7 @@ public:
       chrs.push_back(chr);
     }
 
-    for(int i=0; i<n_mut_type; ++i) nmuts.push_back(0);
+    for(int i=0; i<N_MUT_TYPE; ++i) nmuts.push_back(0);
   }
 
   // allow different germline ploidy
@@ -150,7 +150,7 @@ public:
       }
     }
 
-    for(int i=0; i<n_mut_type; ++i) nmuts.push_back(0);
+    for(int i=0; i<N_MUT_TYPE; ++i) nmuts.push_back(0);
   }
 
 
@@ -222,7 +222,6 @@ public:
     calculate_cn();
 
     // cn is stored as [chr][seg_id][count]
-
     map<int, map<int,int> >::const_iterator it1;
     map<int,int>::const_iterator it2;
     cout << "\tCOPY NUMBER (" << node_id+1 << "):" << endl;
@@ -244,7 +243,7 @@ public:
       cout << "\t\tchr / nsegs: " << i << "\t" << chrs[i].size() << endl;
       cout << "\t";
       for(int j=0; j<chrs[i].size(); ++j){
-    cout << "\t" << chrs[i][j].chr << "_" << chrs[i][j].seg_id;
+          cout << "\t" << chrs[i][j].chr << "_" << chrs[i][j].seg_id;
       }
       cout << endl;
     }

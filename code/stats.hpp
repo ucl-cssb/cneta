@@ -20,7 +20,8 @@ extern "C" {
   map<int, vector<vector<int>>> vobs;
   vector<double> tobs;
   // boost::numeric::ublas::matrix<double> qmat;
-  double qmat[(CN_MAX+1)*(CN_MAX+1)];
+  int cn_max;
+  // double qmat;
   int Ns;
   int Nchar;
   int num_invar_bins;
@@ -307,7 +308,7 @@ evo_tree generate_coal_tree(const int& nsample){
 //
 // Likelihood and transition probabilities
 //
-double get_transition_prob(const double& mu, double blength, const int& sk, const int& sj ){
+double get_transition_prob(const double& mu, double blength, const int& sk, const int& sj){
   //if(debug) cout << "\tget_transition_prob" << endl;
 
   // assume a basic Markov model here cf JC
@@ -329,42 +330,45 @@ double get_transition_prob(const double& mu, double blength, const int& sk, cons
 
 
 // boost::numeric::ublas::matrix<double> get_rate_matrix_bounded(double dup_rate=0.01, double del_rate=0.01) {
-//     boost::numeric::ublas::matrix<double> m(CN_MAX+1, CN_MAX+1);
+//     boost::numeric::ublas::matrix<double> m(cn_max+1, cn_max+1);
 //     for (unsigned i = 0; i < m.size1 (); ++ i){
 //         for (unsigned j = 0; j < m.size2 (); ++ j){
 //             m (i, j) = 0;
 //         }
 //     }
-//     for( unsigned i = 1; i < CN_MAX; i++){
+//     for( unsigned i = 1; i < cn_max; i++){
 //         m (i,i-1) = 2 * i * del_rate;
 //         m (i,i+1) = 2 * i * dup_rate;
 //         m(i, i) = 0 - m (i,i-1) - m (i,i+1);
 //     }
-//     m (CN_MAX, CN_MAX - 1) = 2 * CN_MAX * del_rate;
-//     m (CN_MAX, CN_MAX) = 0 - m (CN_MAX, CN_MAX - 1);
+//     m (cn_max, cn_max - 1) = 2 * cn_max * del_rate;
+//     m (cn_max, cn_max) = 0 - m (cn_max, cn_max - 1);
 //
 //     // std::cout << m << std::endl;
 //     return m;
 // }
 
-void get_rate_matrix_bounded(double* m, double dup_rate, double del_rate) {
-    int ncol = CN_MAX + 1;
+void get_rate_matrix_bounded(double* m, double dup_rate, double del_rate, const int cn_max) {
+    int debug = 0;
+    int ncol = cn_max + 1;
 
     for (unsigned i = 0; i < ncol; ++ i){
         for (unsigned j = 0; j < ncol; ++ j){
             m[i + j*ncol] = 0;
         }
     }
-    for( unsigned i = 1; i < CN_MAX; i++){
+    for( unsigned i = 1; i < cn_max; i++){
         m[i+(i-1)*ncol] = 2 * i * del_rate;
         m[i+(i+1)*ncol] = 2 * i * dup_rate;
         m[i+i*ncol] = 0 - m[i+(i-1)*ncol] - m[i+(i+1)*ncol];
     }
-    m[CN_MAX + (CN_MAX - 1)*ncol] = 2 * CN_MAX * del_rate;
-    m[CN_MAX + CN_MAX*ncol] = 0 - m[CN_MAX + (CN_MAX - 1)*ncol];
+    m[cn_max + (cn_max - 1)*ncol] = 2 * cn_max * del_rate;
+    m[cn_max + cn_max*ncol] = 0 - m[cn_max + (cn_max - 1)*ncol];
 
-    // std::cout << m << std::endl;
-    // r8mat_print ( ncol, ncol, m, "  A:" );
+    if(debug){
+        std::cout << m << std::endl;
+        r8mat_print ( ncol, ncol, m, "  A:" );
+    }
 }
 
 // // http://www.guwi17.de/ublas/examples/
@@ -379,9 +383,9 @@ void get_rate_matrix_bounded(double* m, double dup_rate, double del_rate) {
 //     cout << "P matrix: " << p << endl;
 //     return p(sk, sj);
 // }
-void get_transition_matrix_bounded(double* q, double* p, double t){
+void get_transition_matrix_bounded(double* q, double* p, double t, int cn_max){
     int debug = 0;
-    int n = CN_MAX + 1;
+    int n = cn_max + 1;
     double tmp[n*n]={0};
 
     for(int i = 0; i < n*n; i++){
@@ -405,10 +409,10 @@ void get_transition_matrix_bounded(double* q, double* p, double t){
     }
 }
 
-double get_transition_prob_bounded(double* p, const int& sk, const int& sj ){
+double get_transition_prob_bounded(double* p, const int& sk, const int& sj, int cn_max){
     int debug = 0;
 
-    int n = CN_MAX + 1;
+    int n = cn_max + 1;
     int i = sk  + sj * n;
     double v = p[i];
 
@@ -443,22 +447,24 @@ int is_tree_valid(evo_tree& rtree, int cons){
 
 
 // Compute the likelihood without grouping sites by chromosme
-double get_likelihood(const int& Ns, const int& Nchar, const vector<vector<int>>& vobs, evo_tree& rtree, int model, int cons){
+double get_likelihood(const int& Ns, const int& Nchar, const vector<vector<int>>& vobs, evo_tree& rtree, int model, int cons, const int cn_max){
   int debug = 0;
   if(debug) cout << "\tget_likelihood" << endl;
-  int nstate = CN_MAX + 1;
+  int nstate = cn_max + 1;
 
   // return 0 if the tree is not valid
   if(!is_tree_valid(rtree, cons)){
       return SMALL_LNL;
   }
 
-  if(model == 1){
-      get_rate_matrix_bounded(qmat, rtree.dup_rate, rtree.del_rate);
-  }
-  // double pmat[(CN_MAX+1)*(CN_MAX+1)]={0};
+  double qmat[(nstate)*(nstate)]={0};
+  // double pmat[(cn_max+1)*(cn_max+1)]={0};
   double pmati[(nstate)*(nstate)]={0};
   double pmatj[(nstate)*(nstate)]={0};
+
+  if(model == 1){
+      get_rate_matrix_bounded(qmat, rtree.dup_rate, rtree.del_rate, cn_max);
+  }
 
   double logL = 0;
   for(int nc=0; nc<Nchar; ++nc){
@@ -502,8 +508,8 @@ double get_likelihood(const int& Ns, const int& Nchar, const vector<vector<int>>
       int nj = rtree.edges[rtree.nodes[k].e_ot[1]].end;
       double blj = rtree.edges[rtree.nodes[k].e_ot[1]].length;
       if(model==1){
-           get_transition_matrix_bounded(qmat, pmati, bli);
-           get_transition_matrix_bounded(qmat, pmatj, blj);
+           get_transition_matrix_bounded(qmat, pmati, bli, cn_max);
+           get_transition_matrix_bounded(qmat, pmatj, blj, cn_max);
            if(debug){
                cout << "Get Pmatrix for branch length " << bli << endl;
                r8mat_print( nstate, nstate, pmati, "  P matrix after change:" );
@@ -520,10 +526,10 @@ double get_likelihood(const int& Ns, const int& Nchar, const vector<vector<int>>
     	// loop over possible si
     	for(int si=0; si<nstate; ++si){
             if (model == 0){
-                Li += get_transition_prob(rtree.mu, bli, sk, si ) * L_sk_k[ni][si];
+                Li += get_transition_prob(rtree.mu, bli, sk, si) * L_sk_k[ni][si];
             }
             if (model == 1){
-                Li += get_transition_prob_bounded(pmati, sk, si ) * L_sk_k[ni][si];
+                Li += get_transition_prob_bounded(pmati, sk, si, cn_max) * L_sk_k[ni][si];
             }
     	  //cout << "\tscoring: Li\t" << li << "\t" << get_transition_prob(mu, bli, sk, si ) << "\t" << L_sk_k[ni][si] << endl;
         }
@@ -531,10 +537,10 @@ double get_likelihood(const int& Ns, const int& Nchar, const vector<vector<int>>
     	// loop over possible sj
     	for(int sj=0; sj<nstate; ++sj){
             if (model == 0){
-    	         Lj += get_transition_prob(rtree.mu, blj, sk, sj ) * L_sk_k[nj][sj];
+    	         Lj += get_transition_prob(rtree.mu, blj, sk, sj) * L_sk_k[nj][sj];
             }
             if (model == 1){
-                 Lj += get_transition_prob_bounded(pmatj, sk, sj ) * L_sk_k[nj][sj];
+                 Lj += get_transition_prob_bounded(pmatj, sk, sj, cn_max) * L_sk_k[nj][sj];
             }
     	}
 	    //cout << "scoring: sk" << sk << "\t" <<  Li << "\t" << Lj << endl;
@@ -564,9 +570,9 @@ double get_likelihood(const int& Ns, const int& Nchar, const vector<vector<int>>
 
 // Get the likelihood on one site of a chromosme
 // z: possible changes in copy number caused by chromosme gain/loss
-double get_likelihood_site(vector<vector<double>>& L_sk_k, evo_tree& rtree, const vector<int>& knodes, map<double, double*>& pmats, const int has_wgd, const int z, const int model){
+double get_likelihood_site(vector<vector<double>>& L_sk_k, evo_tree& rtree, const vector<int>& knodes, map<double, double*>& pmats, const int has_wgd, const int z, const int model, int cn_max){
   int debug = 0;
-  int nstate = CN_MAX + 1;
+  int nstate = cn_max + 1;
 
   if(debug){
       cout << "Computing likelihood for one site" << endl;
@@ -592,14 +598,14 @@ double get_likelihood_site(vector<vector<double>>& L_sk_k, evo_tree& rtree, cons
       // loop over possible si
       for(int si=0; si<nstate; ++si){
           if (model == 0){
-            Li += get_transition_prob(rtree.mu, bli, nsk, si ) * L_sk_k[ni][si];
+            Li += get_transition_prob(rtree.mu, bli, nsk, si) * L_sk_k[ni][si];
           }
           if (model == 1){
             // if(debug){
             //     cout << "1st branch length " << bli << endl;
             //     r8mat_print( nstate, nstate, pmats[bli], " Pmatrix for 1st branch length " );
             // }
-            Li += get_transition_prob_bounded(pmats[bli], nsk, si ) * L_sk_k[ni][si];
+            Li += get_transition_prob_bounded(pmats[bli], nsk, si, cn_max) * L_sk_k[ni][si];
           }
         //cout << "\tscoring: Li\t" << li << "\t" << get_transition_prob(mu, bli, sk, si ) << "\t" << L_sk_k[ni][si] << endl;
       }
@@ -607,14 +613,14 @@ double get_likelihood_site(vector<vector<double>>& L_sk_k, evo_tree& rtree, cons
       // loop over possible sj
       for(int sj=0; sj<nstate; ++sj){
           if (model == 0){
-               Lj += get_transition_prob(rtree.mu, blj, nsk, sj ) * L_sk_k[nj][sj];
+               Lj += get_transition_prob(rtree.mu, blj, nsk, sj) * L_sk_k[nj][sj];
           }
           if (model == 1){
               // if(debug){
               //     cout << "2nd branch length " << blj << endl;
               //     r8mat_print( nstate, nstate, pmats[blj], " Pmatrix for 2nd branch length ");
               // }
-               Lj += get_transition_prob_bounded(pmats[blj], nsk, sj ) * L_sk_k[nj][sj];
+               Lj += get_transition_prob_bounded(pmats[blj], nsk, sj, cn_max) * L_sk_k[nj][sj];
           }
       }
       //cout << "scoring: sk" << sk << "\t" <<  Li << "\t" << Lj << endl;
@@ -634,9 +640,9 @@ double get_likelihood_site(vector<vector<double>>& L_sk_k, evo_tree& rtree, cons
 
 
 // Get the likelihood on a set of chromosmes
-double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, evo_tree& rtree, const vector<int>& knodes, map<double, double*>& pmats, const int has_wgd, const int model){
+double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, evo_tree& rtree, const vector<int>& knodes, map<double, double*>& pmats, const int has_wgd, const int model, const int cn_max){
     int debug = 0;
-    int nstate = CN_MAX + 1;
+    int nstate = cn_max + 1;
 
     double logL = 0;    // for all chromosmes
     double chr_gain = rtree.chr_gain_rate;
@@ -678,7 +684,7 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, evo_tree& rtree, 
             }
           }
 
-          get_likelihood_site(L_sk_k, rtree, knodes, pmats, has_wgd, z, model);
+          get_likelihood_site(L_sk_k, rtree, knodes, pmats, has_wgd, z, model, cn_max);
 
           if(debug) cout << "Likelihood char : " << nc << "\t" << L_sk_k[Ns+1][2] << endl;
           if(L_sk_k[Ns+1][2] > 0) site_logL += log(L_sk_k[Ns+1][2]);
@@ -739,7 +745,7 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, evo_tree& rtree, 
                 }
               }
 
-              get_likelihood_site(L_sk_k, rtree, knodes, pmats, has_wgd, z, model);
+              get_likelihood_site(L_sk_k, rtree, knodes, pmats, has_wgd, z, model, cn_max);
 
               if(debug) cout << "Likelihood char : " << nc << "\t" << L_sk_k[Ns+1][2] << endl;
               if(L_sk_k[Ns+1][2] > 0) site_logL += log(L_sk_k[Ns+1][2]);
@@ -792,7 +798,7 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, evo_tree& rtree, 
                 }
               }
 
-              get_likelihood_site(L_sk_k, rtree, knodes, pmats, has_wgd, z, model);
+              get_likelihood_site(L_sk_k, rtree, knodes, pmats, has_wgd, z, model, cn_max);
 
               if(debug) cout << "Likelihood char : " << nc << "\t" << L_sk_k[Ns+1][2] << endl;
               if(L_sk_k[Ns+1][2] > 0) site_logL += log(L_sk_k[Ns+1][2]);
@@ -835,9 +841,9 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, evo_tree& rtree, 
 }
 
 // Compute the likelihood of dummy sites consisting entirely of 2s for the tree
-double get_likelihood_bias(map<int, vector<vector<int>>>& vobs, evo_tree& rtree, const vector<int>& knodes, map<double, double*>& pmats, const int model){
+double get_likelihood_bias(map<int, vector<vector<int>>>& vobs, evo_tree& rtree, const vector<int>& knodes, map<double, double*>& pmats, const int model, const int cn_max){
     int debug = 0;
-    int nstate = CN_MAX + 1;
+    int nstate = cn_max + 1;
     double logL = 0;
 
     for(int nchr=1; nchr<=vobs.size(); nchr++){
@@ -865,20 +871,20 @@ double get_likelihood_bias(map<int, vector<vector<int>>>& vobs, evo_tree& rtree,
               // loop over possible si
               for(int si=0; si<nstate; ++si){
                   if (model == 0){
-                    Li += get_transition_prob(rtree.mu, bli, sk, si ) * L_sk_k[ni][si];
+                    Li += get_transition_prob(rtree.mu, bli, sk, si) * L_sk_k[ni][si];
                   }
                   if (model == 1){
-                    Li += get_transition_prob_bounded(pmats[bli], sk, si ) * L_sk_k[ni][si];
+                    Li += get_transition_prob_bounded(pmats[bli], sk, si, cn_max) * L_sk_k[ni][si];
                   }
               }
               double Lj = 0;
               // loop over possible sj
               for(int sj=0; sj<nstate; ++sj){
                   if (model == 0){
-                       Lj += get_transition_prob(rtree.mu, blj, sk, sj ) * L_sk_k[nj][sj];
+                       Lj += get_transition_prob(rtree.mu, blj, sk, sj) * L_sk_k[nj][sj];
                   }
                   if (model == 1){
-                       Lj += get_transition_prob_bounded(pmats[blj], sk, sj ) * L_sk_k[nj][sj];
+                       Lj += get_transition_prob_bounded(pmats[blj], sk, sj, cn_max) * L_sk_k[nj][sj];
                   }
               }
               L_sk_k[k][sk] = Li*Lj;
@@ -907,7 +913,7 @@ double get_likelihood_bias(map<int, vector<vector<int>>>& vobs, evo_tree& rtree,
 
 
 // Incorporate chromosme gain/loss and WGD
-double get_likelihood_revised(const int& Ns, const int& Nchar, const int& num_invar_bins, map<int, vector<vector<int>>>& vobs, evo_tree& rtree, int model, int cons, int correct_bias = 0){
+double get_likelihood_revised(const int& Ns, const int& Nchar, const int& num_invar_bins, map<int, vector<vector<int>>>& vobs, evo_tree& rtree, int model, int cons, const int cn_max, int correct_bias = 0){
   int debug = 0;
   if(debug) cout << "\tget_likelihood" << endl;
 
@@ -916,9 +922,13 @@ double get_likelihood_revised(const int& Ns, const int& Nchar, const int& num_in
       return SMALL_LNL;
   }
 
-  int nstate = CN_MAX + 1;
+  int nstate = cn_max + 1;
+  double qmat[(nstate)*(nstate)]={0};
   if(model == 1){
-      get_rate_matrix_bounded(qmat, rtree.dup_rate, rtree.del_rate);
+      if(debug){
+          cout << "Getting rate matrix" << endl;
+      }
+      get_rate_matrix_bounded(qmat, rtree.dup_rate, rtree.del_rate, cn_max);
   }
 
   //create a list of nodes to loop over, making sure the root is last
@@ -937,14 +947,14 @@ double get_likelihood_revised(const int& Ns, const int& Nchar, const int& num_in
         double pmatj[(nstate)*(nstate)]={0};
 
         if(pmats.count(bli) == 0){
-            get_transition_matrix_bounded(qmat, pmati, bli);
+            get_transition_matrix_bounded(qmat, pmati, bli, cn_max);
             pmats[bli] = new double[(nstate)*(nstate)];
             for(int i=0; i<nstate*nstate; i++){
                 pmats[bli][i] = pmati[i];
             }
         }
         if(pmats.count(blj) == 0){
-            get_transition_matrix_bounded(qmat, pmatj, blj);
+            get_transition_matrix_bounded(qmat, pmatj, blj, cn_max);
             pmats[blj] = new double[(nstate)*(nstate)];
             for(int i=0; i<nstate*nstate; i++){
                 pmats[blj][i] = pmatj[i];
@@ -978,17 +988,17 @@ double get_likelihood_revised(const int& Ns, const int& Nchar, const int& num_in
   // cout << "WGD rate is " << wgd << endl;
   if(abs(wgd-0) > SMALL_PROB){
        // cout << "Computing the likelihood with consideration of WGD" << endl;
-       logL += (1-wgd) * get_likelihood_chr(vobs, rtree, knodes, pmats, 0, model);
-       logL += wgd * get_likelihood_chr(vobs, rtree, knodes, pmats, 1, model);
+       logL += (1-wgd) * get_likelihood_chr(vobs, rtree, knodes, pmats, 0, model, cn_max);
+       logL += wgd * get_likelihood_chr(vobs, rtree, knodes, pmats, 1, model, cn_max);
   }
   else{
-      logL += get_likelihood_chr(vobs, rtree, knodes, pmats, 0, model);
+      logL += get_likelihood_chr(vobs, rtree, knodes, pmats, 0, model, cn_max);
   }
 
 
   if(debug) cout << "Final likelihood before correcting acquisition bias: " << logL << endl;
   if(correct_bias == 1){
-      double bias = get_likelihood_bias(vobs, rtree, knodes, pmats, model);
+      double bias = get_likelihood_bias(vobs, rtree, knodes, pmats, model, cn_max);
       if(abs(bias-0) > SMALL_PROB)
         logL = logL - Nchar * bias;
   }
@@ -1026,8 +1036,8 @@ double my_f (const gsl_vector *v, void *params){
       new_tree.wgd_rate = tree->wgd_rate;
   }
 
-  // return -1.0*get_likelihood(Ns, Nchar, vobs, new_tree, model, 0);
-  return -1.0*get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, new_tree, model, 0, correct_bias);
+  // return -1.0*get_likelihood(Ns, Nchar, vobs, new_tree, model, 0, cn_max);
+  return -1.0*get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, new_tree, model, 0, cn_max, correct_bias);
 }
 
 double my_f_mu (const gsl_vector *v, void *params){
@@ -1054,8 +1064,8 @@ double my_f_mu (const gsl_vector *v, void *params){
       new_tree.wgd_rate = exp( gsl_vector_get(v,tree->nedge+3) );
   }
 
-  // return -1.0*get_likelihood(Ns, Nchar, vobs, new_tree, model, 0);
-  return -1.0*get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, new_tree, model, 0, correct_bias);
+  // return -1.0*get_likelihood(Ns, Nchar, vobs, new_tree, model, 0, cn_max);
+  return -1.0*get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, new_tree, model, 0, cn_max, correct_bias);
 }
 
 double my_f_cons (const gsl_vector *v, void *params){
@@ -1090,8 +1100,8 @@ double my_f_cons (const gsl_vector *v, void *params){
       new_tree.wgd_rate = tree->wgd_rate;
   }
 
-  // return -1.0*get_likelihood(Ns, Nchar, vobs, new_tree, model, 1);
-  return -1.0*get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, new_tree, model, 1, correct_bias);
+  // return -1.0*get_likelihood(Ns, Nchar, vobs, new_tree, model, 1, cn_max);
+  return -1.0*get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, new_tree, model, 1, cn_max, correct_bias);
 }
 
 double my_f_cons_mu (const gsl_vector *v, void *params){
@@ -1126,8 +1136,8 @@ double my_f_cons_mu (const gsl_vector *v, void *params){
       new_tree.wgd_rate = exp( gsl_vector_get(v,count+5) );
   }
 
-  // return -1.0*get_likelihood(Ns, Nchar, vobs, new_tree, model, 1);
-  return -1.0*get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, new_tree, model, 1, correct_bias);
+  // return -1.0*get_likelihood(Ns, Nchar, vobs, new_tree, model, 1, cn_max);
+  return -1.0*get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, new_tree, model, 1, cn_max, correct_bias);
 }
 
 // Output error informaton without aborting
@@ -1249,11 +1259,11 @@ void get_variables(evo_tree& rtree, int model, int cons, int maxj, double *x){
     @param x the input vector x
     @return the function value at x
 */
-double targetFunk(evo_tree& rtree, const int model, const int cons, const int maxj, const int correct_bias, double x[]) {
+double targetFunk(evo_tree& rtree, const int model, const int cons, const int maxj, const int cn_max, const int correct_bias, double x[]) {
     // negative log likelihood
     get_variables(rtree, model, cons, maxj, x);
     // return -1.0*get_likelihood(Ns, Nchar, vobs, rtree, model, cons);
-    return -1.0*get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, correct_bias);
+    return -1.0*get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, cn_max, correct_bias);
 }
 
 /**
@@ -1262,19 +1272,19 @@ double targetFunk(evo_tree& rtree, const int model, const int cons, const int ma
 	@param dfx the derivative at x
 	@return the function value at x
 */
-double derivativeFunk(evo_tree& rtree, const int model, const int cons, const int maxj, const int correct_bias, int ndim, double x[], double dfx[]) {
+double derivativeFunk(evo_tree& rtree, const int model, const int cons, const int maxj, const int cn_max, const int correct_bias, int ndim, double x[], double dfx[]) {
     int debug = 0;
 	double *h = new double[ndim+1];
     double temp;
     int dim;
-	double fx = targetFunk(rtree, model, cons, maxj, correct_bias, x);
+	double fx = targetFunk(rtree, model, cons, maxj, cn_max, correct_bias, x);
 	for (dim = 1; dim <= ndim; dim++ ){
 		temp = x[dim];
 		h[dim] = ERROR_X * fabs(temp);
 		if (h[dim] == 0.0) h[dim] = ERROR_X;
 		x[dim] = temp + h[dim];
 		h[dim] = x[dim] - temp;
-		dfx[dim] = (targetFunk(rtree, model, cons, maxj, correct_bias, x));
+		dfx[dim] = (targetFunk(rtree, model, cons, maxj, cn_max, correct_bias, x));
 		x[dim] = temp;
 	}
 	for (dim = 1; dim <= ndim; dim++ ){
@@ -1287,12 +1297,12 @@ double derivativeFunk(evo_tree& rtree, const int model, const int cons, const in
 	return fx;
 }
 
-double optimFunc(evo_tree& rtree, const int model, const int cons, const int maxj, const int correct_bias, int nvar, double *vars) {
-    return targetFunk(rtree, model, cons, maxj, correct_bias, vars-1);
+double optimFunc(evo_tree& rtree, const int model, const int cons, const int maxj, const int cn_max, const int correct_bias, int nvar, double *vars) {
+    return targetFunk(rtree, model, cons, maxj, cn_max, correct_bias, vars-1);
 }
 
-double optimGradient(evo_tree& rtree, const int model, const int cons, const int maxj, const int correct_bias, int nvar, double *x, double *dfx) {
-    return derivativeFunk(rtree, model, cons, maxj, correct_bias, nvar, x-1, dfx-1);
+double optimGradient(evo_tree& rtree, const int model, const int cons, const int maxj, const int cn_max, const int correct_bias, int nvar, double *x, double *dfx) {
+    return derivativeFunk(rtree, model, cons, maxj, cn_max, correct_bias, nvar, x-1, dfx-1);
 //    const double ERRORX = 1e-5;
 //	double fx = optimFunc(nvar, x);
 //	double h, temp;
@@ -1309,7 +1319,7 @@ double optimGradient(evo_tree& rtree, const int model, const int cons, const int
 }
 
 
-void lbfgsb(evo_tree& rtree, const int model, const int cons, const int maxj, const int correct_bias, int n, int m, double *x, double *l, double *u, int *nbd,
+void lbfgsb(evo_tree& rtree, const int model, const int cons, const int maxj, const int cn_max, const int correct_bias, int n, int m, double *x, double *l, double *u, int *nbd,
 		double *Fmin, int *fail,
 		double factr, double pgtol,
 		int *fncount, int *grcount, int maxit, char *msg,
@@ -1326,7 +1336,7 @@ void lbfgsb(evo_tree& rtree, const int model, const int cons, const int maxj, co
 	if(n == 0) { /* not handled in setulb */
 		*fncount = 1;
 		*grcount = 0;
-		*Fmin = optimFunc(rtree, model, cons, maxj, correct_bias, n, u);
+		*Fmin = optimFunc(rtree, model, cons, maxj, cn_max, correct_bias, n, u);
 		strcpy(msg, "NOTHING TO DO");
 		*fail = 0;
 		return;
@@ -1355,7 +1365,7 @@ void lbfgsb(evo_tree& rtree, const int model, const int cons, const int maxj, co
 		setulb(n, m, x, l, u, nbd, &f, g, factr, &pgtol, wa, iwa, task, tr, lsave, isave, dsave);
 		/*    Rprintf("in lbfgsb - %s\n", task);*/
 		if (strncmp(task, "FG", 2) == 0) {
-			f = optimGradient(rtree, model, cons, maxj, correct_bias, n, x, g);
+			f = optimGradient(rtree, model, cons, maxj, cn_max, correct_bias, n, x, g);
 			if (!isfinite(f)) {
 				cerr << "L-BFGS-B needs finite values of 'fn'" << endl;
 				exit(1);
@@ -1410,7 +1420,7 @@ void lbfgsb(evo_tree& rtree, const int model, const int cons, const int maxj, co
  @return minimized function value
  After the function is invoked, the values of x will be updated
 */
-double L_BFGS_B(evo_tree& rtree, const int model, const int cons, const int maxj, const int correct_bias, int n, double* x, double* l, double* u, double pgtol, int maxit) {
+double L_BFGS_B(evo_tree& rtree, const int model, const int cons, const int maxj, const int cn_max, const int correct_bias, int n, double* x, double* l, double* u, double pgtol, int maxit) {
     int debug = 0;
     int i;
 	double Fmin;
@@ -1450,7 +1460,7 @@ double L_BFGS_B(evo_tree& rtree, const int model, const int cons, const int maxj
 			factr, pgtol, &fncount, &grcount, maxit, msg, trace, nREPORT);
 #else*/
 
-	lbfgsb(rtree, model, cons, maxj, correct_bias, n, m, x, l, u, nbd, &Fmin, &fail,
+	lbfgsb(rtree, model, cons, maxj, cn_max, correct_bias, n, m, x, l, u, nbd, &Fmin, &fail,
 			factr, pgtol, &fncount, &grcount, maxit, msg, trace, nREPORT);
 //#endif
 
@@ -1465,13 +1475,14 @@ double L_BFGS_B(evo_tree& rtree, const int model, const int cons, const int maxj
 
 
 // Using BFGS method to get the maximum likelihood with lower and upper bounds
-evo_tree max_likelihood_BFGS(evo_tree& rtree, int model, double& minL, const double tolerance, const int miter, int cons=0, int maxj=0, int correct_bias=0){
+ evo_tree max_likelihood_BFGS(evo_tree& rtree, int model, double& minL, const double tolerance, const int miter,  int cons=0, int maxj=0, int cn_max=4, int correct_bias=1){
     int debug = 0;
     int npar_ne;
     int ndim = 0;
     double *variables, *upper_bound, *lower_bound;
     int i;
 
+    // Set variables
     if(cons == 0){
       npar_ne = rtree.nedge-1;
       if(maxj==0){
@@ -1600,7 +1611,7 @@ evo_tree max_likelihood_BFGS(evo_tree& rtree, int model, double& minL, const dou
     }
 
     // variables contains the parameters to estimate (branch length, mutation rate)
-    minL = L_BFGS_B(rtree, model, cons, maxj, correct_bias, ndim, variables+1, lower_bound+1, upper_bound+1, tolerance, miter);
+    minL = L_BFGS_B(rtree, model, cons, maxj, cn_max, correct_bias, ndim, variables+1, lower_bound+1, upper_bound+1, tolerance, miter);
     if (debug){
         // cout << "mu of current ML tree: " << rtree.mu << endl;
         cout << "lnL of current ML tree: " << minL << endl;
@@ -1616,7 +1627,7 @@ evo_tree max_likelihood_BFGS(evo_tree& rtree, int model, double& minL, const dou
 }
 
 // given a tree, maximise the branch lengths (and optionally mu) assuming branch lengths are independent or constrained in time
-evo_tree max_likelihood(evo_tree& rtree, int model, double& minL, const double ssize, const double tolerance, const int miter, int cons=0, int maxj=0, int correct_bias=0){
+evo_tree max_likelihood(evo_tree& rtree, int model, double& minL, const double ssize, const double tolerance, const int miter, int cons=0, int maxj=0, int cn_max=4, int correct_bias=1){
   int debug = 0;
   const gsl_multimin_fminimizer_type *T = gsl_multimin_fminimizer_nmsimplex2;
   gsl_multimin_fminimizer *s = NULL;
@@ -1853,6 +1864,7 @@ evo_tree max_likelihood(evo_tree& rtree, int model, double& minL, const double s
     //     // keep the original tree
     //     return rtree;
     // }
+
     return new_tree;
   }
 

@@ -311,10 +311,10 @@ void evo_tree::scale_time(double ratio) {
         // cout << "Previous length: " << lengths[i] << endl;
         edges[i].length = edges[i].length * ratio;
         lengths[i] = lengths[i] * ratio;
-        node_times[i] = node_times[i] * ratio;
         // cout << "Scaled length: " << lengths[i] << endl;
         // change the time of tip node to reflect the sampling point?
     }
+    calculate_node_times();
 }
 
 
@@ -328,11 +328,11 @@ void evo_tree::scale_time_internal (double ratio) {
           // cout << "Previous length: " << lengths[i] << endl;
           edges[i].length = edges[i].length * ratio;
           lengths[i] = lengths[i] * ratio;
-          node_times[i] = node_times[i] * ratio;
           // cout << "Scaled length: " << lengths[i] << endl;
           // change the time of tip node to reflect the sampling point?
       }
     }
+    calculate_node_times();
 }
 
 void evo_tree::generate_int_edges(){
