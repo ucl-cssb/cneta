@@ -81,6 +81,23 @@ evo_tree read_tree_info(const string& filename, const int& Ns){
 }
 
 
+// evo_tree read_nexus(const string& filename){
+//     ifstream infile (filename.c_str());
+//     if (infile.is_open()){
+//       std::string line;
+//       istringstream newickstream(incomingNewick);
+//     }
+//     else{
+//         std::cerr << "Error: open of tree data unsuccessful: " <<  filename << std::endl;
+//         exit(1);
+//     }
+//
+//     evo_tree new_tree(Ns+1, edges);
+//     //new_tree.print();
+//
+//     return new_tree;
+// }
+
 vector<vector<int> > read_data_var_regions(const string& filename, const int& Ns, const int& max_cn){
   cout << "reading data and calculating CNA regions" << endl;
   vector<vector<vector<int> > > s_info;
@@ -145,10 +162,8 @@ vector<vector<int> > read_data_var_regions(const string& filename, const int& Ns
   cout << "\tFound variable bins:\t" << nvar << endl;
 
   // We now need to convert runs of variable bins into segments of constant cn values
-
   vector<vector<int> > segs;
   for(int k=0; k<4401;){
-
     if(var_bins[k] == 1){
       //in_seg = true;
       int chr = s_info[0][k][0];

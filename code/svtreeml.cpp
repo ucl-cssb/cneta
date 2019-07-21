@@ -35,6 +35,7 @@ using namespace std;
 // The number of trees to search before terminating
 const int MAX_TREE = 100;
 const double MAX_NLNL = 1e20;
+const int MAX_OPT = 10; // max number of optimization for each tree
 int debug = 0;
 
 // global values for gsl function minimization
@@ -48,102 +49,129 @@ map<string,int> searched_trees;
 bool exhausted_tree_search = false;
 
 
+void print_invl_blen(evo_tree& new_tree, string header){
+    cout << header << endl;
+    new_tree.print();
+
+    cout << "\tTop " << new_tree.nleaf - 1 << " time intervals: ";
+    for(int i = 0; i < new_tree.top_tinvls.size(); i++){
+        cout << "\t" << new_tree.top_tinvls[i];
+    }
+    cout<< endl;
+    cout << "\tCorresponding " << Ns + 1 << " nodes: ";
+    for(int i = 0; i < new_tree.top_tnodes.size(); i++){
+        cout << new_tree.top_tnodes[i] + 1 << "\t" << "\t" << new_tree.node_times[new_tree.top_tnodes[i]] << endl;
+    }
+
+    vector<double> blens = new_tree.get_edges_from_interval(new_tree.top_tinvls, new_tree.top_tnodes);
+    cout << "\tNew branch lengths: ";
+    for(int i = 0; i<blens.size(); i++){
+        cout << i + 1 << "\t" << "\t" << blens[i] << endl;
+    }
+}
+
+
 evo_tree perturb_tree( const int& Ns, const evo_tree& tree ){
-  //if(debug) cout << "\tperturb_tree" << endl;
+    int debug = 0;
+    if(debug) cout << "\tperturb one tree" << endl;
 
-  // swap two leaf nodes: 0 to Ns-1 are the samples, Ns is germline, Ns+1 is root
-  vector<int> n_0;
-  for(int i=0; i<Ns; ++i) n_0.push_back( i );
-  random_shuffle(n_0.begin(), n_0.end(),fp);
-  int n1 = n_0[Ns-1];
-  n_0.pop_back();
-  random_shuffle(n_0.begin(), n_0.end(),fp);
-  int n2 = n_0[0];
+    // swap two leaf nodes: 0 to Ns-1 are the samples, Ns is germline, Ns+1 is root
+    vector<int> n_0;
+    for(int i=0; i<Ns; ++i) n_0.push_back( i );
+    random_shuffle(n_0.begin(), n_0.end(),fp);
+    int n1 = n_0[Ns-1];
+    n_0.pop_back();
+    random_shuffle(n_0.begin(), n_0.end(),fp);
+    int n2 = n_0[0];
 
-  //cout << "\ttree: ";
-  //cout << create_tree_string( tree ) << endl;
-  //cout << "\tswapping nodes:\t" << n1+1 << "\t" << n2+1 << endl;
-
-  vector<edge> enew;
-  for(int i=0; i<tree.nedge; ++i){
-    enew.push_back( tree.edges[i] );
-    bool changed = false;
-    if(enew[i].end == n1 && changed == false){
-      enew[i].end = n2;
-      changed = true;
+    if(debug){
+        cout << "\toriginal tree: ";
+        cout << create_tree_string( tree ) << endl;
+        cout << "\tswapping nodes:\t" << n1+1 << "\t" << n2+1 << endl;
     }
-    if(enew[i].end == n2 && changed == false){
-      enew[i].end = n1;
-      changed = true;
+
+    vector<edge> enew;
+    for(int i=0; i<tree.nedge; ++i){
+        enew.push_back( tree.edges[i] );
+        bool changed = false;
+        if(enew[i].end == n1 && changed == false){
+          enew[i].end = n2;
+          changed = true;
+        }
+        if(enew[i].end == n2 && changed == false){
+          enew[i].end = n1;
+          changed = true;
+        }
     }
-  }
 
-  evo_tree new_tree(Ns+1, enew);
-  new_tree.mu = tree.mu;
-  new_tree.dup_rate = tree.dup_rate;
-  new_tree.del_rate = tree.del_rate;
-  new_tree.tobs = tree.tobs;
+    evo_tree new_tree(Ns+1, enew, 1);
+    new_tree.mu = tree.mu;
+    new_tree.dup_rate = tree.dup_rate;
+    new_tree.del_rate = tree.del_rate;
+    new_tree.chr_gain_rate = tree.chr_gain_rate;
+    new_tree.chr_loss_rate = tree.chr_loss_rate;
+    new_tree.wgd_rate = tree.wgd_rate;
+    new_tree.tobs = tree.tobs;
 
-  //cout << "\tntree: ";
-  //cout << create_tree_string( new_tree ) << endl;
+    if(debug){
+        cout << "\tnew tree: ";
+        cout << create_tree_string( new_tree ) << endl;
+        string ordered = order_tree_string( create_tree_string( new_tree ) );
+        cout << "\tordered new tree: ";
+        cout << ordered << endl;
+        cout << endl;
+    }
 
-  //string ordered = order_tree_string( create_tree_string( new_tree ) );
-  //cout << "\totree: ";
-  //cout << ordered << endl;
-  //cout << endl;
-
-  return new_tree;
+    return new_tree;
 }
 
-evo_tree perturb_tree( const int& Ns, vector<evo_tree> trees ){
-  if(debug) cout << "\tperturb_tree" << endl;
+evo_tree perturb_tree_set( const int& Ns, vector<evo_tree> trees ){
+    int debug = 0;
+    if(debug) cout << "\tperturb a set of trees" << endl;
 
-  int count = 0;
-  while(true){
-    // randomly sample the fit population
-    int ind = gsl_rng_uniform_int(r, trees.size());
+    int count = 0;
+    while(true){
+        // randomly sample the fit population
+        int ind = gsl_rng_uniform_int(r, trees.size());
 
-    // generate a new tree
-    evo_tree ttree = perturb_tree( Ns, trees[ind] );
-    string tstring = order_tree_string( create_tree_string( ttree ) );
+        // generate a new tree
+        evo_tree ttree = perturb_tree( Ns, trees[ind] );
+        adjust_tree_height(ttree);
+        adjust_tree_tips(ttree);
+        adjust_tree_blens(ttree);
 
-    if ( searched_trees.find(tstring) == searched_trees.end() ) {
-      // add the tree
-      searched_trees[ tstring ] = 1;
-      return ttree;
+        string tstring = order_tree_string( create_tree_string( ttree ) );
+
+        if ( searched_trees.find(tstring) == searched_trees.end() ) {
+          // add the tree
+          searched_trees[ tstring ] = 0;
+          return ttree;
+        }
+        else {
+          //cout << "Tree already present" << endl;
+          count++;
+        }
+
+        if(count > MAX_TREE){
+          //cout << "\tperturb_tree cannot find new topologies" << endl;
+          exhausted_tree_search = true;
+          return ttree;
+        }
     }
-    else {
-      //cout << "Tree already present" << endl;
-      count++;
-    }
-
-    if(count > MAX_TREE){
-      //cout << "\tperturb_tree cannot find new topologies" << endl;
-      exhausted_tree_search = true;
-      return ttree;
-    }
-  }
 }
+
 
 evo_tree do_evolutionary_algorithm(const int& Npop, const int& Ngen, const int& max_static, const vector<double>& rates, const double ssize, const double tolerance, const int miter, const int optim, const int model, const int cons, const int maxj, const int cn_max, const int correct_bias){
   //cout << "Running evolutionary algorithm" << endl;
   // create initial population of trees. Sample from coalescent trees
   vector<evo_tree> trees;
-
-  vector<double> lnLs(2*Npop,0);
+  vector<double> lnLs(2 * Npop,0);
   for(int i=0; i<Npop; ++i){
     evo_tree rtree = generate_coal_tree(Ns);
     rtree.tobs = tobs;
-    double tree_height = rtree.get_tree_height();
-    double min_height = *max_element(tobs.begin(), tobs.end());
-    if(cons){
-        double max_height = age + min_height;
-        double new_tree_height = runiform(r, min_height, max_height);
-        double ratio = new_tree_height/tree_height;
-        rtree.scale_time_internal(ratio);
-        tree_height = new_tree_height;
-    }
-
+    adjust_tree_height(rtree);
+    adjust_tree_tips(rtree);
+    adjust_tree_blens(rtree);
     if(rates.size()>1){
         rtree.dup_rate = rates[0];
         rtree.del_rate = rates[1];
@@ -155,21 +183,20 @@ evo_tree do_evolutionary_algorithm(const int& Npop, const int& Ngen, const int& 
     else{
         rtree.mu = rates[0];
     }
-
-    // double curr_ttime = rtree.get_total_time();
-    // evo_tree rtree_adjusted(rtree.nleaf, rtree.edges, curr_ttime, tobs);
+    rtree.score = - get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, cn_max, correct_bias);
     trees.push_back( rtree );
 
     string tstring = order_tree_string( create_tree_string( rtree ) );
-    searched_trees[ tstring ] = 1;
+    searched_trees[ tstring ] = 0;
   }
+
   double min_lnL = MAX_NLNL;
   evo_tree min_lnL_tree;
   double Lf = 0;
   int count_static = 0;
 
   for(int g=0; g<Ngen; ++g){
-    // Growth stage: create Npop copies + Npop copies with mutation
+    // Growth stage: create Npop copies + Npop copies with mutation (topolgy changes)
     // The top scoring trees have already been scored and optimised
     vector<evo_tree> new_trees;
     vector<evo_tree> opt_trees;
@@ -178,24 +205,30 @@ evo_tree do_evolutionary_algorithm(const int& Npop, const int& Ngen, const int& 
       for(int i=0; i<Npop; ++i){
 	         new_trees.push_back( trees[i] );
       }
-
       for(int i=0; i<Npop; ++i){
-    	//new_trees.push_back( perturb_tree(Ns, Nchar, trees[i]) );
-    	new_trees.push_back( perturb_tree(Ns, trees) );
+          evo_tree ntree = perturb_tree_set(Ns, trees);
+          ntree.score = - get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, ntree, model, cons, cn_max, correct_bias);
+    	  //new_trees.push_back( perturb_tree(Ns, Nchar, trees[i]) );
+    	  new_trees.push_back(ntree);
       }
 
-      // Selection: score the trees
+      // Selection: score all the trees in new_trees (all got maximized)
       for(int i=0; i<2*Npop; ++i){
         evo_tree otree;
         if(optim == 0){
           otree = max_likelihood(new_trees[i], model, Lf, ssize, tolerance, miter, cons, maxj, cn_max, correct_bias);
         }
         if(optim == 1){
+          // new_trees[i].print();
           otree = max_likelihood_BFGS(new_trees[i], model, Lf, tolerance, miter, cons, maxj, cn_max, correct_bias);
         }
         otree.score = Lf;
         // cout << "otree tobs " << otree.tobs[0] << endl;
         lnLs[i] = Lf;
+
+        string tstring = order_tree_string( create_tree_string( otree ) );
+        searched_trees[ tstring ] += 1;
+
         opt_trees.push_back( otree );
         //cout << "g/i/lnL:\t" << g << "\t" << i << "\t" << lnLs[i] << endl;
       }
@@ -207,21 +240,31 @@ evo_tree do_evolutionary_algorithm(const int& Npop, const int& Ngen, const int& 
         	lnLs[i] = new_trees[i].score;
           }
 
+          // cout << "Size of new_trees " << new_trees.size() << endl;
+          // cout << "Size of opt_trees " << new_trees.size() << endl;
+
           // Perturb this subpopulation
           for(int i=0; i<Npop; ++i){
-        	//new_trees.push_back( perturb_tree(Ns, Nchar, trees[i]) );       // trees is of size Npop
-        	new_trees.push_back( perturb_tree(Ns, trees) );
+            evo_tree ntree = perturb_tree_set(Ns, trees);
+            ntree.score = - get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, ntree, model, cons, cn_max, correct_bias);
+      	    //new_trees.push_back( perturb_tree(Ns, Nchar, trees[i]) );
+      	    new_trees.push_back(ntree);
             // new_trees of size 2 Npop
             evo_tree otree;
             if(optim == 0){
         	    otree = max_likelihood(new_trees[Npop + i], model, Lf, ssize, tolerance, miter, cons, maxj, cn_max, correct_bias);
             }
             if(optim == 1){
+                // new_trees[Npop + i].print();
                 otree = max_likelihood_BFGS(new_trees[Npop + i], model, Lf, tolerance, miter, cons, maxj, cn_max, correct_bias);
             }
         	otree.score = Lf;
             // cout << "otree tobs " << otree.tobs[0] << endl;
         	lnLs[Npop + i] = Lf;
+
+            string tstring = order_tree_string( create_tree_string( otree ) );
+            searched_trees[ tstring ] += 1;
+
         	opt_trees.push_back( otree );
         	//cout << "g/i/lnL:\t" << g << "\t" << Npop+i << "\t" << lnLs[i] << endl;
         }
@@ -252,9 +295,7 @@ evo_tree do_evolutionary_algorithm(const int& Npop, const int& Ngen, const int& 
       min_lnL = lnLs[ index[0] ];
       min_lnL_tree = opt_trees[ index[0] ];
       count_static = 0;
-
       min_lnL_tree.print();
-
     }else{
       cout << "min static" << endl;
       count_static += 1;
@@ -267,13 +308,27 @@ evo_tree do_evolutionary_algorithm(const int& Npop, const int& Ngen, const int& 
 
     fill(lnLs.begin(), lnLs.end(), 0);
 
-    if( exhausted_tree_search == true ){
+    // A tree has been maximized at least five times
+    int sum_max_num = 0;
+    for(auto it : searched_trees){
+        sum_max_num += it.second;
+    }
+    // cout << "Total times of maximization " << sum_max_num << endl;
+
+    if( exhausted_tree_search == true && sum_max_num > MAX_OPT * searched_trees.size()){
       cout << "\tperturb_tree struggling to find new topologies. Either exhausted possible trees or local minimum" << endl;
       break;
     }
   }
 
   cout << "FINISHED. MIN -ve logL = " << min_lnL << endl;
+
+  // print out searched trees
+  ofstream out_tree("./test/searched_trees.txt");
+  for(auto it : searched_trees){
+      out_tree << it.first << endl;
+  }
+  out_tree.close();
 
   return min_lnL_tree;
 }
@@ -493,6 +548,29 @@ double compute_tree_likelihood(const string& tree_file, int Ns, int Nchar, int n
         tree.wgd_rate = rates[4];
         tree.mu = accumulate(rates.begin(), rates.end(), 0.0);
     }
+    cout << "Node times: ";
+    for(int i = 0; i<tree.node_times.size(); i++){
+        cout << "\t" << tree.node_times[i];
+    }
+    cout<< endl;
+
+    int sample1 = 0;
+    tree.get_ntime_interval(Ns, sample1);
+    cout << "Top " << Ns << " time intervals: ";
+    for(int i = 0; i < tree.top_tinvls.size(); i++){
+        cout << "\t" << tree.top_tinvls[i];
+    }
+    cout<< endl;
+    cout << "Corresponding " << Ns + 1 << " nodes: ";
+    for(int i = 0; i < tree.top_tnodes.size(); i++){
+        cout << tree.top_tnodes[i] + 1 << "\t" << "\t" << tree.node_times[tree.top_tnodes[i]] << endl;
+    }
+
+    vector<double> blens = tree.get_edges_from_interval(tree.top_tinvls, tree.top_tnodes);
+    cout << "New branch lengths: ";
+    for(int i = 0; i<blens.size(); i++){
+        cout << i + 1 << "\t" << "\t" << blens[i] << endl;
+    }
 
     double Ls = 0.0;
     Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, tree, model, cons, cn_max, correct_bias);
@@ -513,6 +591,10 @@ double maximize_tree_likelihood(const string& tree_file, const string& ofile, in
     // if (format == "nex"){
     //     tree = read_nexus(tree_file);
     // }
+
+    adjust_tree_height(tree);
+    adjust_tree_tips(tree);
+    adjust_tree_blens(tree);
 
     if(model==0){
         tree.mu = 1.0/Nchar;
@@ -574,12 +656,12 @@ int main (int argc, char ** const argv) {
 
     ("npop,p", po::value<int>(&Npop)->default_value(100), "number of population")
     ("ngen,g", po::value<int>(&Ngen)->default_value(50), "number of generation")
-    ("nstop,e", po::value<int>(&max_static)->default_value(3), "stop condition")
+    ("nstop,e", po::value<int>(&max_static)->default_value(10), "stop condition")
     ("tolerance,r", po::value<double>(&tolerance)->default_value(1e-2), "tolerance value")
     ("miter,m", po::value<int>(&miter)->default_value(2000), "maximum number of iterations in maximization")
     ("ssize,z", po::value<double>(&ssize)->default_value(0.01), "initial step size")
 
-    ("mu,x", po::value<double>(&mu)->default_value(0.025), "mutation rate (allele/locus/year)")
+    ("mu,x", po::value<double>(&mu)->default_value(0.02), "mutation rate (allele/locus/year)")
     ("dup_rate", po::value<double>(&dup_rate)->default_value(0.01), "duplication rate (allele/locus/year)")
     ("del_rate", po::value<double>(&del_rate)->default_value(0.01), "deletion rate (allele/locus/year)")
     ("chr_gain_rate", po::value<double>(&chr_gain_rate)->default_value(0), "chromosome gain rate")

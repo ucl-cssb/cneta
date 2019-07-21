@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 
 # output directory
-dir="./test/"
+dir="./example/"
 mkdir $dir
 
 # seed=847596759
@@ -15,24 +15,24 @@ cons=1
 # Model of evolution. 1: bounded model, 0: JC69 model
 model=1
 # Age of the patient
-age=50
+age=60
 
 cn_max=4
 # rates of duplication, deletion, chromosome gain, chromosome loss, wgd
 r1=0.00002
 r2=0.00001
-r3=0.000002
-r4=0.000001
-r5=0.0000002
+r3=0
+r4=0
+r5=0
 
 # mean of exponential distributions of duplication and deletion size in bins
 s1=50
 s2=50
 
 # effective population size
-Ne=20
+Ne=10
 # observed time step
-dt=5
+dt=2
 
 # Whether or not to print debug information
 verbose=0
