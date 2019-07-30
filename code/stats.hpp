@@ -38,10 +38,12 @@ const double LARGE_LNL = -1e9;
 const double SMALL_LNL = -1e20;
 const double ERROR_X = 1.0e-4;
 const double SMALL_VAL = 1.0e-20;
+// The maximum mutation rates allowed
+const double MAX_MRATE = 0.01;
 // The shortest branch length allowed (in year)
 const double SMALL_BLEN = 0.01;
 // Scaling tree height to 1/HEIGHT_SCALE if the current height is larger than the upper bound (patient age at last sample)
-const int HEIGHT_SCALE = 1.5;
+const int HEIGHT_SCALE = 3;
 // The difference from minmial height
 const int HEIGHT_OFFSET = 10;
 
@@ -375,7 +377,7 @@ void adjust_tree_blens(evo_tree& rtree){
 
     double min_blen = *min_element(blens.begin(), blens.end());
     if(min_blen < 0){
-        double delta = min_blen * 1.1;
+        double delta = min_blen - SMALL_BLEN;
         if(debug){
             cout << "Estimated branch lengths have negative values!" << endl;
             cout << "Increase all branch lengths (except the branch to normal node) to eliminate negative values by " << -delta << endl;
@@ -1383,7 +1385,7 @@ int get_first_sample(vector<double> tobs){
 // Estimate time intervals rather than branch length in order to avoid negative terminal branch lengths
 // Sort node times in increasing order
 // Take the first Ns intervals
-bool get_variables_ntime(evo_tree& rtree, int model, int cons, int maxj, double *x){
+void get_variables_ntime(evo_tree& rtree, int model, int cons, int maxj, double *x){
     int debug = 0;
     // create a new tree from current value of parameters
     vector<edge> enew;
@@ -1532,7 +1534,7 @@ bool get_variables_ntime(evo_tree& rtree, int model, int cons, int maxj, double 
       rtree = evo_tree(new_tree);
     }
 
-    return true;
+    // return true;
 }
 
 /**
@@ -1543,7 +1545,7 @@ bool get_variables_ntime(evo_tree& rtree, int model, int cons, int maxj, double 
 double targetFunk(evo_tree& rtree, const int model, const int cons, const int maxj, const int cn_max, const int correct_bias, double x[]) {
     // negative log likelihood
     // get_variables(rtree, model, cons, maxj, x);
-    bool success = get_variables_ntime(rtree, model, cons, maxj, x);
+    get_variables_ntime(rtree, model, cons, maxj, x);
     return -1.0*get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, cn_max, correct_bias);
 }
 
@@ -1795,33 +1797,33 @@ evo_tree max_likelihood_BFGS(evo_tree& rtree, int model, double& minL, const dou
               i = npar_ne;
               variables[i+1] = rtree.mu;
               lower_bound[i+1] = 0;
-              upper_bound[i+1] = 1;
+              upper_bound[i+1] = MAX_MRATE;
           }
           if(model == 1){
               i = npar_ne;
               variables[i+1] = rtree.dup_rate;
               lower_bound[i+1] = 0;
-              upper_bound[i+1] = 1;
+              upper_bound[i+1] = MAX_MRATE;
 
               i = npar_ne+1;
               variables[i+1] = rtree.del_rate;
               lower_bound[i+1] = 0;
-              upper_bound[i+1] = 1;
+              upper_bound[i+1] = MAX_MRATE;
 
               i = npar_ne+2;
               variables[i+1] = rtree.chr_gain_rate;
               lower_bound[i+1] = 0;
-              upper_bound[i+1] = 1;
+              upper_bound[i+1] = MAX_MRATE;
 
               i = npar_ne+3;
               variables[i+1] = rtree.chr_loss_rate;
               lower_bound[i+1] = 0;
-              upper_bound[i+1] = 1;
+              upper_bound[i+1] = MAX_MRATE;
 
               i = npar_ne+4;
               variables[i+1] = rtree.wgd_rate;
               lower_bound[i+1] = 0;
-              upper_bound[i+1] = 1;
+              upper_bound[i+1] = MAX_MRATE;
           }
       }
     }else{

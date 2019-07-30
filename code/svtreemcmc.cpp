@@ -40,7 +40,6 @@ const double RATE_MIN = 1e-10;
 const double RATE_MAX = 1;
 const double RATE_MIN_LOG = -10;
 const double RATE_MAX_LOG = 0;
-
 const double LOG_MINUS_INFINITY = numeric_limits<double>::lowest();
 
 int debug = 0;
@@ -425,7 +424,6 @@ int move_topology(double& log_hastings_ratio, evo_tree& rtree){
         rtree.print();
         // Output to a file to facilitate ploting
         ofstream out_tree("./test/sim-data-mcmc-tree-before.txt");
-        out_tree;
         rtree.write(out_tree);
         out_tree.close();
     }
@@ -684,7 +682,7 @@ void update_topology(evo_tree& rtree, int model, double& log_likelihood, int& na
         prev_log_likelihood = 1;
     }
     else{
-        prev_log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons);
+        prev_log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, cn_max, correct_bias);
     }
 
     if(debug){
@@ -702,7 +700,7 @@ void update_topology(evo_tree& rtree, int model, double& log_likelihood, int& na
         log_likelihood = 1;
     }
     else{
-        log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, ntree, model, cons);
+        log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, ntree, model, cons, cn_max, correct_bias);
     }
     // log_prior = get_prior_topology(Ns);
     if(debug){
@@ -757,7 +755,7 @@ void update_blen(evo_tree& rtree, int model, double& log_likelihood, int& naccep
         prev_log_likelihood = 1;
     }
     else{
-        prev_log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons);
+        prev_log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, cn_max, correct_bias);
     }
     if(debug){
         cout << "   Previous prior and likelihood " << prev_log_prior << "\t" << prev_log_likelihood << endl;
@@ -784,7 +782,7 @@ void update_blen(evo_tree& rtree, int model, double& log_likelihood, int& naccep
         log_likelihood = 1;
     }
     else{
-        log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, ntree, model, cons);
+        log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, ntree, model, cons, cn_max, correct_bias);
     }
     log_prior = get_prior_blen(blens, num_branch, prior_parameters_blen, alphas);
     if(debug){
@@ -838,7 +836,7 @@ void update_tree_height(evo_tree& rtree, int model, double& log_likelihood, int&
         prev_log_likelihood = 1;
     }
     else{
-        prev_log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, 1);
+        prev_log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, 1, cn_max, correct_bias);
     }
     if(debug){
         cout << "   Previous prior and likelihood " << prev_log_prior << "\t" << prev_log_likelihood << endl;
@@ -881,7 +879,7 @@ void update_tree_height(evo_tree& rtree, int model, double& log_likelihood, int&
         log_likelihood = 1;
     }
     else{
-        log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, ntree, model, 1);
+        log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, ntree, model, 1, cn_max, correct_bias);
     }
     // log_prior = get_prior_tree_height(prior_parameters);
     if(debug){
@@ -926,7 +924,7 @@ void update_pop_size(evo_tree& rtree, double& log_likelihood, int& naccepts, con
         prev_log_likelihood = 1;
     }
     else{
-        prev_log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons);
+        prev_log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, cn_max, correct_bias);
     }
     if(debug){
         cout << "   Previous prior and likelihood " << prev_log_prior << "\t" << prev_log_likelihood << endl;
@@ -942,7 +940,7 @@ void update_pop_size(evo_tree& rtree, double& log_likelihood, int& naccepts, con
         log_likelihood = 1;
     }
     else{
-        log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, ntree, model, cons);
+        log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, ntree, model, cons, cn_max, correct_bias);
     }
     // log_prior = get_prior_tree_height(prior_parameters);
     if(debug){
@@ -984,7 +982,7 @@ void update_mutation_rates(evo_tree& rtree, double& log_likelihood, int& naccept
         prev_log_likelihood = 1;
     }
     else{
-        prev_log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons);
+        prev_log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, cn_max, correct_bias);
     }
     if(debug){
         cout << "   Previous prior and likelihood " << prev_log_prior << "\t" << prev_log_likelihood << endl;
@@ -1001,7 +999,7 @@ void update_mutation_rates(evo_tree& rtree, double& log_likelihood, int& naccept
         log_likelihood = 1;
     }
     else{
-        log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, ntree, model, cons);
+        log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, ntree, model, cons, cn_max, correct_bias);
     }
     log_prior = get_prior_mutation_gamma(ntree.mu, prior_parameters_rate);
     if(debug){
@@ -1044,7 +1042,7 @@ void update_mutation_rates_lnormal(evo_tree& rtree, int model, double& log_likel
         prev_log_likelihood = 1;
     }
     else{
-        prev_log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons);
+        prev_log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, cn_max, correct_bias);
     }
     if(debug){
         cout << "   Previous prior and likelihood " << prev_log_prior << "\t" << prev_log_likelihood << endl;
@@ -1061,7 +1059,7 @@ void update_mutation_rates_lnormal(evo_tree& rtree, int model, double& log_likel
         log_likelihood = 1;
     }
     else{
-        log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, ntree, model, cons);
+        log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, ntree, model, cons, cn_max, correct_bias);
     }
     log_prior = get_prior_mutation_lnormal(new_lmu, prior_parameters_mut);
     if(debug){
@@ -1105,7 +1103,7 @@ void update_deletion_rates_lnormal(evo_tree& rtree, int model, double& log_likel
         prev_log_likelihood = 1;
     }
     else{
-        prev_log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons);
+        prev_log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, cn_max, correct_bias);
     }
     if(debug){
         cout << "   Previous prior and likelihood " << prev_log_prior << "\t" << prev_log_likelihood << endl;
@@ -1122,7 +1120,7 @@ void update_deletion_rates_lnormal(evo_tree& rtree, int model, double& log_likel
         log_likelihood = 1;
     }
     else{
-        log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, ntree, model, cons);
+        log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, ntree, model, cons, cn_max, correct_bias);
     }
     log_prior = get_prior_mutation_lnormal(new_lmu, prior_parameters_mut);
     if(debug){
@@ -1165,7 +1163,7 @@ void update_duplication_rates_lnormal(evo_tree& rtree, int model, double& log_li
         prev_log_likelihood = 1;
     }
     else{
-        prev_log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons);
+        prev_log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, cn_max, correct_bias);
     }
     if(debug){
         cout << "   Previous prior and likelihood " << prev_log_prior << "\t" << prev_log_likelihood << endl;
@@ -1182,7 +1180,7 @@ void update_duplication_rates_lnormal(evo_tree& rtree, int model, double& log_li
         log_likelihood = 1;
     }
     else{
-        log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, ntree, model, cons);
+        log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, ntree, model, cons, cn_max, correct_bias);
     }
     log_prior = get_prior_mutation_lnormal(new_lmu, prior_parameters_mut);
     if(debug){
@@ -1386,7 +1384,7 @@ vector<double> get_vertex_indices(string const& pointLine)
 
 
 int main (int argc, char ** const argv) {
-    int n_draws, n_burnin, n_sample, model, cons, maxj, seed, clock;
+    int n_draws, n_burnin, n_sample, model, cons, maxj, seed, clock, cn_max, correct_bias;
     double lambda, sigma_blen, mbactrian, lambda_topl, sigma_height;
     double dirichlet_param, tlen_shape, tlen_scale;
     double rate_shape, rate_scale;
@@ -1411,6 +1409,7 @@ int main (int argc, char ** const argv) {
     optional.add_options()
             ("config_file", po::value<string>(&config_file)->default_value(""), "configuration file of input parameters")
             ("nsample,s", po::value<int>(&Ns)->default_value(5), "number of samples or regions")
+            ("cn_max", po::value<int>(&cn_max)->default_value(4), "maximum copy number of a segment")
 
             ("trace_param_file", po::value<string>(&trace_param_file)->default_value("trace-mcmc-params.txt"), "output trace file of parameter values")
             ("trace_tree_file", po::value<string>(&trace_tree_file)->default_value("trace-mcmc-trees.txt"), "output trace file of trees")
@@ -1424,6 +1423,7 @@ int main (int argc, char ** const argv) {
             ("fix_topology", po::value<int>(&fix_topology)->default_value(0), "whether or not to fix the topology of the tree")
             ("constrained", po::value<int>(&cons)->default_value(1), "constraints on branch length (0: none, 1: fixed total time)")
             ("estimate_mu", po::value<int>(&maxj)->default_value(1), "estimation of mutation rate (0: mutation rate fixed to be the given value, 1: estimating mutation rate)")
+            ("correct_bias", po::value<int>(&correct_bias)->default_value(1), "correct ascertainment bias")
 
             ("rtree", po::value<string>(&treefile)->default_value(""), "reference tree file")
             ("rmu", po::value<double>(&rmu)->default_value(0.02), "mutation rate (SCA/locus/time) of the reference tree")
@@ -1502,10 +1502,10 @@ int main (int argc, char ** const argv) {
     else{
         cout << "Estimating mutation rate" << endl;
     }
-    // vector<vector<int> > data = read_data_var_regions(datafile, Ns, CN_MAX);
+    // vector<vector<int> > data = read_data_var_regions(datafile, Ns, cn_max);
     int num_invar_bins = 0;
     Nchar = 0;
-    map<int, vector<vector<int>>> data = read_data_var_regions_by_chr(datafile, Ns, CN_MAX, num_invar_bins);
+    map<int, vector<vector<int>>> data = read_data_var_regions_by_chr(datafile, Ns, cn_max, num_invar_bins);
     // Nchar = data.size();
 
     // tobs already defined globally
@@ -1603,7 +1603,7 @@ int main (int argc, char ** const argv) {
             cout << "Tree height " << test_tree.tree_height << endl;
             cout << "Total time " << test_tree.total_time << endl;
             double Ls = 0.0;
-            Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, test_tree, model, cons);
+            Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, test_tree, model, cons, cn_max, correct_bias);
             // cout << "\nOriginal tree likelihood: " << Ls << endl;
             cout << 0 << "\t" << Ls  << "\t" << test_tree.mu << "\t" << test_tree.dup_rate << "\t" << test_tree.del_rate;
             // Output the original tree length
@@ -1672,7 +1672,7 @@ int main (int argc, char ** const argv) {
             sstm.str("");
 
             // Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons);
-            Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, 0);
+            Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, 0, cn_max, correct_bias);
             cout << "\nRandom tree likelihood: " << Ls << endl;
 
             // Estimate branch length with MCMC
@@ -1711,25 +1711,15 @@ int main (int argc, char ** const argv) {
             rtree.mu = rtree.dup_rate + rtree.del_rate;
         }
         rtree.tobs = tobs;
+        adjust_tree_height(rtree);
+        adjust_tree_tips(rtree);
+        adjust_tree_blens(rtree);
         rtree.tree_height = rtree.get_tree_height();
         rtree.total_time = rtree.get_total_time();
         cout << "Total time of random tree " << rtree.total_time << endl;
 
-        if(cons){
-            double tree_height = runiform(r, min_height, max_height);
-            // cout << "Rescaled tree height " << tree_height << endl;
-            double old_tree_height = rtree.get_tree_height();
-            // cout << "Tree height before scaling " << old_tree_height << endl;
-            double ratio = tree_height/old_tree_height;
-            // cout << "Scaling ratio " << ratio << endl;
-            rtree.scale_time(ratio);
-            rtree.tree_height = rtree.get_tree_height();
-            rtree.total_time = rtree.get_total_time();
-        }
-        cout << "Total time of random tree after scaling " << rtree.total_time << endl;
-
         // double Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons);
-        double Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons);
+        double Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, cn_max, correct_bias);
         cout << "\nRandom tree likelihood: " << Ls << endl;
 
         // Estimate branch length with MCMC

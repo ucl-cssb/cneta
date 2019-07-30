@@ -12,7 +12,7 @@ sveta: sveta.cpp
 svtreeml: svtreeml.cpp
 	cd gzstream/ && make
 	cd lbfgsb/ && cmake ./ && make
-	$(CCC) -std=gnu++11 svtreeml.cpp matexp/matrix_exponential.cpp matexp/r8lib.cpp -o svtreeml -L/usr/local/lib/ -lboost_program_options -lgsl -lgslcblas -L./lbfgsb -llbfgsb -L./gzstream -lgzstream -lz -I./ -I/usr/local/include -I./gzstream -I./lbfgsb
+	$(CCC) -std=gnu++11 -fopenmp svtreeml.cpp matexp/matrix_exponential.cpp matexp/r8lib.cpp -o svtreeml -L/usr/local/lib/ -lboost_program_options -lgsl -lgslcblas -L./lbfgsb -llbfgsb -L./gzstream -lgzstream -lz -I./ -I/usr/local/include -I./gzstream -I./lbfgsb
 
 svtreemu: svtreemu.cpp
 	cd gzstream/ && make

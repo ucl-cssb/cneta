@@ -1,6 +1,6 @@
 // collection of functions for reading/writing
 extern int debug;
-const int NUM_TOTAL_BIN = 4401;
+// const int num_total_bin = 4401;
 
 // Read the samping time and patient age of each sample
 vector<double> read_time_info(const string& filename, const int& Ns, int& age){
@@ -100,7 +100,7 @@ evo_tree read_tree_info(const string& filename, const int& Ns){
 
 vector<vector<int> > read_data_var_regions(const string& filename, const int& Ns, const int& max_cn){
   cout << "reading data and calculating CNA regions" << endl;
-  vector<vector<vector<int> > > s_info;
+  vector<vector<vector<int>>> s_info;
 
   // data indexed by [sample][data][ chr, bid, cn ]
   for(int i=0; i<Ns; ++i) s_info.push_back( vector< vector<int> >(4401, vector<int>(3,0) ) );
@@ -261,19 +261,21 @@ vector<vector<int> > read_data_var_regions(const string& filename, const int& Ns
 }
 
 map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filename, const int& Ns, const int& max_cn, int &num_invar_bins){
-  cout << "reading data and calculating CNA regions" << endl;
-  vector<vector<vector<int>>> s_info;
-  num_invar_bins = 0;
+    cout << "reading data and calculating CNA regions" << endl;
+    int num_total_bin = 0;
+    vector<vector<vector<int>>> s_info;
+    num_invar_bins = 0;
 
-  // data indexed by [sample][data][ chr, bid, cn ]
-  for(int i=0; i<Ns; ++i) s_info.push_back( vector< vector<int> >(NUM_TOTAL_BIN, vector<int>(3,0) ) );
+    // data indexed by [sample][data][ chr, bid, cn ]
+    // for(int i=0; i<Ns; ++i) s_info.push_back( vector< vector<int> >(num_total_bin, vector<int>(3,0) ) );
+    for(int i=0; i<Ns; ++i) s_info.push_back( vector<vector<int>>());
 
-  //ifstream infile (filename.c_str());
-  igzstream infile (filename.c_str());
+    //ifstream infile (filename.c_str());
+    igzstream infile (filename.c_str());
 
-  int counter = 0;
-  //if (infile.is_open()){
+    int counter = 0;
     std::string line;
+    int prev_sample = 1;
     while(!getline(infile,line).eof()){
       if(line.empty()) continue;
 
@@ -283,28 +285,33 @@ map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filenam
       while (ss >> buf) split.push_back(buf);
 
       int sample = atoi(split[0].c_str());
-      if( sample > Ns) break;
+      // Read next sample
+      if( sample > Ns) {
+          break;
+      }
+      if(prev_sample != sample){
+          num_total_bin = counter;
+          counter = 0;
+      }
 
       //cout << sample-1 << "\t" << counter << endl;
-      s_info[sample-1][counter][0] = atoi( split[1].c_str() );  // chr
-      s_info[sample-1][counter][1] = atof( split[2].c_str() );  // segment ID
-      s_info[sample-1][counter][2] = atof( split[3].c_str() );  // copy number
+      int chr = atoi( split[1].c_str() );  // chr
+      int sid = atoi( split[2].c_str() );  // segment ID
+      int cn = atoi( split[3].c_str() );  // copy number
+      vector<int> vcn{chr, sid, cn};
+      s_info[sample-1].push_back(vcn);
       counter++;
 
-      if(counter >= NUM_TOTAL_BIN) counter = 0;
+      // if(counter >= num_total_bin) counter = 0;
+      prev_sample = sample;
     }
 
-    //}else{
-    // std::cerr << "Error: open of data file unsuccessful: " <<  filename << std::endl;
-    //exit(1);
-    //}
-  cout << "\tSuccessfully read input file" << endl;
+    cout << "\tSuccessfully read input file" << endl;
 
-  // Find the number of invariable sites for each character (state)
-
-  // Loop over and output only the regions that have varied
-  vector<int> var_bins(NUM_TOTAL_BIN,0);
-  for(int k=0; k<NUM_TOTAL_BIN; ++k){
+    // Find the number of invariable sites for each character (state)
+    // Loop over and output only the regions that have varied
+    vector<int> var_bins(num_total_bin, 0);
+    for(int k=0; k<num_total_bin; ++k){
     int sum = 0;
     for(int i=0; i<Ns; ++i){
       sum += abs(s_info[i][k][2]);
@@ -315,26 +322,27 @@ map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filenam
     else{
         num_invar_bins += 1;
     }
-  }
+    }
 
-  if(debug){
+    if(debug){
     cout << "\tVariable bins found:" << endl;
-    for(int k=0; k<NUM_TOTAL_BIN; ++k){
+    for(int k=0; k<num_total_bin; ++k){
       if(var_bins[k] == 1){
     	cout << s_info[0][k][0] << "\t" << s_info[0][k][1];
     	for(int i=0; i<Ns; ++i) cout << "\t" << s_info[i][k][2];
     	cout << endl;
       }
     }
-  }
+    }
 
-  int nvar = accumulate(var_bins.begin(), var_bins.end(), 0);
-  cout << "\tFound variable bins:\t" << nvar << endl;
-  cout << "\tFound invariable bins:\t" << num_invar_bins << endl;
+    int nvar = accumulate(var_bins.begin(), var_bins.end(), 0);
+    cout << "\tTotal number of bins:\t" << num_total_bin << endl;
+    cout << "\tFound variable bins:\t" << nvar << endl;
+    cout << "\tFound invariable bins:\t" << num_invar_bins << endl;
 
-  // We now need to convert runs of variable bins into segments of constant cn values, grouped by chromosme
-  vector<vector<int>> segs;
-  for(int k=0; k<NUM_TOTAL_BIN;){
+    // We now need to convert runs of variable bins into segments of constant cn values, grouped by chromosme
+    vector<vector<int>> segs;
+    for(int k=0; k<num_total_bin;){
     if(var_bins[k] == 1){
       //in_seg = true;
       int chr = s_info[0][k][0];
@@ -379,19 +387,19 @@ map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filenam
       if(const_cn == false) k--;
     }
     ++k;
-  }
-  cout << "\tFound segments:\t\t" << segs.size() << endl;
+    }
+    cout << "\tFound segments:\t\t" << segs.size() << endl;
 
-  // vector<vector<int>> ret;
-  map<int, vector<vector<int>>> ret;
-  int Nchar = 0;
-  for(int i=0; i<segs.size(); ++i){
+    // vector<vector<int>> ret;
+    map<int, vector<vector<int>>> ret;
+    int Nchar = 0;
+    for(int i=0; i<segs.size(); ++i){
     vector<double> av_cn(Ns,0);     // Compute the average copy number of a segment
     bool valid = true;
 
     for(int j=0; j<Ns; ++j){
       for(int k=segs[i][1]; k<(segs[i][2]+1); ++k){
-	         av_cn[j] += s_info[j][k][2];
+             av_cn[j] += s_info[j][k][2];
       }
       av_cn[j] = av_cn[j]/( segs[i][2] - segs[i][1] + 1 );
 
@@ -419,23 +427,23 @@ map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filenam
       Nchar += 1;
     }
 
-  }
+    }
 
-  cout << "\tUsing segments:\t\t" << Nchar << endl;
-  // for(int i=0; i<ret.size(); ++i){
-  //     for(int j=0; j<ret[i].size(); ++j){
-  //     cout << "\t" << ret[i][j];
-  //     }
-  //     cout << endl;
-  // }
-  // for(int i=1; i<=ret.size(); ++i){
-  //     for(int j=0; j<ret[i].size(); ++j){
-  //          for(int k=0; k<Ns; ++k){
-  //              cout << "\t" << ret[i][j][k+3];
-  //          }
-  //          cout << "; ";
-  //     }
-  //     cout << endl;
-  // }
-  return ret;
+    cout << "\tUsing segments:\t\t" << Nchar << endl;
+    // for(int i=0; i<ret.size(); ++i){
+    //     for(int j=0; j<ret[i].size(); ++j){
+    //     cout << "\t" << ret[i][j];
+    //     }
+    //     cout << endl;
+    // }
+    // for(int i=1; i<=ret.size(); ++i){
+    //     for(int j=0; j<ret[i].size(); ++j){
+    //          for(int k=0; k<Ns; ++k){
+    //              cout << "\t" << ret[i][j][k+3];
+    //          }
+    //          cout << "; ";
+    //     }
+    //     cout << endl;
+    // }
+    return ret;
 }
