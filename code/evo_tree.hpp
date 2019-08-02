@@ -241,12 +241,11 @@ public:
     }
   }
 
-  void write_with_mut(ofstream& of){
+  void write_with_mut(ofstream& of, vector<int> nmuts){
     assert(mu > 0);
     of << "start\tend\tlength\tnmut" << endl;
     for(int i=0; i<nedge; ++i){
-      int nmut = edges[i].length * mu;
-      of << edges[i].start+1 << "\t" << edges[i].end+1 << "\t" << edges[i].length << "\t" << nmut << endl;
+      of << edges[i].start+1 << "\t" << edges[i].end+1 << "\t" << edges[i].length << "\t" << nmuts[i] << endl;
     }
   }
 

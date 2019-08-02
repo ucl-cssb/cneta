@@ -1103,9 +1103,18 @@ int main (int argc, char ** const argv) {
               cout << "The final tree is not valid!" << endl;
           }
       }
+
+      double mu_est = total_chr * (min_lnL_tree.chr_gain_rate + min_lnL_tree.chr_loss_rate) + Nchar * (min_lnL_tree.dup_rate + min_lnL_tree.del_rate) + min_lnL_tree.wgd_rate;
+      cout << "Estimated total mutation rate per year " << mu_est << endl;
+      vector<double> mu_all;
+      for(int i = 0; i<min_lnL_tree.lengths.size(); i++){
+          mu_all.push_back(mu_est);
+      }
+      vector<int> nmuts = min_lnL_tree.get_nmuts(mu_all);
+
       ofstream out_tree(ofile);
       // min_lnL_tree.write(out_tree);
-      min_lnL_tree.write_with_mut(out_tree);
+      min_lnL_tree.write_with_mut(out_tree, nmuts);
       out_tree.close();
 
       string ofile_nex = ofile + ".nex";
@@ -1118,13 +1127,6 @@ int main (int argc, char ** const argv) {
       ofile_nex =  ofile + ".nmut.nex";
       ofstream nex_tree2(ofile_nex);
       precision = 0;
-      double mu_est = total_chr * (min_lnL_tree.chr_gain_rate + min_lnL_tree.chr_loss_rate) + Nchar * (min_lnL_tree.dup_rate + min_lnL_tree.del_rate) + min_lnL_tree.wgd_rate;
-      cout << "Estimated total mutation rate per year " << mu_est << endl;
-      vector<double> mu_all;
-      for(int i = 0; i<min_lnL_tree.lengths.size(); i++){
-          mu_all.push_back(mu_est);
-      }
-      vector<int> nmuts = min_lnL_tree.get_nmuts(mu_all);
       newick = min_lnL_tree.make_newick_nmut(precision, nmuts);
       min_lnL_tree.write_nexus(newick, nex_tree2);
       nex_tree2.close();
