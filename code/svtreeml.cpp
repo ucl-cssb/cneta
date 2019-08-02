@@ -16,6 +16,7 @@
 #include <map>
 #include <unistd.h>
 #include <omp.h>
+#include <climits>
 
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_randist.h>
@@ -35,6 +36,7 @@ using namespace std;
 
 // The number of tree shapes
 static const int num_shapes[] = {1, 1, 1, 2, 3, 6, 11, 23, 46, 98, 207, 451, 983, 2179, 4850, 10905, 24631, 56011, 127912, 293547};
+static const int num_trees[] = {1, 1, 1, 2, 3, 6, 11, 23, 46, 98, 207, 451, 983, 2179, 4850, 10905, 24631, 56011, 127912, 293547};
 // The number of trees to search before terminating
 const int MAX_TREE = 100;
 const int MAX_TREE2 = 10;
@@ -290,8 +292,9 @@ vector<evo_tree> find_best_trees(const vector<evo_tree>& trees, const vector<dou
 
 evo_tree do_hill_climbing(const int Npop, const int Ngen, const int init_tree, int& max_static, const vector<double>& rates, const double ssize, const double tolerance, const int miter, const int optim, const int model, const int cons, const int maxj, const int cn_max, const int correct_bias){
     // initialize candidate tree set
-    int max_tree_num = fact(Ns) * fact(Ns - 1) / exp2(Ns-1);
-    cout << "Maximum number of possible trees " << max_tree_num << endl;
+    // int max_tree_num = fact(Ns) * fact(Ns - 1) / exp2(Ns-1);
+    int max_tree_num = INT_MAX;
+    // cout << "Maximum number of possible trees to explore " << max_tree_num << endl;
     vector<evo_tree> trees = get_initial_trees(init_tree, Npop, rates, max_tree_num);
     int num2init = trees.size();
     vector<double> lnLs(num2init,0);
