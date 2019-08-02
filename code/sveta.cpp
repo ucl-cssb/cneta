@@ -1261,6 +1261,7 @@ int main (int argc, char ** const argv) {
           // }
           // cout << endl;
       }
+      // test_tree.mu = accumulate(rate_consts.begin(), rate_consts.end(), 0.0);
       simulate_samples(results, muts, test_tree, germline, rate_consts, model, cn_max, false);
 
       sstm << dir << prefix << "-cn.txt.gz";
@@ -1298,12 +1299,14 @@ int main (int argc, char ** const argv) {
       sstm.str("");
 
       sstm << dir << prefix << "-tree.txt";
+      vector<int> nmuts;
       ofstream out_tree(sstm.str());
       //test_tree.write(out_tree);
       out_tree << "start\tend\tlength\teid\tnmut" << endl;
       for(int i=0; i<test_tree.nedge; ++i){
           out_tree << test_tree.edges[i].start+1 << "\t" << test_tree.edges[i].end+1 << "\t" << test_tree.edges[i].length
      << "\t" << test_tree.edges[i].id+1 << "\t" << muts[test_tree.edges[i].id].size() << endl;
+        nmuts.push_back(muts[test_tree.edges[i].id].size());
       }
       out_tree.close();
       sstm.str("");
@@ -1311,8 +1314,17 @@ int main (int argc, char ** const argv) {
       sstm << dir << prefix << "-tree.nex";
       ofstream nex_tree(sstm.str());
       int precision = 5;
-      test_tree.write_nexus(precision, nex_tree);
+      string newick = test_tree.make_newick(precision);
+      test_tree.write_nexus(newick, nex_tree);
       nex_tree.close();
+      sstm.str("");
+
+      sstm << dir << prefix << "-tree-nmut.nex";
+      ofstream nex_tree2(sstm.str());
+      precision = 0;
+      newick = test_tree.make_newick_nmut(precision, nmuts);
+      test_tree.write_nexus(newick, nex_tree2);
+      nex_tree2.close();
       sstm.str("");
 
       sstm << dir << prefix << "-mut.txt";

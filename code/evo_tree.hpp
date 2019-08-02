@@ -101,6 +101,7 @@ public:
   int nintedge;
   vector<edge>   edges;
   vector<double> lengths;
+  // vector<int> muts;
   vector<node>   nodes;
   vector<double> node_times;
   // pointers to internal edges
@@ -129,7 +130,8 @@ public:
 
   void   get_nodes_preorder(node* root, vector<node*>& nodes_preorder);
   string make_newick(int precision);
-  void   write_nexus(int precision, ofstream& fout);
+  string make_newick_nmut(int precision, vector<int> nmuts);
+  void   write_nexus(string newick, ofstream& fout);
   void   scale_time(double ratio);
   void   scale_time_internal(double ratio);
   void   generate_nodes();
@@ -192,6 +194,16 @@ public:
       return tips;
   }
 
+  // Find the number of mutations on each branch
+  vector<int> get_nmuts(vector<double> mu){
+      vector<int> nmuts;
+      for(int i=0; i< lengths.size(); i++){
+          int mut = mu[i] * lengths[i];
+          nmuts.push_back(mut);
+      }
+      return nmuts;
+  }
+
   void print(){
     cout << "EDGES:" << endl;
     cout << "\tid\tstart\tend\tlength" << endl;
@@ -226,6 +238,15 @@ public:
     of << "start\tend\tlength" << endl;
     for(int i=0; i<nedge; ++i){
       of << edges[i].start+1 << "\t" << edges[i].end+1 << "\t" << edges[i].length << endl;
+    }
+  }
+
+  void write_with_mut(ofstream& of){
+    assert(mu > 0);
+    of << "start\tend\tlength\tnmut" << endl;
+    for(int i=0; i<nedge; ++i){
+      int nmut = edges[i].length * mu;
+      of << edges[i].start+1 << "\t" << edges[i].end+1 << "\t" << edges[i].length << "\t" << nmut << endl;
     }
   }
 
@@ -804,11 +825,70 @@ string evo_tree::make_newick(int precision){
     return newick;
 }
 
+string evo_tree::make_newick_nmut(int precision, vector<int> nmuts){
+    string newick;
+    const boost::format tip_node_format(boost::str(boost::format("%%d:%%.%df") % precision));
+    const boost::format internal_node_format(boost::str(boost::format(")%%d:%%.%df") % precision));
+    const boost::format root_node_format(boost::str(boost::format(")%%d")));
+    stack<node*> node_stack;
+    vector<node*> nodes_preorder;
+    node* root;
+
+    for(int i=0; i<nodes.size(); ++i){
+      if(nodes[i].isRoot){
+          root = &nodes[i];
+          break;
+      }
+    }
+    // cout << "root " << root->id + 1 << endl;
+    get_nodes_preorder(root, nodes_preorder);
+
+    // Traverse nodes in preorder
+    for (int i = 0; i<nodes_preorder.size(); i++)
+    {
+        node* nd = nodes_preorder[i];
+        // cout << nd->id + 1 << endl;
+        if (nd->daughters.size()>0) // internal nodes
+        {
+            newick += "(";
+            node_stack.push(nd);
+        }
+        else
+        {
+            newick += boost::str(boost::format(tip_node_format) % (nd->id + 1) % nmuts[nd->e_in]);
+            if (nd->id == nodes[nd->parent].daughters[0])   //left child
+                newick += ",";
+            else
+            {
+                node* popped = (node_stack.empty() ? 0 : node_stack.top());
+                while (popped && popped->parent>0 && popped->id == nodes[popped->parent].daughters[1]) // right sibling of the previous node
+                {
+                    node_stack.pop();
+                    newick += boost::str(boost::format(internal_node_format) % (popped->id + 1) % nmuts[popped->e_in]);
+                    popped = node_stack.top();
+                }
+                if (popped && popped->parent>0 && popped->id == nodes[popped->parent].daughters[0]) // left child, with another sibling
+                {
+                    node_stack.pop();
+                    newick += boost::str(boost::format(internal_node_format) % (popped->id + 1) % nmuts[popped->e_in]);
+                    newick += ",";
+                }
+                if (node_stack.empty())
+                {
+                    newick += ")";
+                }
+            }
+        }
+    }
+    newick +=  boost::str(boost::format(root_node_format) % (root->id + 1));
+    return newick;
+}
+
 // Print the tree in nexus format to be used in other tools for downstream analysis
-void evo_tree::write_nexus(int precision, ofstream& fout){
+void evo_tree::write_nexus(string newick, ofstream& fout){
     fout << "#nexus" << endl;
     fout << "begin trees;" << endl;
-    string newick = make_newick(precision);
+    // string newick = make_newick(precision);
     fout << "tree 1 = " << newick << ";" << endl;
     fout << "end;" << endl;
 }

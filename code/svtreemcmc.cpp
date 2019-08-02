@@ -1205,6 +1205,186 @@ void update_duplication_rates_lnormal(evo_tree& rtree, int model, double& log_li
     }
 }
 
+void update_cgain_rates_lnormal(evo_tree& rtree, int model, double& log_likelihood, int& naccepts, const int n_draw, const int n_burnin, const int n_sample, vector<double> prior_parameters_mut, double sigma, int sample_prior, int cons) {
+    double prev_log_prior, prev_log_likelihood, log_prior, log_diff;
+    double log_hastings_ratio = 0;
+    bool accept = false;
+    evo_tree ntree;
+
+    if(debug){
+        cout << "Updating model parameters " << endl;
+    }
+
+    assert(rtree.chr_gain_rate > 0);
+    double lmu = log10(rtree.chr_gain_rate);
+    prev_log_prior = get_prior_mutation_lnormal(lmu, prior_parameters_mut);
+    if(sample_prior){
+        prev_log_likelihood = 1;
+    }
+    else{
+        prev_log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, cn_max, correct_bias);
+    }
+    if(debug){
+        cout << "   Previous prior and likelihood " << prev_log_prior << "\t" << prev_log_likelihood << endl;
+    }
+
+    double new_lmu = move_mrates_normal(log_hastings_ratio, lmu, sigma);
+    ntree = evo_tree(rtree);
+    ntree.chr_gain_rate = pow(10, new_lmu);
+    // if(debug){
+    //     cout << "   Old duplication rate " << rtree.dup_rate << "\t" << lmu << endl;
+    //     cout << "   New duplication rate " << ntree.dup_rate << "\t" << new_lmu << endl;
+    // }
+    if(sample_prior){
+        log_likelihood = 1;
+    }
+    else{
+        log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, ntree, model, cons, cn_max, correct_bias);
+    }
+    log_prior = get_prior_mutation_lnormal(new_lmu, prior_parameters_mut);
+    if(debug){
+        cout << "   log hastings ratio of rate proposal " << log_hastings_ratio << endl;
+        cout << "   Current prior and likelihood " << log_prior << "\t" << log_likelihood << endl;
+    }
+
+    if (log_prior > LOG_MINUS_INFINITY)
+    {
+        log_diff = log_hastings_ratio;
+        log_diff += (log_likelihood + log_prior) - (prev_log_likelihood + prev_log_prior);
+        if ( log(runiform(r, 0, 1)) < log_diff){
+            accept = true;
+        }
+    }
+    if (accept)
+    {
+        if(n_draw > n_burnin && n_draw % n_sample == 0){
+            naccepts++;
+        }
+        rtree = evo_tree(ntree);
+    }
+}
+
+
+void update_closs_rates_lnormal(evo_tree& rtree, int model, double& log_likelihood, int& naccepts, const int n_draw, const int n_burnin, const int n_sample, vector<double> prior_parameters_mut, double sigma, int sample_prior, int cons) {
+    double prev_log_prior, prev_log_likelihood, log_prior, log_diff;
+    double log_hastings_ratio = 0;
+    bool accept = false;
+    evo_tree ntree;
+
+    if(debug){
+        cout << "Updating model parameters " << endl;
+    }
+
+    assert(rtree.chr_loss_rate > 0);
+    double lmu = log10(rtree.chr_loss_rate);
+    prev_log_prior = get_prior_mutation_lnormal(lmu, prior_parameters_mut);
+    if(sample_prior){
+        prev_log_likelihood = 1;
+    }
+    else{
+        prev_log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, cn_max, correct_bias);
+    }
+    if(debug){
+        cout << "   Previous prior and likelihood " << prev_log_prior << "\t" << prev_log_likelihood << endl;
+    }
+
+    double new_lmu = move_mrates_normal(log_hastings_ratio, lmu, sigma);
+    ntree = evo_tree(rtree);
+    ntree.chr_loss_rate = pow(10, new_lmu);
+    // if(debug){
+    //     cout << "   Old duplication rate " << rtree.dup_rate << "\t" << lmu << endl;
+    //     cout << "   New duplication rate " << ntree.dup_rate << "\t" << new_lmu << endl;
+    // }
+    if(sample_prior){
+        log_likelihood = 1;
+    }
+    else{
+        log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, ntree, model, cons, cn_max, correct_bias);
+    }
+    log_prior = get_prior_mutation_lnormal(new_lmu, prior_parameters_mut);
+    if(debug){
+        cout << "   log hastings ratio of rate proposal " << log_hastings_ratio << endl;
+        cout << "   Current prior and likelihood " << log_prior << "\t" << log_likelihood << endl;
+    }
+
+    if (log_prior > LOG_MINUS_INFINITY)
+    {
+        log_diff = log_hastings_ratio;
+        log_diff += (log_likelihood + log_prior) - (prev_log_likelihood + prev_log_prior);
+        if ( log(runiform(r, 0, 1)) < log_diff){
+            accept = true;
+        }
+    }
+    if (accept)
+    {
+        if(n_draw > n_burnin && n_draw % n_sample == 0){
+            naccepts++;
+        }
+        rtree = evo_tree(ntree);
+    }
+}
+
+
+void update_wgd_rates_lnormal(evo_tree& rtree, int model, double& log_likelihood, int& naccepts, const int n_draw, const int n_burnin, const int n_sample, vector<double> prior_parameters_mut, double sigma, int sample_prior, int cons) {
+    double prev_log_prior, prev_log_likelihood, log_prior, log_diff;
+    double log_hastings_ratio = 0;
+    bool accept = false;
+    evo_tree ntree;
+
+    if(debug){
+        cout << "Updating model parameters " << endl;
+    }
+
+    assert(rtree.wgd_rate > 0);
+    double lmu = log10(rtree.wgd_rate);
+    prev_log_prior = get_prior_mutation_lnormal(lmu, prior_parameters_mut);
+    if(sample_prior){
+        prev_log_likelihood = 1;
+    }
+    else{
+        prev_log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, cn_max, correct_bias);
+    }
+    if(debug){
+        cout << "   Previous prior and likelihood " << prev_log_prior << "\t" << prev_log_likelihood << endl;
+    }
+
+    double new_lmu = move_mrates_normal(log_hastings_ratio, lmu, sigma);
+    ntree = evo_tree(rtree);
+    ntree.wgd_rate = pow(10, new_lmu);
+    // if(debug){
+    //     cout << "   Old duplication rate " << rtree.dup_rate << "\t" << lmu << endl;
+    //     cout << "   New duplication rate " << ntree.dup_rate << "\t" << new_lmu << endl;
+    // }
+    if(sample_prior){
+        log_likelihood = 1;
+    }
+    else{
+        log_likelihood = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, ntree, model, cons, cn_max, correct_bias);
+    }
+    log_prior = get_prior_mutation_lnormal(new_lmu, prior_parameters_mut);
+    if(debug){
+        cout << "   log hastings ratio of rate proposal " << log_hastings_ratio << endl;
+        cout << "   Current prior and likelihood " << log_prior << "\t" << log_likelihood << endl;
+    }
+
+    if (log_prior > LOG_MINUS_INFINITY)
+    {
+        log_diff = log_hastings_ratio;
+        log_diff += (log_likelihood + log_prior) - (prev_log_likelihood + prev_log_prior);
+        if ( log(runiform(r, 0, 1)) < log_diff){
+            accept = true;
+        }
+    }
+    if (accept)
+    {
+        if(n_draw > n_burnin && n_draw % n_sample == 0){
+            naccepts++;
+        }
+        rtree = evo_tree(ntree);
+    }
+}
+
+
 
 // Given a tree, find the MAP estimation of the branch lengths (and optionally mu) assuming branch lengths are independent or constrained in time
 void run_mcmc(evo_tree& rtree, int model, const int n_draws, const int n_burnin, const int n_sample, vector<double> proposal_parameters, vector<double> prior_parameters_blen, vector<double> prior_parameters_height, vector<double> alphas, vector<double> prior_parameters_mut, double lambda_topl, string ofile, string tfile, int sample_prior=0, int fix_topology=0, int cons=0, int maxj=0){
@@ -1226,6 +1406,9 @@ void run_mcmc(evo_tree& rtree, int model, const int n_draws, const int n_burnin,
         double mu_lmut, sigma_lmut, sigma_mut;
         double mu_ldup, sigma_ldup, sigma_dup;
         double mu_ldel, sigma_ldel, sigma_del;
+        double mu_lgain, sigma_lgain, sigma_gain;
+        double mu_lloss, sigma_lloss, sigma_loss;
+        double mu_lwgd, sigma_lwgd, sigma_wgd;
 
         double lambda = proposal_parameters[0];     // multiplier proposal
         double mbactrian = proposal_parameters[1];     // Bactrian proposal
@@ -1241,11 +1424,24 @@ void run_mcmc(evo_tree& rtree, int model, const int n_draws, const int n_burnin,
         if(model==1){
             mu_ldup = prior_parameters_mut[0];
             sigma_ldup = prior_parameters_mut[1];
+
             mu_ldel = prior_parameters_mut[2];
             sigma_ldel = prior_parameters_mut[3];
 
+            mu_lgain = prior_parameters_mut[4];
+            sigma_lgain = prior_parameters_mut[5];
+
+            mu_lloss = prior_parameters_mut[6];
+            sigma_lloss = prior_parameters_mut[7];
+
+            mu_lwgd = prior_parameters_mut[8];
+            sigma_lwgd = prior_parameters_mut[9];
+
             sigma_dup = proposal_parameters[3];
             sigma_del = proposal_parameters[4];
+            sigma_gain = proposal_parameters[5];
+            sigma_loss = proposal_parameters[6];
+            sigma_wgd = proposal_parameters[7];
         }
         if(cons){
             sigma_height = proposal_parameters[proposal_parameters.size()-1];
@@ -1259,7 +1455,7 @@ void run_mcmc(evo_tree& rtree, int model, const int n_draws, const int n_burnin,
             header = "state\tlnl\tdup_rate\tdel_rate";
         }
         if(cons){
-            header = "state\tlnl\tdup_rate\tdel_rate\theight";
+            header = "state\tlnl\tdup_rate\tdel_rate\tgain_rate\tloss_rate\twgd_rate\theight";
             for(int j=1; j<=rtree.nintedge; j++){
                 header += "\tl" + to_string(j);
             }
@@ -1296,8 +1492,18 @@ void run_mcmc(evo_tree& rtree, int model, const int n_draws, const int n_burnin,
                 if(model==1){
                     vector<double> prior_parameters_dup({mu_ldup, sigma_ldup});
                     update_duplication_rates_lnormal(rtree, model, log_likelihood, naccepts_dup, i, n_burnin, n_sample, prior_parameters_dup, sigma_dup, sample_prior, cons);
+
                     vector<double> prior_parameters_del({mu_ldel, sigma_ldel});
                     update_deletion_rates_lnormal(rtree, model, log_likelihood, naccepts_del, i, n_burnin, n_sample, prior_parameters_del, sigma_del, sample_prior, cons);
+
+                    vector<double> prior_parameters_gain({mu_lgain, sigma_lgain});
+                    update_cgain_rates_lnormal(rtree, model, log_likelihood, naccepts_gain, i, n_burnin, n_sample, prior_parameters_gain, sigma_gain, sample_prior, cons);
+
+                    vector<double> prior_parameters_loss({mu_lloss, sigma_lloss});
+                    update_closs_rates_lnormal(rtree, model, log_likelihood, naccepts_loss, i, n_burnin, n_sample, prior_parameters_loss, sigma_loss, sample_prior, cons);
+
+                    vector<double> prior_parameters_wgd({mu_lwgd, sigma_lwgd});
+                    update_wgd_rates_lnormal(rtree, model, log_likelihood, naccepts_wgd, i, n_burnin, n_sample, prior_parameters_wgd, sigma_wgd, sample_prior, cons);
                 }
             }
             // Discard burn in samples
@@ -1313,7 +1519,7 @@ void run_mcmc(evo_tree& rtree, int model, const int n_draws, const int n_burnin,
                     fout_trace << "\t" << rtree.mu ;
                 }
                 if(model==1){
-                    fout_trace << "\t" << rtree.dup_rate << "\t" << rtree.del_rate;
+                    fout_trace << "\t" << rtree.dup_rate << "\t" << rtree.del_rate << "\t" << rtree.chr_gain_rate << "\t" << rtree.chr_loss_rate << "\t" << rtree.wgd_rate;
                 }
                 if(cons==1){
                     fout_trace << "\t" << rtree.get_tree_height();
@@ -1367,6 +1573,12 @@ void run_mcmc(evo_tree& rtree, int model, const int n_draws, const int n_burnin,
             cout << "Accept rate of duplication rate proposal: " << accept_rate_mrate << endl;
             accept_rate_mrate = naccepts_del / n_keep;
             cout << "Accept rate of deletion rate proposal: " << accept_rate_mrate << endl;
+            accept_rate_mrate = naccepts_gain / n_keep;
+            cout << "Accept rate of chromosme gain rate proposal: " << accept_rate_mrate << endl;
+            accept_rate_mrate = naccepts_loss / n_keep;
+            cout << "Accept rate of chromosme loss rate proposal: " << accept_rate_mrate << endl;
+            accept_rate_mrate = naccepts_wgd / n_keep;
+            cout << "Accept rate of whole genome doubling rate proposal: " << accept_rate_mrate << endl;
         }
 }
 
@@ -1388,11 +1600,13 @@ int main (int argc, char ** const argv) {
     double lambda, sigma_blen, mbactrian, lambda_topl, sigma_height;
     double dirichlet_param, tlen_shape, tlen_scale;
     double rate_shape, rate_scale;
-    string datafile, timefile, trace_param_file, trace_tree_file, treefile, config_file;
+    string datafile, timefile, trace_param_file, trace_tree_file, rtreefile, config_file;
     string dirichlet_alpha;
     int sample_prior, fix_topology;
-    double rmu, rdup_rate, rdel_rate, mu, dup_rate, del_rate, chr_gain, chr_loss, wgd;
-    double sigma_mut, sigma_lmut, sigma_dup, sigma_ldup, sigma_del, sigma_ldel;
+    double rmu, rdup_rate, rdel_rate, rgain_rate, rloss_rate, rwgd_rate;
+    double mu, dup_rate, del_rate, chr_gain_rate, chr_loss_rate, wgd_rate;
+    double sigma_mut, sigma_dup, sigma_del, sigma_gain, sigma_loss, sigma_wgd;
+    double sigma_lmut, sigma_ldup, sigma_ldel, sigma_lgain, sigma_lloss, sigma_lwgd;
 
     namespace po = boost::program_options;
     po::options_description generic("Generic options");
@@ -1425,24 +1639,30 @@ int main (int argc, char ** const argv) {
             ("estimate_mu", po::value<int>(&maxj)->default_value(1), "estimation of mutation rate (0: mutation rate fixed to be the given value, 1: estimating mutation rate)")
             ("correct_bias", po::value<int>(&correct_bias)->default_value(1), "correct ascertainment bias")
 
-            ("rtree", po::value<string>(&treefile)->default_value(""), "reference tree file")
-            ("rmu", po::value<double>(&rmu)->default_value(0.02), "mutation rate (SCA/locus/time) of the reference tree")
-            ("rdup_rate", po::value<double>(&rdup_rate)->default_value(0.01), "segment duplication rate (SCA/locus/time) of the reference tree")
-            ("rdel_rate", po::value<double>(&rdel_rate)->default_value(0.01), "segment deletion rate (SCA/locus/time) of the reference tree")
+            ("rtreefile", po::value<string>(&rtreefile)->default_value(""), "reference tree file")
+            ("rmu", po::value<double>(&rmu)->default_value(0.02), "mutation rate of the reference tree")
+            ("rdup_rate", po::value<double>(&rdup_rate)->default_value(0.01), "segment duplication rate of the reference tree")
+            ("rdel_rate", po::value<double>(&rdel_rate)->default_value(0.01), "segment deletion rate of the reference tree")
+            ("rgain_rate", po::value<double>(&rgain_rate)->default_value(0.01), "chromosme gain rate of the reference tree")
+            ("rloss_rate", po::value<double>(&rloss_rate)->default_value(0.01), "chromosme loss rate of the reference tree")
+            ("rwgd_rate", po::value<double>(&rwgd_rate)->default_value(0.01), "whole genome doubling rate of the reference tree")
 
             ("sigma_blen,g", po::value<double>(&sigma_blen)->default_value(2.5), "sigma for proposal of branch length")
             ("sigma_height", po::value<double>(&sigma_height)->default_value(2.5), "sigma for prior of tree height")
 
-            ("mu,x", po::value<double>(&mu)->default_value(0.025), "mean of mutation rate (SCA/locus/time)")
-            ("dup_rate", po::value<double>(&dup_rate)->default_value(0.01), "mean of segment duplication rate (SCA/locus/time)")
-            ("del_rate", po::value<double>(&del_rate)->default_value(0.01), "mean of segment deletion rate (SCA/locus/time)")
-            ("chr_gain", po::value<double>(&chr_gain)->default_value(0), "chromosome gain rate")
-            ("chr_loss", po::value<double>(&chr_loss)->default_value(0), "chromosome loss rate")
-            ("wgd", po::value<double>(&wgd)->default_value(0), "WGD (whole genome doubling) rate")
+            ("mu,x", po::value<double>(&mu)->default_value(0.025), "mean of mutation rate")
+            ("dup_rate", po::value<double>(&dup_rate)->default_value(0.01), "mean of segment duplication rate")
+            ("del_rate", po::value<double>(&del_rate)->default_value(0.01), "mean of segment deletion rate")
+            ("chr_gain_rate", po::value<double>(&chr_gain_rate)->default_value(0), "mean of chromosome gain rate")
+            ("chr_loss_rate", po::value<double>(&chr_loss_rate)->default_value(0), "mean of chromosome loss rate")
+            ("wgd_rate", po::value<double>(&wgd_rate)->default_value(0), "mean of WGD (whole genome doubling) rate")
 
             ("sigma_mut", po::value<double>(&sigma_mut)->default_value(0.05), "sigma for proposal of mutation rate")
             ("sigma_dup", po::value<double>(&sigma_dup)->default_value(0.05), "sigma for proposal of segment duplication rate")
             ("sigma_del", po::value<double>(&sigma_del)->default_value(0.05), "sigma for proposal of segment deletion rate")
+            ("sigma_gain", po::value<double>(&sigma_gain)->default_value(0.05), "sigma for proposal of chromosme gain rate")
+            ("sigma_loss", po::value<double>(&sigma_loss)->default_value(0.05), "sigma for proposal of chromosme loss rate")
+            ("sigma_wgd", po::value<double>(&sigma_wgd)->default_value(0.05), "sigma for proposal of whole genome doubling rate")
             ("lambda,l", po::value<double>(&lambda)->default_value(0.5), "lambda for multiplier proposal")
             ("lambda_topl", po::value<double>(&lambda_topl)->default_value(1), "lambda for topology proposal")
             ("mbactrian,m", po::value<double>(&mbactrian)->default_value(0.95), "m for Bactrian proposal")
@@ -1450,6 +1670,9 @@ int main (int argc, char ** const argv) {
             ("sigma_lmut", po::value<double>(&sigma_lmut)->default_value(0.05), "sigma for prior of log10 of mutation rate")
             ("sigma_ldup", po::value<double>(&sigma_ldup)->default_value(0.05), "sigma for prior of log10 of segment duplication rate")
             ("sigma_ldel", po::value<double>(&sigma_ldel)->default_value(0.05), "sigma for prior of log10 of segment deletion rate")
+            ("sigma_lgain", po::value<double>(&sigma_lgain)->default_value(0.05), "sigma for prior of log10 of chromosme gain rate")
+            ("sigma_lloss", po::value<double>(&sigma_lloss)->default_value(0.05), "sigma for prior of log10 of chromosme loss rate")
+            ("sigma_lwgd", po::value<double>(&sigma_lwgd)->default_value(0.05), "sigma for prior of log10 of whole genome doubling rate")
             ("tlen_shape", po::value<double>(&tlen_shape)->default_value(10), "shape of gamma prior for total branch length")
             ("dirichlet_alpha", po::value<string>(&dirichlet_alpha)->default_value(""), "Dirichlet prior for branch length proportion")
             ("dirichlet_param", po::value<double>(&dirichlet_param)->default_value(0), "Symmetric Dirichlet prior for branch length proportion")
@@ -1545,6 +1768,9 @@ int main (int argc, char ** const argv) {
     if(model==1){
         proposal_parameters.push_back(sigma_dup);
         proposal_parameters.push_back(sigma_del);
+        proposal_parameters.push_back(sigma_gain);
+        proposal_parameters.push_back(sigma_loss);
+        proposal_parameters.push_back(sigma_wgd);
     }
     if(cons){
         proposal_parameters.push_back(sigma_height);
@@ -1569,13 +1795,19 @@ int main (int argc, char ** const argv) {
     vector<double> prior_parameters_mut;
     if(model==0){
         prior_parameters_mut.push_back(log10(mu));
-        prior_parameters_mut.push_back(sigma_mut);
+        prior_parameters_mut.push_back(sigma_lmut);
     }
     if(model==1){
         prior_parameters_mut.push_back(log10(dup_rate));
-        prior_parameters_mut.push_back(sigma_dup);
+        prior_parameters_mut.push_back(sigma_ldup);
         prior_parameters_mut.push_back(log10(del_rate));
-        prior_parameters_mut.push_back(sigma_del);
+        prior_parameters_mut.push_back(sigma_ldel);
+        prior_parameters_mut.push_back(log10(chr_gain_rate));
+        prior_parameters_mut.push_back(sigma_lgain);
+        prior_parameters_mut.push_back(log10(chr_loss_rate));
+        prior_parameters_mut.push_back(sigma_lloss);
+        prior_parameters_mut.push_back(log10(wgd_rate));
+        prior_parameters_mut.push_back(sigma_lwgd);
     }
 
     double min_height = *max_element(tobs.begin(), tobs.end());
@@ -1584,10 +1816,10 @@ int main (int argc, char ** const argv) {
     prior_parameters_height.push_back(min_height);
     prior_parameters_height.push_back(max_height);
 
-    if(treefile!="") {
+    if(rtreefile!="") {
             // MLE testing
             // read in true tree
-            evo_tree test_tree = read_tree_info(treefile, Ns);
+            evo_tree test_tree = read_tree_info(rtreefile, Ns);
             test_tree.print();
             if(model==0){
                 test_tree.mu = rmu;
@@ -1648,22 +1880,15 @@ int main (int argc, char ** const argv) {
                 rtree.mu = rtree.dup_rate + rtree.del_rate;
             }
             rtree.tobs = tobs;
+            if(cons){
+                adjust_tree_height(rtree);
+                adjust_tree_tips(rtree);
+                adjust_tree_blens(rtree);
+            }
             rtree.tree_height = rtree.get_tree_height();
             rtree.total_time = rtree.get_total_time();
             cout << "Total time of random tree " << rtree.total_time << endl;
 
-            if(cons){
-                double tree_height = runiform(r, min_height, max_height);
-                // cout << "Rescaled tree height " << tree_height << endl;
-                double old_tree_height = rtree.get_tree_height();
-                // cout << "Tree height before scaling " << old_tree_height << endl;
-                double ratio = tree_height/old_tree_height;
-                // cout << "Scaling ratio " << ratio << endl;
-                rtree.scale_time(ratio);
-                rtree.tree_height = tree_height;
-                rtree.total_time = rtree.get_total_time();
-            }
-            cout << "Total time of random tree after scaling " << rtree.total_time << endl;
 
             sstm << "./test1/sim-data-" << cons << maxj << "-mcmc-tree-start.txt";
             out_tree.open(sstm.str());
@@ -1708,9 +1933,13 @@ int main (int argc, char ** const argv) {
         if(model==1){
             rtree.dup_rate = dup_rate;
             rtree.del_rate = del_rate;
-            rtree.mu = rtree.dup_rate + rtree.del_rate;
+            rtree.chr_gain_rate = chr_gain_rate;
+            rtree.chr_loss_rate = chr_loss_rate;
+            rtree.wgd_rate = wgd_rate;
+            rtree.mu = rtree.dup_rate + rtree.del_rate + rtree.chr_gain_rate + rtree.chr_loss_rate + rtree.wgd_rate;
         }
         rtree.tobs = tobs;
+
         adjust_tree_height(rtree);
         adjust_tree_tips(rtree);
         adjust_tree_blens(rtree);

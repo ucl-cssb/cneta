@@ -33,20 +33,19 @@
 
 using namespace std;
 
+// The number of tree shapes
+static const int num_shapes[] = {1, 1, 1, 2, 3, 6, 11, 23, 46, 98, 207, 451, 983, 2179, 4850, 10905, 24631, 56011, 127912, 293547};
 // The number of trees to search before terminating
 const int MAX_TREE = 100;
+const int MAX_TREE2 = 10;
+const int MAX_PERTURB = 20;
 const double MAX_NLNL = 1e20;
 const int MAX_OPT = 10; // max number of optimization for each tree
 int debug = 0;
 
-// global values for gsl function minimization
-//vector<vector<int> > vobs;
-//vector<double> tobs;
-//int Ns;
-//int Nchar;
-
 // global value for tree search
 map<string,int> searched_trees;
+// map<string,int> searched_shapes;
 bool exhausted_tree_search = false;
 
 
@@ -162,19 +161,89 @@ evo_tree perturb_tree_set( const int& Ns, vector<evo_tree> trees ){
     }
 }
 
+// Apply hill climbing perturbation to obtain a local optimal
+evo_tree get_local_optimal_tree(evo_tree& tree, int Ngen, int max_perturb, int max_static, const double ssize, const double tolerance, const int miter, const int optim, const int model, const int cons, const int maxj, const int cn_max, const int correct_bias){
+    int count_static = 0;
+    int count = 0;
+    while(count <= Ngen && count_static < max_static ){
+        // perturb T by NNI to get T'
+        evo_tree ttree = perturb_tree(Ns, tree);
+        string tstring = order_tree_string(create_tree_string(ttree));
+        // perturb the tree until it is new
+        // int count_tree = 1;
+        // while (searched_trees.find(tstring) != searched_trees.end() && count_tree < max_perturb){
+        //     ttree = perturb_tree(Ns, ttree);
+        //     tstring = order_tree_string(create_tree_string(ttree));
+        //     count_tree += 1;
+        // }
+        if ( searched_trees.find(tstring) == searched_trees.end() ) {
+            // mark the tree
+            searched_trees[ tstring ] = 0;
+        }
+        // cout << "Perturb " << count_tree << " times for tree " << index[i] << endl;
+        adjust_tree_height(ttree);
+        adjust_tree_tips(ttree);
+        adjust_tree_blens(ttree);
 
-//
-evo_tree do_hill_climbing(const int Npop, const int Ngen, const int& max_static, const vector<double>& rates, const double ssize, const double tolerance, const int miter, const int optim, const int model, const int cons, const int maxj, const int cn_max, const int correct_bias){
-    vector<double> lnLs(Npop,0);
-    vector<int> index(Npop);
+        // optimize T' to get T"
+        evo_tree otree;
+        double Lf = 0;
+        if(optim == 0){
+          otree = max_likelihood(ttree, model, Lf, ssize, tolerance, miter, cons, maxj, cn_max, correct_bias);
+        }
+        if(optim == 1){
+          otree = max_likelihood_BFGS(ttree, model, Lf, tolerance, miter, cons, maxj, cn_max, correct_bias);
+        }
+        otree.score = Lf;
+        assert(tree.score > 0);
+        if(Lf < tree.score){
+            // cout << "tree score before " << tree.score << endl;
+            tree = otree;
+            // cout << "tree score after " << tree.score << endl;
+        }
+        else{
+            count_static += 1;
+        }
+        // A tree has been maximized at least five times
+        count += 1;
+        // stop if maximum value does not improve for several times
+        // if( max_static > 0 && count_static == max_static ){
+        //   cout << "\t### static likelihood value. Finishing optimizing tree on ngen = " << count << endl;
+        //   // break;
+        // }
+    }
+    return tree;
+}
 
-    // initialize candidate tree set
+// Build parsimony tree from copy number changes (breakpoints)
+evo_tree build_parsimony_tree(int Ns, vector<vector<int>> breakpoints){
+
+}
+
+
+// Read parsimony trees built by other tools
+evo_tree read_parsimony_tree(string file_name){
+
+}
+
+
+// Generate initial set of trees
+vector<evo_tree> get_initial_trees(int init_tree, int Npop, const vector<double>& rates, int max_tree_num){
     vector<evo_tree> trees;
     int num_tree = 0;
-    while(num_tree < Npop){
-        evo_tree rtree = generate_coal_tree(Ns);
-
+    int n =  (max_tree_num < Npop) ? max_tree_num: Npop;
+    while(num_tree < n){
+        evo_tree rtree;
+        if(init_tree == 0){
+            rtree = generate_coal_tree(Ns);
+        }
+        else{
+            rtree = generate_coal_tree(Ns);
+        }
+        // string tstring = rtree.make_newick(0);
+        // tstring.erase(remove_if(tstring.begin(), tstring.end(), [](char c) { return !(c == '(' || c == ')'); }), tstring.end());
         string tstring = order_tree_string(create_tree_string(rtree));
+        // if ( searched_shapes.find(tstring) == searched_shapes.end() ) {
         if ( searched_trees.find(tstring) == searched_trees.end() ) {
             // mark the tree
             searched_trees[ tstring ] = 0;
@@ -201,9 +270,35 @@ evo_tree do_hill_climbing(const int Npop, const int Ngen, const int& max_static,
         }
         trees.push_back( rtree );
     }
+    return trees;
+}
 
+vector<evo_tree> find_best_trees(const vector<evo_tree>& trees, const vector<double>& lnLs, vector<int>& index, int n){
+    vector<evo_tree> btrees;
+    int x=0;
+
+    iota( index.begin(), index.end(), x++);
+    sort( index.begin(), index.end(), [&](int i,int j){ return lnLs[i] < lnLs[j]; } );
+
+    for(int i=0; i < n; ++i){
+        btrees.push_back(trees[index[i]]);
+    }
+
+    return btrees;
+}
+
+
+evo_tree do_hill_climbing(const int Npop, const int Ngen, const int init_tree, int& max_static, const vector<double>& rates, const double ssize, const double tolerance, const int miter, const int optim, const int model, const int cons, const int maxj, const int cn_max, const int correct_bias){
+    // initialize candidate tree set
+    int max_tree_num = fact(Ns) * fact(Ns - 1) / exp2(Ns-1);
+    cout << "Maximum number of possible trees " << max_tree_num << endl;
+    vector<evo_tree> trees = get_initial_trees(init_tree, Npop, rates, max_tree_num);
+    int num2init = trees.size();
+    vector<double> lnLs(num2init,0);
+    vector<int> index(num2init);
+    cout << "Initial number of trees " << num2init << endl;
     #pragma omp parallel for
-    for(int i=0; i<Npop; ++i){
+    for(int i=0; i < num2init; ++i){
         evo_tree rtree;
         double Lf = 0;
         if(optim == 0){
@@ -215,89 +310,87 @@ evo_tree do_hill_climbing(const int Npop, const int Ngen, const int& max_static,
         // Lf = - get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, cn_max, correct_bias);
 
         rtree.score = Lf;
-        lnLs[i] = Lf;
         trees[i] = rtree;
+        lnLs[i] = Lf;
         // cout << "Score for tree " << i << " is " << Lf << endl;
     }
 
-    int x=0;
-    iota( index.begin(), index.end(), x++);
-    sort( index.begin(), index.end(), [&](int i,int j){ return lnLs[i]<lnLs[j];} );
-
-    // Keep top trees
+    // Select top MAX_TREE trees for hill climbing to obtain locally optimal ML trees
+    int num2perturb = (trees.size() < MAX_TREE) ? trees.size() : MAX_TREE;
+    cout << "Number of trees to perturb " << num2perturb << endl;
+    cout << "Number of maximum times to do perturbation " << Ngen << endl;
+    cout << "Number of times with no improvement before stopping perturbation " << max_static << endl;
+    int max_perturb = fact(Ns)/( 2*fact(Ns-2));
+    cout << "Maximum number of reachable neighbors for one perturbation " << max_perturb << endl;
+    vector<evo_tree> trees2 = find_best_trees(trees, lnLs, index, num2perturb);
+    vector<double> lnLs2(num2perturb,0);
+    vector<int> index2(num2perturb);
     // Perturb trees randomly
     #pragma omp parallel for
-    for(int i=0; i < MAX_TREE; ++i){
-        int count = 0;
-        // int count_static = 0;
-        // cout << "Optimize tree " << index[i] << endl;
-        while(count <= Ngen){
-            // randomly choose one tree T
-            // perturb T by NNI to get T'
-            // evo_tree rtree = perturb_tree_set(Ns, trees);
-            // generate a new tree
-            evo_tree ttree = perturb_tree( Ns, trees[index[i]] );
-            adjust_tree_height(ttree);
-            adjust_tree_tips(ttree);
-            adjust_tree_blens(ttree);
-
-            // string tstring = order_tree_string( create_tree_string( ttree ) );
-            // if ( searched_trees.find(tstring) == searched_trees.end() ) {
-            //     // mark the tree
-            //     searched_trees[ tstring ] = 0;
-            // }
-            // else{
-            //     searched_trees[ tstring ] += 1;
-            // }
-            // optimize T' to get T"
-            evo_tree otree;
-            double Lf = 0;
-            if(optim == 0){
-              otree = max_likelihood(ttree, model, Lf, ssize, tolerance, miter, cons, maxj, cn_max, correct_bias);
-            }
-            if(optim == 1){
-              otree = max_likelihood_BFGS(ttree, model, Lf, tolerance, miter, cons, maxj, cn_max, correct_bias);
-            }
-            if(Lf < trees[index[i]].score){
-                otree.score = Lf;
-                trees[index[i]] = otree;
-            }
-            // else{
-            //     count_static += 1;
-            // }
-
-            // stop if maximum value does not improve for several times
-            // if( max_static > 0 && count_static == max_static ){
-            //   // cout << "\t### static likelihood value. Finishing on ngen = " << g << endl;
-            //   break;
-            // }
-            // A tree has been maximized at least five times
-            count += 1;
-        }
-        // cout << "otree tobs " << otree.tobs[0] << endl;
-        lnLs[index[i]] = trees[index[i]].score;
-
-        // int sum_max_num = 0;
-        // for(auto it : searched_trees){
-        //     sum_max_num += it.second;
-        // }
-        // if( sum_max_num > MAX_OPT * searched_trees.size()){
-        //   cout << "\tperturb_tree struggling to find new topologies." << endl;
-        //   break;
-        // }
+    for(int i=0; i < num2perturb; ++i){
+        trees2[i] = get_local_optimal_tree(trees2[i], Ngen, max_perturb, max_static, ssize, tolerance, miter, optim, model, cons, maxj, cn_max, correct_bias);
+        lnLs2[i] = trees2[i].score;
+        // cout << "Score " << lnLs2[i] << endl;
     }
 
-    x=0;
-    iota( index.begin(), index.end(), x++);
-    sort( index.begin(), index.end(), [&](int i,int j){ return lnLs[i]<lnLs[j];} );
+    // Keep top 5 trees for further optimization to escape from local optima
+    int num2refine = (trees2.size() < MAX_TREE2) ? trees2.size(): MAX_TREE2;
+    cout << "Number of trees to refine " << num2refine << endl;
+    vector<evo_tree> trees3 = find_best_trees(trees2, lnLs2, index2, num2refine);
+    vector<double> lnLs3(num2refine, 0);
+    vector<int> index3(num2refine);
+    for(int i=0; i < num2refine; ++i){
+        lnLs3[i] = trees3[i].score;
+        // cout << lnLs3[i] << endl;
+    }
+    int count = 0;
+    // Perturb trees randomly
+    while(count < MAX_PERTURB){
+        int i = gsl_rng_uniform_int(r, trees3.size());
+        // cout << "Perturb tree " << i << endl;
+        evo_tree ttree = perturb_tree(Ns, trees3[i]);
+        int c = 0;
+        while( c < max_perturb){
+            ttree = perturb_tree(Ns, ttree);
+            c += 1;
+        }
+        adjust_tree_height(ttree);
+        adjust_tree_tips(ttree);
+        adjust_tree_blens(ttree);
+
+        // cout << "Optimized score before " << trees3[i].score << endl;
+        ttree.score = trees3[i].score;
+        evo_tree otree = get_local_optimal_tree(ttree, Ngen, max_perturb, max_static, ssize, tolerance, miter, optim, model, cons, maxj, cn_max, correct_bias);
+        // cout << "Optimized score after " << otree.score << endl;
+        evo_tree btree = find_best_trees(trees3, lnLs3, index3, 1)[0];
+        assert(btree.score == lnLs3[index3[0]]);
+        // for(int i=0; i < num2refine; ++i){
+        //     cout << lnLs3[index3[i]] << endl;
+        // }
+        // cout << "Best score " << lnLs3[index3[0]] << endl;
+        // cout << "Worst score " << lnLs3[index3.size()-1] << endl;
+        if(otree.score < lnLs3[index3[0]]){
+            // cout << "Replace best tree" << endl;
+            trees3[index3[0]] = otree;
+            lnLs3[index3[0]] = otree.score;
+            count = 0;
+        }
+        else{
+            // Replace the worst tree
+            if(otree.score < lnLs3[index3[index3.size()-1]]){
+                // cout << "Replace worst tree" << endl;
+                trees3[index3[index3.size()-1]] = otree;
+                lnLs3[index3[index3.size()-1]] = otree.score;
+            }
+            count += 1;
+        }
+    }
 
     // Output best tree in C
-    double min_lnL = MAX_NLNL;
-    evo_tree min_lnL_tree;
-    min_lnL = lnLs[ index[0] ];
-    min_lnL_tree = trees[ index[0] ];
+    cout << "Output best tree so far" << endl;
+    evo_tree min_lnL_tree = find_best_trees(trees3, lnLs3, index3, 1)[0];
+    double min_lnL = min_lnL_tree.score;
     min_lnL_tree.print();
-
     cout << "FINISHED. MIN -ve logL = " << min_lnL << endl;
 
     // print out searched trees
@@ -781,7 +874,7 @@ double maximize_tree_likelihood(const string& tree_file, const string& ofile, in
 
 
 int main (int argc, char ** const argv) {
-  int Npop, Ngen, max_static, miter, bootstrap, seed, cons, maxj, optim, correct_bias, mode, cn_max, tree_search;
+  int Npop, Ngen, max_static, miter, bootstrap, seed, cons, maxj, optim, correct_bias, mode, cn_max, tree_search, init_tree;
   double tolerance, ssize, mu, dup_rate, del_rate, chr_gain_rate, chr_loss_rate, wgd_rate, max_rate;
   string datafile, timefile, ofile, tree_file;
 
@@ -801,7 +894,8 @@ int main (int argc, char ** const argv) {
   po::options_description optional("Optional parameters");
   optional.add_options()
     ("nsample,s", po::value<int>(&Ns)->default_value(5), "number of samples or regions")
-    ("ofile,o", po::value<string>(&ofile)->default_value("results-maxL-tree.txt"), "output tree file with maximum likelihood")
+    ("ofile,o", po::value<string>(&ofile)->default_value("maxL-tree.txt"), "output tree file with maximum likelihood")
+    // ("ofile_nex,o", po::value<string>(&ofile_nex)->default_value("maxL-tree.nex"), "output tree file with maximum likelihood in NEXUS format")
     ("tree_file", po::value<string>(&tree_file)->default_value(""), "input tree file ")
     ("cn_max", po::value<int>(&cn_max)->default_value(4), "maximum copy number of a segment")
 
@@ -825,6 +919,7 @@ int main (int argc, char ** const argv) {
     ("fixm", po::value<int>(&maxj)->default_value(0), "estimation of mutation rate (0: mutation rate fixed to be the given value, 1: estimating mutation rate)")
     ("optim", po::value<int>(&optim)->default_value(1), "method of optimization (0: Simplex, 1: L-BFGS-B)")
     ("tree_search", po::value<int>(&tree_search)->default_value(1), "method of searching tree space (0: Genetic algorithm, 1: Random-restart hill climbing)")
+    ("init_tree", po::value<int>(&init_tree)->default_value(0), "method of building inital tree (0: Random coalescence tree, 1: Maximum parsimony tree)")
     ("correct_bias", po::value<int>(&correct_bias)->default_value(1), "correct ascertainment bias")
 
     ("bootstrap,b", po::value<int>(&bootstrap)->default_value(0), "doing bootstrap or not")
@@ -921,7 +1016,8 @@ int main (int argc, char ** const argv) {
   // }
   // cout << "The number of sites used: " << data0.size() << endl;
   // Construct the CN matrix by chromosome
-  for(int nchr=1; nchr<=data.size(); nchr++){
+  int total_chr = data.size();
+  for(int nchr=1; nchr <= total_chr; nchr++){
     vector<vector<int>> obs_chr;
     Nchar += data[nchr].size();
     for(int nc=0; nc<data[nchr].size(); ++nc){
@@ -976,10 +1072,12 @@ int main (int argc, char ** const argv) {
 
       evo_tree min_lnL_tree;
       if(tree_search == 0){
+          cout << "Searching tree space with evolutionary algorithm" << endl;
           min_lnL_tree = do_evolutionary_algorithm(Npop, Ngen, max_static, rates, ssize, tolerance, miter, optim, model, cons, maxj, cn_max, correct_bias);
       }
       else{
-          min_lnL_tree = do_hill_climbing(Npop, Ngen, max_static, rates, ssize, tolerance, miter, optim, model, cons, maxj, cn_max, correct_bias);
+          cout << "Searching tree space with hill climbing algorithm" << endl;
+          min_lnL_tree = do_hill_climbing(Npop, Ngen, init_tree, max_static, rates, ssize, tolerance, miter, optim, model, cons, maxj, cn_max, correct_bias);
       }
 
       if(maxj==1){
@@ -992,6 +1090,7 @@ int main (int argc, char ** const argv) {
               cout << "Estimated chromosome gain rate (year):  " << min_lnL_tree.chr_gain_rate << endl;
               cout << "Estimated chromosome loss rate (year):  " << min_lnL_tree.chr_loss_rate << endl;
               cout << "Estimated whole genome doubling rate (year):  " << min_lnL_tree.wgd_rate << endl;
+              min_lnL_tree.mu = min_lnL_tree.dup_rate + min_lnL_tree.del_rate + min_lnL_tree.chr_gain_rate + min_lnL_tree.chr_loss_rate + min_lnL_tree.wgd_rate;
           }
       }
       // Write out the top tree
@@ -1005,8 +1104,30 @@ int main (int argc, char ** const argv) {
           }
       }
       ofstream out_tree(ofile);
-      min_lnL_tree.write(out_tree);
+      // min_lnL_tree.write(out_tree);
+      min_lnL_tree.write_with_mut(out_tree);
       out_tree.close();
+
+      string ofile_nex = ofile + ".nex";
+      ofstream nex_tree(ofile_nex);
+      int precision = 5;
+      string newick = min_lnL_tree.make_newick(precision);
+      min_lnL_tree.write_nexus(newick, nex_tree);
+      nex_tree.close();
+
+      ofile_nex =  ofile + ".nmut.nex";
+      ofstream nex_tree2(ofile_nex);
+      precision = 0;
+      double mu_est = total_chr * (min_lnL_tree.chr_gain_rate + min_lnL_tree.chr_loss_rate) + Nchar * (min_lnL_tree.dup_rate + min_lnL_tree.del_rate) + min_lnL_tree.wgd_rate;
+      cout << "Estimated total mutation rate per year " << mu_est << endl;
+      vector<double> mu_all;
+      for(int i = 0; i<min_lnL_tree.lengths.size(); i++){
+          mu_all.push_back(mu_est);
+      }
+      vector<int> nmuts = min_lnL_tree.get_nmuts(mu_all);
+      newick = min_lnL_tree.make_newick_nmut(precision, nmuts);
+      min_lnL_tree.write_nexus(newick, nex_tree2);
+      nex_tree2.close();
   }
 
   if(mode == 2){

@@ -43,7 +43,7 @@ int debug = 0;
 //int Nchar;
 
 int main (int argc, char ** const argv) {
-  int miter, nmax, seed;
+  int miter, nmax, seed, cn_max;
   double tolerance, ssize, mu_0, vlnorm;
   string datafile, timefile, treefile, ofile;
 
@@ -62,6 +62,7 @@ int main (int argc, char ** const argv) {
   po::options_description optional("Optional parameters");
   optional.add_options()
     ("nsample,s", po::value<int>(&Ns)->default_value(5), "number of samples or regions")
+    ("cn_max", po::value<int>(&cn_max)->default_value(4), "maximum copy number of a segment")
     ("tolerance,r", po::value<double>(&tolerance)->default_value(1e-2), "tolerance value")
     ("miter,m", po::value<int>(&miter)->default_value(2000), "maximum number of iterations in maximization")
     ("nmax,n", po::value<int>(&nmax)->default_value(100), "number of maximizations to attempt")
@@ -99,7 +100,7 @@ int main (int argc, char ** const argv) {
   // Nchar = data.size();
   int num_invar_bins = 0;
   Nchar = 0;
-  map<int, vector<vector<int>>> data = read_data_var_regions_by_chr(datafile, Ns, CN_MAX, num_invar_bins);
+  map<int, vector<vector<int>>> data = read_data_var_regions_by_chr(datafile, Ns, cn_max, num_invar_bins);
 
   // tobs already defined globally
   tobs = read_time_info(timefile, Ns, age);
