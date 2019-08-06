@@ -81,7 +81,8 @@ evo_tree read_tree_info(const string& filename, const int& Ns){
 }
 
 
-// evo_tree read_nexus(const string& filename){
+// Read a newick tree
+// evo_tree read_newick(const string& filename){
 //     ifstream infile (filename.c_str());
 //     if (infile.is_open()){
 //       std::string line;
@@ -97,6 +98,17 @@ evo_tree read_tree_info(const string& filename, const int& Ns){
 //
 //     return new_tree;
 // }
+
+bool is_equal_vector(const vector<int>& bin1, const vector<int>& bin2){
+    assert(bin1.size() == bin2.size());
+    for (int i=0; i < bin1.size(); i++){
+        if(bin1[i] != bin2[i]){
+            return false;
+        }
+    }
+    return true;
+}
+
 
 vector<vector<int> > read_data_var_regions(const string& filename, const int& Ns, const int& max_cn){
   cout << "reading data and calculating CNA regions" << endl;
@@ -171,18 +183,26 @@ vector<vector<int> > read_data_var_regions(const string& filename, const int& Ns
       int id_start = k;
 
       // hold the total copy number of the first bin. If this changes we need a new segment
-      int seg_cn_tot = 0;
-      for(int j=0; j<Ns; ++j) seg_cn_tot += s_info[j][k][2];
+      // int seg_cn_tot = 0;
+      // for(int j=0; j<Ns; ++j) seg_cn_tot += s_info[j][k][2];
+
+      // hold all the sites in a bin
+      vector<int> prev_bin;
+      for(int j=0; j<Ns; ++j) prev_bin.push_back(s_info[j][k][2]);
 
       //cout << "seg_start: " << chr << "\t" << seg_start << ", cn= " << seg_cn_tot << endl;
 
       bool const_cn = true;
       while( var_bins[k] == 1 && s_info[0][k][0] == chr && const_cn == true){
+            // Any change in a site is considered as not constant
+            vector<int> curr_bin;
+            for(int j=0; j<Ns; ++j) curr_bin.push_back(s_info[j][k][2]);
         	// calculate new total cn of next bin
-        	int cn_tot = 0;
-        	for(int j=0; j<Ns; ++j) cn_tot += s_info[j][k][2];
-        	//cout << "\tbin:\t" << k+1 << "\t" << cn_tot << endl;
-        	if( cn_tot == seg_cn_tot){
+        	// int cn_tot = 0;
+        	// for(int j=0; j<Ns; ++j) cn_tot += s_info[j][k][2];
+        	// //cout << "\tbin:\t" << k+1 << "\t" << cn_tot << endl;
+        	// if( cn_tot == seg_cn_tot){
+            if(is_equal_vector(prev_bin, curr_bin)){
         	  const_cn = true;
         	  ++k;
         	}else{
@@ -350,18 +370,24 @@ map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filenam
       int id_start = k;
 
       // hold the total copy number of the first bin. If this changes we need a new segment
-      int seg_cn_tot = 0;
-      for(int j=0; j<Ns; ++j) seg_cn_tot += s_info[j][k][2];
+      // int seg_cn_tot = 0;
+      // for(int j=0; j<Ns; ++j) seg_cn_tot += s_info[j][k][2];
+      // hold all the sites in a bin
+      vector<int> prev_bin;
+      for(int j=0; j<Ns; ++j) prev_bin.push_back(s_info[j][k][2]);
 
       //cout << "seg_start: " << chr << "\t" << seg_start << ", cn= " << seg_cn_tot << endl;
 
       bool const_cn = true;
       while( var_bins[k] == 1 && s_info[0][k][0] == chr && const_cn == true){
-    	// calculate new total cn of next bin
-    	int cn_tot = 0;
-    	for(int j=0; j<Ns; ++j) cn_tot += s_info[j][k][2];
-    	//cout << "\tbin:\t" << k+1 << "\t" << cn_tot << endl;
-    	if( cn_tot == seg_cn_tot){
+          vector<int> curr_bin;
+          for(int j=0; j<Ns; ++j) curr_bin.push_back(s_info[j][k][2]);
+          // calculate new total cn of next bin
+          // int cn_tot = 0;
+          // for(int j=0; j<Ns; ++j) cn_tot += s_info[j][k][2];
+          // //cout << "\tbin:\t" << k+1 << "\t" << cn_tot << endl;
+          // if( cn_tot == seg_cn_tot){
+          if(is_equal_vector(prev_bin, curr_bin)){
     	  const_cn = true;
     	  ++k;
     	}else{
@@ -402,6 +428,8 @@ map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filenam
              av_cn[j] += s_info[j][k][2];
       }
       av_cn[j] = av_cn[j]/( segs[i][2] - segs[i][1] + 1 );
+      // The average should be the same as the value of each bin
+      // assert(av_cn[j] == s_info[j][segs[i][1]][2]);
 
       // check all cns across the segment are integer valued
       if( ceil(av_cn[j]) != floor(av_cn[j]) ) valid = false;

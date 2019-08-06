@@ -59,7 +59,8 @@ public:
   int node_id;
 
   // map [chr][seg_id][count]
-  map<int, map<int,int> > cn_profile;
+  map<int, map<int,int>> cn_profile;
+  map<int, map<int,int>> allele_cn_profile;
 
   // count types of mutation
   vector<int> nmuts;
@@ -154,8 +155,8 @@ public:
   }
 
 
+  // Compute total copy number
   void calculate_cn(){
-
     map<int, map<int,int> >::iterator nit1;
     map<int,int>::iterator nit2;
     for(nit1 = cn_profile.begin(); nit1 != cn_profile.end(); ++nit1){
@@ -187,6 +188,25 @@ public:
         segment s = chrs[i][j];
         //cout << "#####:" << "\t" << s.chr << "\t" << s.seg_id << endl;
         cn_profile[s.chr][s.seg_id]++;
+      }
+    }
+  }
+
+
+ // Compute allele-specific copy number
+  void calculate_allele_cn(){
+    allele_cn_profile.clear();
+    assert(allele_cn_profile.size()==0);
+
+    // cout << "Computing allele-specific copy number " << endl;
+    // cout << chrs.size() << endl;
+    // here chrs stores the segments that are currently in the genome
+    // the cn profile is calculated wrt to the original unmutated genome
+    for(int i=0; i<chrs.size(); ++i){
+      for(int j=0; j < chrs[i].size(); ++j){
+        segment s = chrs[i][j];
+        // cout << "#####:" << "\t" << i%44 << "\t" << s.seg_id << endl;
+        allele_cn_profile[i%44][s.seg_id]++;
       }
     }
   }
@@ -258,6 +278,34 @@ public:
     for(it1 = cn_profile.begin(); it1 != cn_profile.end(); ++it1){
       for(it2 = it1->second.begin(); it2 != it1->second.end(); ++it2){
         of << node_id+1 << "\t" << it1->first+1 << "\t" << it2->first << "\t" << it2->second << endl;
+      }
+    }
+  }
+
+  void write_allele_cn(ogzstream& of){
+    calculate_allele_cn();
+    assert(allele_cn_profile.size() == 44);
+    // cout << "Writing allele-specific copy number " << endl;
+    for(int i=0; i < allele_cn_profile.size()/2; i++){
+       map<int,int> segs1 = allele_cn_profile[i];
+       map<int,int> segs2 = allele_cn_profile[i+22];
+       // cout << i << "\t" << segs1.size() << "\t" << segs2.size() << endl;
+       int max_size = (segs1.size() >segs2.size())? segs1.size(): segs2.size();
+       for(int j=0; j < max_size; j++){
+           int cn1, cn2;
+           if (segs1.find(j) == segs1.end()) {
+               cn1 = 0;
+           }
+           else{
+               cn1 = segs1[j];
+           }
+           if (segs2.find(j) == segs2.end()) {
+               cn2 = 0;
+           }
+           else{
+               cn2 = segs2[j];
+           }
+          of << node_id+1 << "\t" << i+1 << "\t" << j+1 << "\t" << cn1 << "\t" << cn2 << endl;
       }
     }
   }

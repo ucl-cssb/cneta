@@ -396,7 +396,7 @@ void adjust_tree_blens(evo_tree& rtree){
 
 // Scale the tree so that total tree height is in the lifetime of the patient
 // This may cause tips nodes violating the given sampling time
-void adjust_tree_height(evo_tree& rtree){
+void adjust_tree_height(evo_tree& rtree, int scale = HEIGHT_SCALE){
     int debug = 0;
     double tree_height = rtree.get_tree_height();
     double min_height = *max_element(tobs.begin(), tobs.end());
@@ -404,7 +404,7 @@ void adjust_tree_height(evo_tree& rtree){
     // cout << "ttime " << ttime << endl;
     if(tree_height > max_height){
         // Use smaller height to avoid new violations after tip adjustment
-        double max_height_scaled = (max_height/HEIGHT_SCALE > min_height) ? max_height/HEIGHT_SCALE : min_height + HEIGHT_OFFSET;
+        double max_height_scaled = (max_height/scale > min_height) ? max_height/scale : min_height + scale;
         double new_tree_height = runiform(r, min_height, max_height_scaled);
         double ratio = new_tree_height/tree_height;
         if(debug){
@@ -1893,7 +1893,7 @@ evo_tree max_likelihood_BFGS(evo_tree& rtree, int model, double& minL, const dou
             double max_len = *min_element(tips_obs.begin(), tips_obs.end());
             // If max_len is very small, this tree seems not feasible
             if( abs(max_len -0) < SMALL_VAL){
-                cout << "The terminal branch length under " << rtree.top_tnodes[i] + 1 << " in the proposed tree will not be valid ! " << endl;
+                cout << "The terminal branch length under " << rtree.top_tnodes[i] + 1 << " in the proposed tree will not be valid! " << endl;
                 // minL = - SMALL_LNL;
                 // return rtree;
             }
@@ -1921,33 +1921,33 @@ evo_tree max_likelihood_BFGS(evo_tree& rtree, int model, double& minL, const dou
               i = npar_ne;
               variables[i+1] = rtree.mu;
               lower_bound[i+1] = 0;
-              upper_bound[i+1] = 1;
+              upper_bound[i+1] = MAX_MRATE;
           }
           if(model == 1){
               i = npar_ne;
               variables[i+1] = rtree.dup_rate;
               lower_bound[i+1] = 0;
-              upper_bound[i+1] = 1;
+              upper_bound[i+1] = MAX_MRATE;
 
               i = npar_ne+1;
               variables[i+1] = rtree.del_rate;
               lower_bound[i+1] = 0;
-              upper_bound[i+1] = 1;
+              upper_bound[i+1] = MAX_MRATE;
 
               i = npar_ne+2;
               variables[i+1] = rtree.chr_gain_rate;
               lower_bound[i+1] = 0;
-              upper_bound[i+1] = 1;
+              upper_bound[i+1] = MAX_MRATE;
 
               i = npar_ne+3;
               variables[i+1] = rtree.chr_loss_rate;
               lower_bound[i+1] = 0;
-              upper_bound[i+1] = 1;
+              upper_bound[i+1] = MAX_MRATE;
 
               i = npar_ne+4;
               variables[i+1] = rtree.wgd_rate;
               lower_bound[i+1] = 0;
-              upper_bound[i+1] = 1;
+              upper_bound[i+1] = MAX_MRATE;
           }
        }
     }

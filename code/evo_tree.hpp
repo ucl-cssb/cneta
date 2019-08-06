@@ -338,7 +338,7 @@ evo_tree::evo_tree(const int& _nleaf, const vector<edge>& _edges, int gen_node){
   nintedge = nedge - nleaf;
 
   edges.clear();
-  edges.insert(edges.end(), _edges.begin(), _edges.end() );
+  edges.insert(edges.end(), _edges.begin(), _edges.end());
   lengths.clear();
   for(int i=0; i<nedge; ++i){
       lengths.push_back(_edges[i].length);

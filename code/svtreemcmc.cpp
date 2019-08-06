@@ -660,7 +660,7 @@ gsl_vector* move_blens_bactrian(double& log_hastings_ratio, double m, double sig
 }
 
 
-void update_topology(evo_tree& rtree, int model, double& log_likelihood, int& naccepts, const int n_draw, const int n_burnin, const int n_sample, double lambda_topl, int sample_prior, int cons){
+void update_topology(evo_tree& rtree, int model, double& log_likelihood, int& naccepts, const int n_draw, const int n_burnin, const int n_gap, double lambda_topl, int sample_prior, int cons, int cn_max, int correct_bias){
     double prev_log_prior = 1, prev_log_likelihood, log_prior = 1, log_diff;
     double log_hastings_ratio = 0;
     bool accept = false;
@@ -720,7 +720,7 @@ void update_topology(evo_tree& rtree, int model, double& log_likelihood, int& na
     // cout << "Print the accepted state" << endl;
     if (accept)
     {
-        if(n_draw > n_burnin && n_draw % n_sample == 0){
+        if(n_draw > n_burnin && n_draw % n_gap == 0){
             naccepts++;
         }
         rtree = evo_tree(ntree);
@@ -728,7 +728,7 @@ void update_topology(evo_tree& rtree, int model, double& log_likelihood, int& na
 }
 
 
-void update_blen(evo_tree& rtree, int model, double& log_likelihood, int& naccepts, const int n_draw, const int n_burnin, const int n_sample, vector<double> prior_parameters_blen, vector<double> alphas, double lambda, double mbactrian, double sigma, int sample_prior, int cons) {
+void update_blen(evo_tree& rtree, int model, double& log_likelihood, int& naccepts, const int n_draw, const int n_burnin, const int n_gap, vector<double> prior_parameters_blen, vector<double> alphas, double lambda, double mbactrian, double sigma, int sample_prior, int cons, int cn_max, int correct_bias) {
     gsl_vector *prev_blens, *blens;
     int num_branch;
     double prev_log_prior, prev_log_likelihood, log_prior, log_diff;
@@ -804,7 +804,7 @@ void update_blen(evo_tree& rtree, int model, double& log_likelihood, int& naccep
     // cout << "Print the accepted state" << endl;
     if (accept)
     {
-        if(n_draw > n_burnin && n_draw % n_sample == 0){
+        if(n_draw > n_burnin && n_draw % n_gap == 0){
             naccepts++;
         }
         rtree = evo_tree(ntree);
@@ -815,7 +815,7 @@ void update_blen(evo_tree& rtree, int model, double& log_likelihood, int& naccep
 }
 
 
-void update_tree_height(evo_tree& rtree, int model, double& log_likelihood, int& naccepts, const int n_draw, const int n_burnin, const int n_sample, vector<double> prior_parameters, double sigma, int sample_prior) {
+void update_tree_height(evo_tree& rtree, int model, double& log_likelihood, int& naccepts, const int n_draw, const int n_burnin, const int n_gap, vector<double> prior_parameters, double sigma, int sample_prior, int cn_max, int correct_bias) {
     // uniform prior
     double prev_log_prior = 1, prev_log_likelihood, log_prior = 1, log_diff;
     double log_hastings_ratio = 0;
@@ -897,7 +897,7 @@ void update_tree_height(evo_tree& rtree, int model, double& log_likelihood, int&
     }
     if (accept)
     {
-        if(n_draw > n_burnin && n_draw % n_sample == 0){
+        if(n_draw > n_burnin && n_draw % n_gap == 0){
             naccepts++;
         }
         rtree = evo_tree(ntree);
@@ -906,7 +906,7 @@ void update_tree_height(evo_tree& rtree, int model, double& log_likelihood, int&
 
 
 // Update the effective population size for coalescent model
-void update_pop_size(evo_tree& rtree, double& log_likelihood, int& naccepts, const int n_draw, const int n_burnin, const int n_sample, vector<double> prior_parameters, double sigma, int sample_prior, int cons) {
+void update_pop_size(evo_tree& rtree, double& log_likelihood, int& naccepts, const int n_draw, const int n_burnin, const int n_gap, vector<double> prior_parameters, double sigma, int sample_prior, int cons, int cn_max, int correct_bias) {
     // uniform prior
     double prev_log_prior = 1, prev_log_likelihood, log_prior = 1, log_diff;
     double log_hastings_ratio = 0;
@@ -958,14 +958,14 @@ void update_pop_size(evo_tree& rtree, double& log_likelihood, int& naccepts, con
     }
     if (accept)
     {
-        if(n_draw > n_burnin && n_draw % n_sample == 0){
+        if(n_draw > n_burnin && n_draw % n_gap == 0){
             naccepts++;
         }
         rtree = evo_tree(ntree);
     }
 }
 
-void update_mutation_rates(evo_tree& rtree, double& log_likelihood, int& naccepts, const int n_draw, const int n_burnin, const int n_sample, vector<double> prior_parameters_rate, double sigma, int sample_prior, int cons) {
+void update_mutation_rates(evo_tree& rtree, double& log_likelihood, int& naccepts, const int n_draw, const int n_burnin, const int n_gap, vector<double> prior_parameters_rate, double sigma, int sample_prior, int cons, int cn_max, int correct_bias) {
     double prev_log_prior, prev_log_likelihood, log_prior, log_diff;
     double log_hastings_ratio = 0;
     bool accept = false;
@@ -1017,7 +1017,7 @@ void update_mutation_rates(evo_tree& rtree, double& log_likelihood, int& naccept
     }
     if (accept)
     {
-        if(n_draw > n_burnin && n_draw % n_sample == 0){
+        if(n_draw > n_burnin && n_draw % n_gap == 0){
             naccepts++;
         }
         rtree = evo_tree(ntree);
@@ -1025,7 +1025,7 @@ void update_mutation_rates(evo_tree& rtree, double& log_likelihood, int& naccept
 }
 
 //
-void update_mutation_rates_lnormal(evo_tree& rtree, int model, double& log_likelihood, int& naccepts, const int n_draw, const int n_burnin, const int n_sample, vector<double> prior_parameters_mut, double sigma, int sample_prior, int cons) {
+void update_mutation_rates_lnormal(evo_tree& rtree, int model, double& log_likelihood, int& naccepts, const int n_draw, const int n_burnin, const int n_gap, vector<double> prior_parameters_mut, double sigma, int sample_prior, int cons, int cn_max, int correct_bias) {
     double prev_log_prior, prev_log_likelihood, log_prior, log_diff;
     double log_hastings_ratio = 0;
     bool accept = false;
@@ -1077,7 +1077,7 @@ void update_mutation_rates_lnormal(evo_tree& rtree, int model, double& log_likel
     }
     if (accept)
     {
-        if(n_draw > n_burnin && n_draw % n_sample == 0){
+        if(n_draw > n_burnin && n_draw % n_gap == 0){
             naccepts++;
         }
         rtree = evo_tree(ntree);
@@ -1086,7 +1086,7 @@ void update_mutation_rates_lnormal(evo_tree& rtree, int model, double& log_likel
 
 
 
-void update_deletion_rates_lnormal(evo_tree& rtree, int model, double& log_likelihood, int& naccepts, const int n_draw, const int n_burnin, const int n_sample, vector<double> prior_parameters_mut, double sigma, int sample_prior, int cons) {
+void update_deletion_rates_lnormal(evo_tree& rtree, int model, double& log_likelihood, int& naccepts, const int n_draw, const int n_burnin, const int n_gap, vector<double> prior_parameters_mut, double sigma, int sample_prior, int cons, int cn_max, int correct_bias) {
     double prev_log_prior, prev_log_likelihood, log_prior, log_diff;
     double log_hastings_ratio = 0;
     bool accept = false;
@@ -1138,7 +1138,7 @@ void update_deletion_rates_lnormal(evo_tree& rtree, int model, double& log_likel
     }
     if (accept)
     {
-        if(n_draw > n_burnin && n_draw % n_sample == 0){
+        if(n_draw > n_burnin && n_draw % n_gap == 0){
             naccepts++;
         }
         rtree = evo_tree(ntree);
@@ -1146,7 +1146,7 @@ void update_deletion_rates_lnormal(evo_tree& rtree, int model, double& log_likel
 }
 
 
-void update_duplication_rates_lnormal(evo_tree& rtree, int model, double& log_likelihood, int& naccepts, const int n_draw, const int n_burnin, const int n_sample, vector<double> prior_parameters_mut, double sigma, int sample_prior, int cons) {
+void update_duplication_rates_lnormal(evo_tree& rtree, int model, double& log_likelihood, int& naccepts, const int n_draw, const int n_burnin, const int n_gap, vector<double> prior_parameters_mut, double sigma, int sample_prior, int cons, int cn_max, int correct_bias) {
     double prev_log_prior, prev_log_likelihood, log_prior, log_diff;
     double log_hastings_ratio = 0;
     bool accept = false;
@@ -1198,14 +1198,14 @@ void update_duplication_rates_lnormal(evo_tree& rtree, int model, double& log_li
     }
     if (accept)
     {
-        if(n_draw > n_burnin && n_draw % n_sample == 0){
+        if(n_draw > n_burnin && n_draw % n_gap == 0){
             naccepts++;
         }
         rtree = evo_tree(ntree);
     }
 }
 
-void update_cgain_rates_lnormal(evo_tree& rtree, int model, double& log_likelihood, int& naccepts, const int n_draw, const int n_burnin, const int n_sample, vector<double> prior_parameters_mut, double sigma, int sample_prior, int cons) {
+void update_cgain_rates_lnormal(evo_tree& rtree, int model, double& log_likelihood, int& naccepts, const int n_draw, const int n_burnin, const int n_gap, vector<double> prior_parameters_mut, double sigma, int sample_prior, int cons, int cn_max, int correct_bias) {
     double prev_log_prior, prev_log_likelihood, log_prior, log_diff;
     double log_hastings_ratio = 0;
     bool accept = false;
@@ -1257,7 +1257,7 @@ void update_cgain_rates_lnormal(evo_tree& rtree, int model, double& log_likeliho
     }
     if (accept)
     {
-        if(n_draw > n_burnin && n_draw % n_sample == 0){
+        if(n_draw > n_burnin && n_draw % n_gap == 0){
             naccepts++;
         }
         rtree = evo_tree(ntree);
@@ -1265,7 +1265,7 @@ void update_cgain_rates_lnormal(evo_tree& rtree, int model, double& log_likeliho
 }
 
 
-void update_closs_rates_lnormal(evo_tree& rtree, int model, double& log_likelihood, int& naccepts, const int n_draw, const int n_burnin, const int n_sample, vector<double> prior_parameters_mut, double sigma, int sample_prior, int cons) {
+void update_closs_rates_lnormal(evo_tree& rtree, int model, double& log_likelihood, int& naccepts, const int n_draw, const int n_burnin, const int n_gap, vector<double> prior_parameters_mut, double sigma, int sample_prior, int cons, int cn_max, int correct_bias) {
     double prev_log_prior, prev_log_likelihood, log_prior, log_diff;
     double log_hastings_ratio = 0;
     bool accept = false;
@@ -1317,7 +1317,7 @@ void update_closs_rates_lnormal(evo_tree& rtree, int model, double& log_likeliho
     }
     if (accept)
     {
-        if(n_draw > n_burnin && n_draw % n_sample == 0){
+        if(n_draw > n_burnin && n_draw % n_gap == 0){
             naccepts++;
         }
         rtree = evo_tree(ntree);
@@ -1325,7 +1325,7 @@ void update_closs_rates_lnormal(evo_tree& rtree, int model, double& log_likeliho
 }
 
 
-void update_wgd_rates_lnormal(evo_tree& rtree, int model, double& log_likelihood, int& naccepts, const int n_draw, const int n_burnin, const int n_sample, vector<double> prior_parameters_mut, double sigma, int sample_prior, int cons) {
+void update_wgd_rates_lnormal(evo_tree& rtree, int model, double& log_likelihood, int& naccepts, const int n_draw, const int n_burnin, const int n_gap, vector<double> prior_parameters_mut, double sigma, int sample_prior, int cons, int cn_max, int correct_bias) {
     double prev_log_prior, prev_log_likelihood, log_prior, log_diff;
     double log_hastings_ratio = 0;
     bool accept = false;
@@ -1377,7 +1377,7 @@ void update_wgd_rates_lnormal(evo_tree& rtree, int model, double& log_likelihood
     }
     if (accept)
     {
-        if(n_draw > n_burnin && n_draw % n_sample == 0){
+        if(n_draw > n_burnin && n_draw % n_gap == 0){
             naccepts++;
         }
         rtree = evo_tree(ntree);
@@ -1387,7 +1387,7 @@ void update_wgd_rates_lnormal(evo_tree& rtree, int model, double& log_likelihood
 
 
 // Given a tree, find the MAP estimation of the branch lengths (and optionally mu) assuming branch lengths are independent or constrained in time
-void run_mcmc(evo_tree& rtree, int model, const int n_draws, const int n_burnin, const int n_sample, vector<double> proposal_parameters, vector<double> prior_parameters_blen, vector<double> prior_parameters_height, vector<double> alphas, vector<double> prior_parameters_mut, double lambda_topl, string ofile, string tfile, int sample_prior=0, int fix_topology=0, int cons=0, int maxj=0){
+void run_mcmc(evo_tree& rtree, int model, const int n_draws, const int n_burnin, const int n_gap, vector<double> proposal_parameters, vector<double> prior_parameters_blen, vector<double> prior_parameters_height, vector<double> alphas, vector<double> prior_parameters_mut, double lambda_topl, string ofile, string tfile, int sample_prior=0, int fix_topology=0, int cons=0, int maxj=0, int cn_max = 4, int correct_bias=0){
         ofstream fout_trace(ofile);
         ofstream fout_tree(tfile);
 
@@ -1422,6 +1422,9 @@ void run_mcmc(evo_tree& rtree, int model, const int n_draws, const int n_burnin,
             sigma_mut = proposal_parameters[3];
         }
         if(model==1){
+            assert(prior_parameters_mut.size()>9);
+            assert(proposal_parameters.size()>7);
+
             mu_ldup = prior_parameters_mut[0];
             sigma_ldup = prior_parameters_mut[1];
 
@@ -1452,10 +1455,10 @@ void run_mcmc(evo_tree& rtree, int model, const int n_draws, const int n_burnin,
             header = "state\tlnl\tmu";
         }
         if(model==1){
-            header = "state\tlnl\tdup_rate\tdel_rate";
+            header = "state\tlnl\tdup_rate\tdel_rate\tgain_rate\tloss_rate\twgd_rate";
         }
         if(cons){
-            header = "state\tlnl\tdup_rate\tdel_rate\tgain_rate\tloss_rate\twgd_rate\theight";
+            header += "\theight";
             for(int j=1; j<=rtree.nintedge; j++){
                 header += "\tl" + to_string(j);
             }
@@ -1474,47 +1477,54 @@ void run_mcmc(evo_tree& rtree, int model, const int n_draws, const int n_burnin,
         for (int i = 1; i <= n_draws; ++i)
         {
             if(fix_topology==0){
-                update_topology(rtree, model, log_likelihood, naccepts_toplogy, i, n_burnin, n_sample, lambda_topl, sample_prior, cons);
+                update_topology(rtree, model, log_likelihood, naccepts_toplogy, i, n_burnin, n_gap, lambda_topl, sample_prior, cons, cn_max, correct_bias);
             }
 
-            update_blen(rtree, model, log_likelihood, naccepts_blen, i, n_burnin, n_sample, prior_parameters_blen, alphas, lambda, mbactrian, sigma_blen, sample_prior, cons);
+            update_blen(rtree, model, log_likelihood, naccepts_blen, i, n_burnin, n_gap, prior_parameters_blen, alphas, lambda, mbactrian, sigma_blen, sample_prior, cons, cn_max, correct_bias);
 
             if(cons){
-                update_tree_height(rtree, model, log_likelihood, naccepts_height, i, n_burnin, n_sample, prior_parameters_height, sigma_height, sample_prior);
+                update_tree_height(rtree, model, log_likelihood, naccepts_height, i, n_burnin, n_gap, prior_parameters_height, sigma_height, sample_prior, cons, cn_max);
             }
 
             if(maxj){
-                // update_mutation_rates(rtree, log_likelihood, naccepts_mrate, i, n_burnin, n_sample, prior_parameters_mut, sigma_mut, cons);
+                // update_mutation_rates(rtree, log_likelihood, naccepts_mrate, i, n_burnin, n_gap, prior_parameters_mut, sigma_mut, cons, cn_max, correct_bias);
                 if(model==0){
                     vector<double> prior_parameters_mu({mu_lmut, sigma_lmut});
-                    update_mutation_rates_lnormal(rtree, model, log_likelihood, naccepts_mrate, i, n_burnin, n_sample, prior_parameters_mu, sigma_mut, sample_prior, cons);
+                    update_mutation_rates_lnormal(rtree, model, log_likelihood, naccepts_mrate, i, n_burnin, n_gap, prior_parameters_mu, sigma_mut, sample_prior, cons, cn_max, correct_bias);
                 }
                 if(model==1){
                     vector<double> prior_parameters_dup({mu_ldup, sigma_ldup});
-                    update_duplication_rates_lnormal(rtree, model, log_likelihood, naccepts_dup, i, n_burnin, n_sample, prior_parameters_dup, sigma_dup, sample_prior, cons);
+                    update_duplication_rates_lnormal(rtree, model, log_likelihood, naccepts_dup, i, n_burnin, n_gap, prior_parameters_dup, sigma_dup, sample_prior, cons, cn_max, correct_bias);
 
                     vector<double> prior_parameters_del({mu_ldel, sigma_ldel});
-                    update_deletion_rates_lnormal(rtree, model, log_likelihood, naccepts_del, i, n_burnin, n_sample, prior_parameters_del, sigma_del, sample_prior, cons);
+                    update_deletion_rates_lnormal(rtree, model, log_likelihood, naccepts_del, i, n_burnin, n_gap, prior_parameters_del, sigma_del, sample_prior, cons, cn_max, correct_bias);
 
-                    vector<double> prior_parameters_gain({mu_lgain, sigma_lgain});
-                    update_cgain_rates_lnormal(rtree, model, log_likelihood, naccepts_gain, i, n_burnin, n_sample, prior_parameters_gain, sigma_gain, sample_prior, cons);
+                    // if(rtree.chr_gain_rate>0){
+                        vector<double> prior_parameters_gain({mu_lgain, sigma_lgain});
+                        update_cgain_rates_lnormal(rtree, model, log_likelihood, naccepts_gain, i, n_burnin, n_gap, prior_parameters_gain, sigma_gain, sample_prior, cons, cn_max, correct_bias);
+                    // }
 
-                    vector<double> prior_parameters_loss({mu_lloss, sigma_lloss});
-                    update_closs_rates_lnormal(rtree, model, log_likelihood, naccepts_loss, i, n_burnin, n_sample, prior_parameters_loss, sigma_loss, sample_prior, cons);
+                    // if(rtree.chr_loss_rate>0){
+                        vector<double> prior_parameters_loss({mu_lloss, sigma_lloss});
+                        update_closs_rates_lnormal(rtree, model, log_likelihood, naccepts_loss, i, n_burnin, n_gap, prior_parameters_loss, sigma_loss, sample_prior, cons, cn_max, correct_bias);
+                    // }
 
-                    vector<double> prior_parameters_wgd({mu_lwgd, sigma_lwgd});
-                    update_wgd_rates_lnormal(rtree, model, log_likelihood, naccepts_wgd, i, n_burnin, n_sample, prior_parameters_wgd, sigma_wgd, sample_prior, cons);
+                    // if(rtree.wgd_rate>0){
+                        vector<double> prior_parameters_wgd({mu_lwgd, sigma_lwgd});
+                        update_wgd_rates_lnormal(rtree, model, log_likelihood, naccepts_wgd, i, n_burnin, n_gap, prior_parameters_wgd, sigma_wgd, sample_prior, cons, cn_max, correct_bias);
+                    // }
+
                 }
             }
             // Discard burn in samples
             if(i <= n_burnin){
                 continue;
             }
-            if (i % n_sample == 0){
+            if (i % n_gap == 0){
                 // print out the accepted proposal
                 // string str_tree = order_tree_string(create_tree_string(rtree));
                 // fout << i - n_burnin << "\t" << str_tree << "\t"  << log_likelihood << "\t" << rtree.mu ;
-                fout_trace << (i - n_burnin)/n_sample << "\t"  << log_likelihood;
+                fout_trace << (i - n_burnin)/n_gap << "\t"  << log_likelihood;
                 if(model==0){
                     fout_trace << "\t" << rtree.mu ;
                 }
@@ -1548,7 +1558,7 @@ void run_mcmc(evo_tree& rtree, int model, const int n_draws, const int n_burnin,
         fout_trace.close();
         fout_tree.close();
 
-        double n_keep = (n_draws - n_burnin)/n_sample;
+        double n_keep = (n_draws - n_burnin)/n_gap;
 
         if(fix_topology==0){
             double accept_rate_topology = naccepts_toplogy / n_keep;
@@ -1573,12 +1583,18 @@ void run_mcmc(evo_tree& rtree, int model, const int n_draws, const int n_burnin,
             cout << "Accept rate of duplication rate proposal: " << accept_rate_mrate << endl;
             accept_rate_mrate = naccepts_del / n_keep;
             cout << "Accept rate of deletion rate proposal: " << accept_rate_mrate << endl;
-            accept_rate_mrate = naccepts_gain / n_keep;
-            cout << "Accept rate of chromosme gain rate proposal: " << accept_rate_mrate << endl;
-            accept_rate_mrate = naccepts_loss / n_keep;
-            cout << "Accept rate of chromosme loss rate proposal: " << accept_rate_mrate << endl;
-            accept_rate_mrate = naccepts_wgd / n_keep;
-            cout << "Accept rate of whole genome doubling rate proposal: " << accept_rate_mrate << endl;
+            // if(rtree.chr_gain_rate>0){
+                accept_rate_mrate = naccepts_gain / n_keep;
+                cout << "Accept rate of chromosme gain rate proposal: " << accept_rate_mrate << endl;
+            // }
+            // if(rtree.chr_loss_rate>0){
+                accept_rate_mrate = naccepts_loss / n_keep;
+                cout << "Accept rate of chromosme loss rate proposal: " << accept_rate_mrate << endl;
+            // }
+            // if(rtree.wgd_rate>0){
+                accept_rate_mrate = naccepts_wgd / n_keep;
+                cout << "Accept rate of whole genome doubling rate proposal: " << accept_rate_mrate << endl;
+            // }
         }
 }
 
@@ -1596,7 +1612,7 @@ vector<double> get_vertex_indices(string const& pointLine)
 
 
 int main (int argc, char ** const argv) {
-    int n_draws, n_burnin, n_sample, model, cons, maxj, seed, clock, cn_max, correct_bias;
+    int n_draws, n_burnin, n_gap, model, cons, maxj, seed, clock, cn_max, correct_bias;
     double lambda, sigma_blen, mbactrian, lambda_topl, sigma_height;
     double dirichlet_param, tlen_shape, tlen_scale;
     double rate_shape, rate_scale;
@@ -1629,7 +1645,7 @@ int main (int argc, char ** const argv) {
             ("trace_tree_file", po::value<string>(&trace_tree_file)->default_value("trace-mcmc-trees.txt"), "output trace file of trees")
             ("n_burnin,r", po::value<int>(&n_burnin)->default_value(9000), "number of burnin samples")
             ("n_draws,n", po::value<int>(&n_draws)->default_value(10000), "number of posterior draws to keep")
-            ("n_sample", po::value<int>(&n_sample)->default_value(1), "sampling every n_sample samples ")
+            ("n_gap", po::value<int>(&n_gap)->default_value(1), "sampling every kth samples ")
             ("sample_prior", po::value<int>(&sample_prior)->default_value(0), "whether or not to sample from the prior only")
 
             ("model,d", po::value<int>(&model)->default_value(0), "model of evolution (0: JC69, 1: 1-step bounded)")
@@ -1653,9 +1669,9 @@ int main (int argc, char ** const argv) {
             ("mu,x", po::value<double>(&mu)->default_value(0.025), "mean of mutation rate")
             ("dup_rate", po::value<double>(&dup_rate)->default_value(0.01), "mean of segment duplication rate")
             ("del_rate", po::value<double>(&del_rate)->default_value(0.01), "mean of segment deletion rate")
-            ("chr_gain_rate", po::value<double>(&chr_gain_rate)->default_value(0), "mean of chromosome gain rate")
-            ("chr_loss_rate", po::value<double>(&chr_loss_rate)->default_value(0), "mean of chromosome loss rate")
-            ("wgd_rate", po::value<double>(&wgd_rate)->default_value(0), "mean of WGD (whole genome doubling) rate")
+            ("chr_gain_rate", po::value<double>(&chr_gain_rate)->default_value(0.001), "mean of chromosome gain rate")
+            ("chr_loss_rate", po::value<double>(&chr_loss_rate)->default_value(0.001), "mean of chromosome loss rate")
+            ("wgd_rate", po::value<double>(&wgd_rate)->default_value(0.0001), "mean of WGD (whole genome doubling) rate")
 
             ("sigma_mut", po::value<double>(&sigma_mut)->default_value(0.05), "sigma for proposal of mutation rate")
             ("sigma_dup", po::value<double>(&sigma_dup)->default_value(0.05), "sigma for proposal of segment duplication rate")
@@ -1779,7 +1795,7 @@ int main (int argc, char ** const argv) {
     vector<double> prior_parameters_blen;
     prior_parameters_blen.push_back(tlen_shape);
     prior_parameters_blen.push_back(tlen_scale);
-    if(dirichlet_param>0){
+    if(dirichlet_param > 0){
         prior_parameters_blen.push_back(dirichlet_param);
     }
 
@@ -1827,7 +1843,10 @@ int main (int argc, char ** const argv) {
             if(model==1){
                 test_tree.dup_rate = rdup_rate;
                 test_tree.del_rate = rdel_rate;
-                test_tree.mu = rdup_rate + rdel_rate;
+                test_tree.chr_gain_rate = chr_gain_rate;
+                test_tree.chr_loss_rate = chr_loss_rate;
+                test_tree.wgd_rate = wgd_rate;
+                test_tree.mu =dup_rate + del_rate + chr_gain_rate + chr_loss_rate + wgd_rate;
             }
             test_tree.tobs = tobs;
             test_tree.tree_height = test_tree.get_tree_height();
@@ -1896,13 +1915,13 @@ int main (int argc, char ** const argv) {
             out_tree.close();
             sstm.str("");
 
-            // Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons);
+            // Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, cn_max, correct_bias);
             Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, 0, cn_max, correct_bias);
             cout << "\nRandom tree likelihood: " << Ls << endl;
 
             // Estimate branch length with MCMC
             cout << "\n\n### Running MCMC" << endl;
-            run_mcmc(rtree, model, n_draws, n_burnin, n_sample, proposal_parameters, prior_parameters_blen, prior_parameters_height, alphas, prior_parameters_mut, lambda_topl, trace_param_file, trace_tree_file, sample_prior, fix_topology, cons, maxj);
+            run_mcmc(rtree, model, n_draws, n_burnin, n_gap, proposal_parameters, prior_parameters_blen, prior_parameters_height, alphas, prior_parameters_mut, lambda_topl, trace_param_file, trace_tree_file, sample_prior, fix_topology, cons, maxj, cn_max, correct_bias);
             // cout << "\nMinimised tree likelihood by MCMC / mu : " << Lf << "\t" << min_tree.mu*Nchar <<  endl;
 
             // cout << "\n\n### Running ML" << endl;
@@ -1943,16 +1962,17 @@ int main (int argc, char ** const argv) {
         adjust_tree_height(rtree);
         adjust_tree_tips(rtree);
         adjust_tree_blens(rtree);
+
         rtree.tree_height = rtree.get_tree_height();
         rtree.total_time = rtree.get_total_time();
-        cout << "Total time of random tree " << rtree.total_time << endl;
+        cout << "Total hight of random tree " << rtree.tree_height << endl;
 
-        // double Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons);
+        // double Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, cn_max, correct_bias);
         double Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, cn_max, correct_bias);
         cout << "\nRandom tree likelihood: " << Ls << endl;
 
         // Estimate branch length with MCMC
         cout << "\n\n### Running MCMC" << endl;
-        run_mcmc(rtree, model, n_draws, n_burnin, n_sample, proposal_parameters, prior_parameters_blen, prior_parameters_height, alphas, prior_parameters_mut, lambda_topl, trace_param_file, trace_tree_file, sample_prior, fix_topology, cons, maxj);
+        run_mcmc(rtree, model, n_draws, n_burnin, n_gap, proposal_parameters, prior_parameters_blen, prior_parameters_height, alphas, prior_parameters_mut, lambda_topl, trace_param_file, trace_tree_file, sample_prior, fix_topology, cons, maxj);
     }
 }

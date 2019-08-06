@@ -60,6 +60,20 @@ plot.tree.xlim <- function(tree) {
   print(p)
 }
 
+# Plot tree with xlim specified with age backwards
+plot.tree.xlim.age <- function(tree, ttime, age) {
+  p <- ggtree(tree, size = 0.5, linetype = 1)  #+ geom_rootedge()
+  # Add margin to show full name of labels  if (is.na(tree.max))
+  #   tree.max = max(node.depth.edgelength(tree)) + 20
+  tree.max = age + 10
+  p <- p + geom_tiplab(align = TRUE) + theme_tree2() + xlim(NA, tree.max)
+  # p <- p + geom_text2(aes(subset=!isTip,label = node), hjust=-.3)
+  edge = data.frame(tree$edge, edge_num = 1:nrow(tree$edge), edge_len = tree$edge.length)
+  colnames(edge) = c("parent", "node", "edge_num", "edge_len")
+  p <- p %<+% edge + geom_text(aes(x = branch, label = edge_len), nudge_y = 0.1)
+  print(p)
+}
+
 
 plot.tree.bootstrap <- function(tree, with_title, mut_rate){
   p <- ggtree(tree) #+ geom_rootedge()
@@ -108,14 +122,16 @@ print.tree <- function(tree_file, tree_style, out_file = "", branch_num = 0, bst
   # dd$start <- dd$start + 1 dd$end <- dd$end + 1
   if (branch_num == 0) {
     dd$length <- as.numeric(dd$length)
-    dd[which(dd$length < 1e-3), ]$length <- 0
+    small_col <- which(dd$length < 1e-3)
+    if(length(small_col)>0){
+      dd[small_col, ]$length <- 0
+    }
     dd <- dd[, c(1, 2, 3)]
   }
   if (branch_num == 1) {
     dd$nmut <- as.numeric(dd$nmut)
-    dd <- dd[, c(1, 2, 5)]
+    dd <- dd[, c("start", "end", "nmut")]
   }
-
   mytree <- make.tree(dd, labels)
 
   pdf(fout)

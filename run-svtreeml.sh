@@ -3,13 +3,14 @@
 # input parameters
 # prefix=sim-data-N"$Ns"-cons"$cons"-model"$model"-1
 prefix=sim-data-1
-dir=./test
+dir=./example
 input=$dir/"$prefix"-cn.txt.gz
 times=$dir/"$prefix"-rel-times.txt
 # tree_file=$dir/"$prefix"-tree.txt
 # tree_file=$dir/AllTreesNr5_"$1".txt
+dir_itrees=$dir/itrees  # The directory containing the initial trees (in TXT format)
 
-Ns=5  # number of regions
+Ns=10  # number of regions
 
 mode=1 # Running mode. 0: test; 1: build maximum likelihood tree; 2: compute likelihood; 3: compute maximum likelihood
 
@@ -20,11 +21,13 @@ cons=1  # Whether or not the tree is constrained by patient age
 maxj=1 # Whether or not to estimate mutation rate
 correct_bias=1  # Whether or not to correct acquisition bias
 tree_search=1 # 1: hill climbing; 0: genetic algorithm
+init_tree=1  # 0: Random coalescence tree, 1: Maximum parsimony tree
+
 # Age of the patient
 age=60
 
 # Whether or not to print debug information
-verbose=1
+verbose=0
 
 # Specify the mutation rates when they are fixed
 r1=0.00001
@@ -32,21 +35,22 @@ r2=0.00002
 r3=0
 r4=0
 r5=0
+
 mu=0  # Used in model 0 (JC69 model)
 
 # seed=1215208885 # Setting seed for reproductive results
 
-# evolutionary algorithm
-Npop=180
-Ngen=10
-Nstop=5   # Only used in genetic algorithm
+# tree search algorithm
+Npop=100
+Ngen=100
+Nstop=10
 
 
 if [[ $mode -eq 1 ]]; then
   suffix=o"$opt"-"$prefix"
   mltree=$dir/MaxL-"$suffix".txt
 
-  code/svtreeml -c $input -t $times -s $Ns -p $Npop -g $Ngen -e $Nstop -o $mltree -d $model --cn_max $cn_max --tree_search $tree_search --optim $opt --constrained $cons --fixm $maxj  --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2  --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode > $dir/std_svtreeml_"$suffix"
+  code/svtreeml -c $input -t $times -s $Ns -p $Npop -g $Ngen -e $Nstop -o $mltree -d $model --cn_max $cn_max --tree_search $tree_search --init_tree $init_tree --dir_itrees $dir_itrees --optim $opt --constrained $cons --fixm $maxj  --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2  --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode > $dir/std_svtreeml_"$suffix"
   # --seed $seed
 
   Rscript ana/plot-trees-all.R -f $mltree -b 0 -t "single" -l "xlim"  #>& /dev/null
@@ -61,7 +65,7 @@ if [[ $mode -eq 1 ]]; then
       echo $i
       ofile=$bdir/results-maxL-"$suffix"-btree-$i.txt
 
-      code/svtreeml -c $input -t $times -s $Ns -p $Npop -g $Ngen -e $Nstop -o $ofile -d $model --cn_max $cn_max --tree_search $tree_search --optim $opt --constrained $cons --fixm $maxj --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2  --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5  --verbose $verbose -b 1 > $bdir/std-maxL-"$suffix"-btree-$i
+      code/svtreeml -c $input -t $times -s $Ns -p $Npop -g $Ngen -e $Nstop -o $ofile -d $model --cn_max $cn_max --tree_search $tree_search --init_tree $init_tree --dir_itrees $dir_itrees --optim $opt --constrained $cons --fixm $maxj --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2  --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5  --verbose $verbose -b 1 > $bdir/std-maxL-"$suffix"-btree-$i
     done
     # Draw the ML tree with bootstapping support
     #Rscript ana/plot-consensus.R $bdir $ofile $dir/results-maxL-tree-sim1-bootstap.pdf
@@ -72,7 +76,7 @@ elif [[ $mode -eq 0 ]]; then
   suffix=sim1-m$model-test-"$prefix"
   mltree=$dir/MaxL-"$suffix".txt
 
-  code/svtreeml -c $input -t $times -s $Ns -p $Npop -g $Ngen -e $Nstop -o $mltree -d $model --cn_max $cn_max --tree_search $tree_search --optim $opt --constrained $cons --fixm $maxj --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose > $dir/std_svtreeml_"$suffix"
+  code/svtreeml -c $input -t $times -s $Ns -p $Npop -g $Ngen -e $Nstop -o $mltree -d $model --cn_max $cn_max --tree_search $tree_search --init_tree $init_tree --dir_itrees $dir_itrees --optim $opt --constrained $cons --fixm $maxj --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose > $dir/std_svtreeml_"$suffix"
   Rscript ana/plot-trees-all.R -d test/ -b 0 -t "all" -l "xlim" -p "sim-data-*-tree.txt"
 
 elif [[ $mode -eq 2 ]]; then
@@ -86,7 +90,7 @@ else
   suffix=m$model-o"$opt"-"$cons""$maxj"-mode"$mode"-"$prefix"-all"$1"
   mltree=$dir/MaxL-"$prefix"-"$suffix".txt
 
-  code/svtreeml -c $input -t $times -s $Ns --tree_file $tree_file -o $mltree -d $model --cn_max $cn_max --tree_search $tree_search --optim $opt --constrained $cons --fixm $maxj --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode > $dir/std_svtreeml_"$suffix"
+  code/svtreeml -c $input -t $times -s $Ns --tree_file $tree_file -o $mltree -d $model --cn_max $cn_max --tree_search $tree_search --init_tree $init_tree --dir_itrees $dir_itrees --optim $opt --constrained $cons --fixm $maxj --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode > $dir/std_svtreeml_"$suffix"
 
   Rscript ana/plot-trees-all.R -f $mltree -b 0 -t "single" -l "xlim"  #>& /dev/null
 fi

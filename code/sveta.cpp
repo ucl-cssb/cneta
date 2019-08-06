@@ -1278,6 +1278,15 @@ int main (int argc, char ** const argv) {
       cout << "#### Nchar: " << Nchar << endl;
       sstm.str("");
 
+        // cout << "Writing allele specific copy number " << endl;
+        sstm << dir << prefix << "-allele-cn.txt.gz";
+        ogzstream out_allele_cn(sstm.str().c_str());
+        for(int j=0; j<test_tree.nleaf; ++j){
+            // cout << "Chr size " << results[j].chrs.size() << endl;
+            results[j].write_allele_cn(out_allele_cn);
+        }
+        out_allele_cn.close();
+
       sstm << dir << prefix << "-info.txt";
       ofstream out_info(sstm.str());
       out_info << "NODE TIMES:";
