@@ -12,8 +12,10 @@ option_list = list(
               help="input copy number file [default=%default]", metavar="character"),
   make_option(c("-d", "--dir_nwk"), type="character", default="",
               help="The directory to store results [default=%default]", metavar="character"),
-  make_option(c("-n", "--num_tree"), type="integer", default=2000,
-              help="The number of trees to generate [default=%default]", metavar="character")
+  make_option(c("-n", "--num_generate"), type="integer", default=2000,
+              help="The number of trees to generate [default=%default]", metavar="number"),
+  make_option(c("-s", "--num_select"), type="integer", default=100,
+              help="The maximum number of trees to select [default=%default]", metavar="number")  
 );
 opt_parser = OptionParser(option_list = option_list);
 opt = parse_args(opt_parser);
@@ -22,7 +24,14 @@ opt = parse_args(opt_parser);
 file_cn=opt$file_cn
 # The directory to store NEWICK trees
 dir_nwk=opt$dir_nwk
-num_tree=opt$num_tree
+num_generate=opt$num_generate
+num_select=opt$num_select
+
+
+# file_cn="D:/Gdrive/git/sveta/example/391forSveta-cn.txt"
+# dir_nwk="D:/Gdrive/git/sveta/example/itrees_391_nwk"
+# num_generate=100
+# num_select=10
 
 dir.create(file.path(dir_nwk), showWarnings = FALSE)
 # Remove old files
@@ -32,6 +41,24 @@ file.remove(file.path(dir_nwk,junk))
 
 data_cn <- read.table(file_cn)
 names(data_cn) = c("sid", "chr", "seg", "cn")
+# data_cn %>% group_by(sid) %>% count()
+# Check if the last sample is nomal
+nid=length(unique(data_cn$sid)) 
+data_cn %>% filter(sid==nid) -> sn
+ncn=unique(sn$cn)
+
+if(length(ncn)==1 && ncn[1]==2){
+  cat("The last sample is normal")
+}else{
+  data_cn %>% filter(sid==1) -> s1
+  s1$cn=2
+  s1$sid=length(unique(data_cn$sid))+1
+  data_cn=rbind(data_cn, s1)
+}
+
+# nid=length(unique(data_cn$sid)) 
+# data_cn %>% filter(sid==nid) -> sn
+# unique(sn$cn)
 
 # Convert data to breakpoints
 data_cn %>% spread(key = sid, value = cn) %>% select(-c(chr, seg))-> cn_tbl
@@ -68,7 +95,7 @@ phydata_cnbp <- as.phyDat(bp_df, type='USER', level=(c(0, 1)))
 
 
 strees = list()
-for(i in seq(1,num_tree))
+for(i in seq(1,num_generate))
 {
   # set.seed(i)
   stree=random.addition(phydata_cnbp, method = "fitch")
@@ -81,11 +108,29 @@ for(i in seq(1,num_tree))
 uniq_strees = unique.multiPhylo(strees, use.edge.length = TRUE)
 # length(uniq_strees)
 
-
+# Sort all trees by score
+scores=c()
 for(i in 1:length(uniq_strees))
 {
-  print(i)
+  # print(i)
   stree = uniq_strees[[i]]
+  score = attributes(stree)$pscore
+  scores = c(scores, score)
+  # print(score)
+  # plot(stree)
+  #write.tree(stree, file=file.path(dir_nwk, paste0("tree_mp_", i, ".nwk")))
+}
+sindex = order(scores)
+
+# Only take top trees
+num = ifelse(length(uniq_strees)>num_select, num_select, length(uniq_strees))
+for(i in 1:num)
+{
+  j = sindex[i]
+  # print(j)
+  stree = uniq_strees[[j]]
+  score = attributes(stree)$pscore
+  # print(score)
   # plot(stree)
   write.tree(stree, file=file.path(dir_nwk, paste0("tree_mp_", i, ".nwk")))
 }

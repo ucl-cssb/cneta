@@ -37,7 +37,7 @@ extern "C" {
 const double LARGE_LNL = -1e9;
 const double SMALL_LNL = -1e20;
 const double ERROR_X = 1.0e-4;
-const double SMALL_VAL = 1.0e-20;
+const double SMALL_VAL = 1.0e-10;
 // The maximum mutation rates allowed
 const double MAX_MRATE = 0.01;
 // The shortest branch length allowed (in year)
@@ -316,6 +316,122 @@ evo_tree generate_coal_tree(const int& nsample){
 }
 
 
+// update edge ending at i when its time is updated
+void update_edge_len(evo_tree& rtree, int i){
+    for(int j = 0; j < rtree.nedge; j++){
+        if (rtree.edges[j].end == i){
+            rtree.edges[j].length = rtree.node_times[i] - rtree.node_times[rtree.edges[j].start];
+        }
+    }
+}
+
+
+// Adjust the time of sample1 so that the difference between it and the other tip is always smaller than maximum value in tobs
+void adjust_sample1(evo_tree& rtree, vector<double>& tobs, int sample1){
+    // double max_tobs = *max_element(tobs.begin(), tobs.end());
+    double max_diff = 0;
+    for(int i = 0; i < tobs.size(); i++){
+        // current differences to first sample
+        double delta = rtree.node_times[i] - rtree.node_times[sample1];
+        if(delta > max_diff){
+            max_diff = delta;
+        }
+    }
+    // cout << "Sample 1 time before " << rtree.node_times[sample1] << endl;
+    if(max_diff > 0){
+        // double increament = max_diff - max_tobs;
+        rtree.node_times[sample1] =  rtree.node_times[sample1] + max_diff;
+        update_edge_len(rtree, sample1);
+    }
+    // cout << "Sample 1 time after " << rtree.node_times[sample1] << endl;
+}
+
+
+void adjust_one_tip(evo_tree& rtree, vector<double>& tobs, int i, int sample1){
+    int debug = 0;
+    double delta = rtree.node_times[i] - rtree.node_times[sample1];
+    if(fabs(delta-tobs[i]) <= SMALL_VAL){
+        return;
+    }
+    double diff = delta - tobs[i];
+    for(int j = 0; j < rtree.nedge; j++){
+        if (rtree.edges[j].end == i){
+            assert (diff <= SMALL_VAL);
+
+            if(debug){
+                cout << "Adjust sample " << i << endl;
+                cout << "Sample time before " << rtree.node_times[i] << endl;
+            }
+            rtree.node_times[i] =  rtree.node_times[sample1] + tobs[i];
+            if(debug) cout << "Sample time after " << rtree.node_times[i] << endl;
+            rtree.edges[j].length = rtree.node_times[i] - rtree.node_times[rtree.edges[j].start];
+
+            break;
+        }
+    }
+}
+
+
+// Adjust all tips so that tree height is smaller than age
+void adjust_all_tips(evo_tree& rtree, vector<double>& tobs, int age){
+    int debug = 0;
+    double ttime = rtree.get_total_time();
+    if(ttime < age) return;
+    if(debug) {
+        cout << "Age of patient " << age << endl;
+        cout << "Time until first sample before " << ttime << endl;
+    }
+
+    double diff = ttime - age + SMALL_BLEN;
+    vector<double> tip_blens;
+    for(int j = 0; j < rtree.nedge; j++){
+        if (rtree.edges[j].end < Ns ){
+            tip_blens.push_back(rtree.edges[j].length);
+        }
+    }
+    double min_tblen = *min_element(tip_blens.begin(), tip_blens.end()) - SMALL_BLEN;
+    double delta = ( 5*diff < min_tblen)? 5*diff: min_tblen;
+    if(debug) cout << "Reducing all tip branches by " << delta << endl;
+
+    for(int i = 0; i < rtree.nedge; i++){
+        int j = rtree.edges[i].end;
+        if (j < Ns){
+            // cout << "Adjusting tip " << j << endl;
+            // cout << "Time before  " << rtree.node_times[j] << endl;
+            rtree.node_times[j] =  rtree.node_times[j] - delta;
+            // cout << "Time after  " << rtree.node_times[j] << endl;
+            rtree.edges[j].length = rtree.node_times[j] - rtree.node_times[rtree.edges[i].start];
+        }
+    }
+
+    if(debug) {
+        // cout << "Age of patient " << age << endl;
+        cout << "Time until first sample after " << rtree.get_total_time() << endl;
+    }
+
+}
+
+
+// Seem not work well
+bool is_tip_valid(evo_tree& rtree, vector<double>& tobs, int sample1){
+    int debug = 0;
+    for(int i = 0; i < tobs.size(); i++){
+        // current differences to first sample
+        double delta = rtree.node_times[i] - rtree.node_times[sample1];
+        if(fabs(delta-tobs[i]) > SMALL_VAL){
+            if(debug){
+                cout << delta << endl;
+                cout << tobs[i] << endl;
+                cout << fabs(delta-tobs[i]) << endl;
+                cout << "tip " << i << " is not valid" << endl;
+                rtree.print();
+            }
+            return false;
+        }
+    }
+    return true;
+}
+
 // Adjust the terminal branch lengths of a tree with fixed topolgy when the constraints are violated
 // The initial or perturbed tree may not have tip nodes in accord with the sampling time informaton
 // New edge length may become negative
@@ -334,33 +450,17 @@ void adjust_tree_tips(evo_tree& rtree){
     if(debug){
         cout << "A first sample is " << sample1 << endl;
     }
-    double ntime_sample1 = rtree.node_times[sample1];
+
     // Check the node times for tip nodes
-    for(int i = 0; i < tobs.size(); i++){
-        // current differences to first sample
-        double delta = rtree.node_times[i] - rtree.node_times[sample1];
-        if(delta != tobs[i]){
-            double ntime = rtree.node_times[sample1] + tobs[i];
-            if(debug){
-                cout << "Inconsistant tip time for node " << i << endl;
-                cout << "Original node time is " << rtree.node_times[i] << endl;
-                cout << "Changing node time to  " << ntime << endl;
-            }
-            rtree.node_times[i] =  rtree.node_times[sample1] + tobs[i];
-            // Changing branch length accordingly
-            for(int j = 0; j < rtree.nedge; j++){
-                if (rtree.edges[j].end == i){
-                    double nlen = rtree.node_times[i] - rtree.node_times[rtree.edges[j].start];
-                    if(debug){
-                        cout << "Previous edge length " << rtree.edges[j].length << endl;
-                        cout << "Current edge length " << nlen << endl;
-                    }
-                    rtree.edges[j].length = nlen;
-                    break;
-                }
-            }
+    adjust_sample1(rtree, tobs, sample1);
+    // while(!is_tip_valid(rtree, tobs, sample1)){
+        for(int i = 0; i < tobs.size(); i++){
+            if(i==sample1) continue;
+            if(debug) cout << "Adjusting tip " << i << endl;
+            adjust_one_tip(rtree, tobs, i, sample1);
         }
-    }
+    // }
+    adjust_all_tips(rtree, tobs, age);
 }
 
 
@@ -817,10 +917,10 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, evo_tree& rtree, 
       }
 
       double chr_normal = 1;
-      if(abs(chr_loss-0) > SMALL_VAL){
+      if(fabs(chr_loss-0) > SMALL_VAL){
          chr_normal -= chr_loss;
       }
-      if(abs(chr_gain-0) > SMALL_VAL){
+      if(fabs(chr_gain-0) > SMALL_VAL){
          chr_normal -= chr_gain;
       }
 
@@ -832,7 +932,7 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, evo_tree& rtree, 
           cout << "Likelihood without chr gain/loss: " << chr_logL_normal << endl;
       }
 
-      if(abs(chr_loss-0) > SMALL_VAL){
+      if(fabs(chr_loss-0) > SMALL_VAL){
           z = -1;
           double site_logL = 0;   // log likelihood for all sites on a chromosme
           // cout << " chromosme number change is " << z << endl;
@@ -885,7 +985,7 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, evo_tree& rtree, 
           }
       } // for all chromosme loss
 
-      if(abs(chr_gain-0) > SMALL_VAL){
+      if(fabs(chr_gain-0) > SMALL_VAL){
           z = 1;
           double site_logL = 0;   // log likelihood for all sites on a chromosme
           // cout << " chromosme number change is " << z << endl;
@@ -1100,7 +1200,7 @@ double get_likelihood_revised(const int& Ns, const int& Nchar, const int& num_in
 
   double wgd = rtree.wgd_rate;
   // cout << "WGD rate is " << wgd << endl;
-  if(abs(wgd-0) > SMALL_VAL){
+  if(fabs(wgd-0) > SMALL_VAL){
        // cout << "Computing the likelihood with consideration of WGD" << endl;
        logL += (1-wgd) * get_likelihood_chr(vobs, rtree, knodes, pmats, 0, model, cn_max);
        logL += wgd * get_likelihood_chr(vobs, rtree, knodes, pmats, 1, model, cn_max);
@@ -1113,7 +1213,7 @@ double get_likelihood_revised(const int& Ns, const int& Nchar, const int& num_in
   if(debug) cout << "Final likelihood before correcting acquisition bias: " << logL << endl;
   if(correct_bias == 1){
       double bias = get_likelihood_bias(vobs, rtree, knodes, pmats, model, cn_max);
-      if(abs(bias-0) > SMALL_VAL)
+      if(fabs(bias-0) > SMALL_VAL)
         logL = logL - Nchar * bias;
   }
 
@@ -1374,7 +1474,7 @@ void get_variables(evo_tree& rtree, int model, int cons, int maxj, double *x){
 // tobs stores sampling time difference relative to the first sample
 int get_first_sample(vector<double> tobs){
     for (int i = 0; i < tobs.size(); i++){
-        if(abs(tobs[i] - 0) < SMALL_VAL){
+        if(fabs(tobs[i] - 0) < SMALL_VAL){
             return i;
         }
     }
@@ -1892,7 +1992,7 @@ evo_tree max_likelihood_BFGS(evo_tree& rtree, int model, double& minL, const dou
             }
             double max_len = *min_element(tips_obs.begin(), tips_obs.end());
             // If max_len is very small, this tree seems not feasible
-            if( abs(max_len -0) < SMALL_VAL){
+            if( fabs(max_len - 0) < SMALL_VAL){
                 cout << "The terminal branch length under " << rtree.top_tnodes[i] + 1 << " in the proposed tree will not be valid! " << endl;
                 // minL = - SMALL_LNL;
                 // return rtree;

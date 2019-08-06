@@ -221,10 +221,16 @@ evo_tree get_local_optimal_tree(evo_tree& tree, int Ngen, int max_perturb, int m
         evo_tree otree;
         double Lf = 0;
         if(optim == 0){
-          otree = max_likelihood(ttree, model, Lf, ssize, tolerance, miter, cons, maxj, cn_max, correct_bias);
+            while(!(Lf>0)){
+                Lf = 0;
+                otree = max_likelihood(ttree, model, Lf, ssize, tolerance, miter, cons, maxj, cn_max, correct_bias);
+            }
         }
         if(optim == 1){
-          otree = max_likelihood_BFGS(ttree, model, Lf, tolerance, miter, cons, maxj, cn_max, correct_bias);
+            while(!(Lf>0)){
+                Lf = 0;
+                otree = max_likelihood_BFGS(ttree, model, Lf, tolerance, miter, cons, maxj, cn_max, correct_bias);
+            }
         }
         otree.score = Lf;
         assert(tree.score > 0);
@@ -256,13 +262,25 @@ evo_tree build_parsimony_tree(int Ns, vector<vector<int>> data){
 
 
 // Read parsimony trees built by other tools
-evo_tree read_parsimony_tree(const string& tree_file, int Ns, const vector<double>& rates){
+evo_tree read_parsimony_tree(const string& tree_file, int Ns, const vector<double>& rates, vector<double>& tobs){
+    int debug = 0;
+    if(debug)   cout << tree_file << endl;
     evo_tree rtree = read_tree_info(tree_file, Ns);
+    // for(int i=0; i<tobs.size();i++){
+    //     cout << tobs[i] << endl;
+    // }
     rtree.tobs = tobs;
+
     // The branch lengths in parsimony tree may be very large
-    adjust_tree_height(rtree, 10);
+    if(debug)   cout << "Adjusting tree height" << endl;
+    adjust_tree_height(rtree);
+
+    if(debug)   cout << "Adjusting tree tips" << endl;
     adjust_tree_tips(rtree);
+
+    if(debug)   cout << "Adjusting branch lengths" << endl;
     adjust_tree_blens(rtree);
+
     if(rates.size()>1){
       rtree.dup_rate = rates[0];
       rtree.del_rate = rates[1];
@@ -282,8 +300,7 @@ evo_tree read_parsimony_tree(const string& tree_file, int Ns, const vector<doubl
 // Generate initial set of trees
 vector<evo_tree> get_initial_trees(int init_tree, string dir_itrees, int Npop, const vector<double>& rates, int max_tree_num){
     vector<evo_tree> trees;
-    int num_tree = 0;
-    int n =  (max_tree_num < Npop) ? max_tree_num: Npop;
+
     if(dir_itrees != ""){
         string fname;
         boost::filesystem::path p(dir_itrees);
@@ -291,7 +308,7 @@ vector<evo_tree> get_initial_trees(int init_tree, string dir_itrees, int Npop, c
             // cout << "    " << x.path() << '\n';
             fname = x.path().string();
             // cout << "    " << fname << '\n';
-            evo_tree rtree = read_parsimony_tree(fname, Ns, rates);
+            evo_tree rtree = read_parsimony_tree(fname, Ns, rates, tobs);
             string tstring = order_tree_string(create_tree_string(rtree));
             // if ( searched_shapes.find(tstring) == searched_shapes.end() ) {
             if ( searched_trees.find(tstring) == searched_trees.end() ) {
@@ -302,6 +319,8 @@ vector<evo_tree> get_initial_trees(int init_tree, string dir_itrees, int Npop, c
         }
     }
     else{
+        int num_tree = 0;
+        int n =  (max_tree_num < Npop) ? max_tree_num: Npop;
         while(num_tree < n){
             evo_tree rtree;
             if(init_tree == 0){
@@ -375,10 +394,16 @@ evo_tree do_hill_climbing(const int Npop, const int Ngen, const int init_tree, c
         evo_tree rtree;
         double Lf = 0;
         if(optim == 0){
-            rtree = max_likelihood(trees[i], model, Lf, ssize, tolerance, miter, cons, maxj, cn_max, correct_bias);
+            while(!(Lf>0)){
+                Lf = 0;
+                rtree = max_likelihood(trees[i], model, Lf, ssize, tolerance, miter, cons, maxj, cn_max, correct_bias);
+            }
         }
         if(optim == 1){
-            rtree = max_likelihood_BFGS(trees[i], model, Lf, tolerance, miter, cons, maxj, cn_max, correct_bias);
+            while(!(Lf>0)){
+                Lf = 0;
+                rtree = max_likelihood_BFGS(trees[i], model, Lf, tolerance, miter, cons, maxj, cn_max, correct_bias);
+            }
         }
         // Lf = - get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, cn_max, correct_bias);
 

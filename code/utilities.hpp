@@ -64,7 +64,9 @@ evo_tree read_tree_info(const string& filename, const int& Ns){
     	int start = atoi(split[0].c_str());
     	int end   = atoi(split[1].c_str());
     	double length = atof(split[2].c_str());
-    	//cout << "t: " << id << "\t" << start << "\t" << end << "\t" << length << endl;
+        if(end == Ns+1) length = 0;
+        if( !(length>0) && end != Ns+1 ) length = 1;
+    	// cout << "t: " << id << "\t" << start << "\t" << end << "\t" << length << endl;
     	edges.push_back( edge( id-1, start-1, end-1, length) );
       }
       id++;
