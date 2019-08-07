@@ -1127,7 +1127,9 @@ int main (int argc, char ** const argv) {
   // }
   // cout << "The number of sites used: " << data0.size() << endl;
   // Construct the CN matrix by chromosome
-  int total_chr = data.size();
+
+  int total_chr = data.rbegin()->first;
+  // int total_chr = data.size();   // Some chromosmes got lost in the segment merging
   for(int nchr=1; nchr <= total_chr; nchr++){
     vector<vector<int>> obs_chr;
     Nchar += data[nchr].size();
@@ -1165,20 +1167,30 @@ int main (int argc, char ** const argv) {
       // }
       cout << "Building maximum likelihood tree from copy number profile " << endl;
       if(bootstrap){
+          cout << "Doing bootstapping " << endl;
           // create a copy of vobs to resample
           map<int, vector<vector<int>>> vobs_copy = vobs;
           vobs.clear();
-          for(int nchr=1; nchr<=data.size(); nchr++){
+          // cout << "Total number of chromosmes " << total_chr << endl;
+          for(int nchr=1; nchr<=total_chr; nchr++){
+            // cout << "Chr " << nchr << "\t";
             vector<vector<int>> obs_chr;
             for(int nc=0; nc<data[nchr].size(); ++nc){
                   // randomly select a site
                  int i = gsl_rng_uniform_int(r, data[nchr].size());
-                 // cout << i << "\t";
+                 // cout << i << ":" << vobs_copy[nchr][i].size() << "\t" ;
                  obs_chr.push_back(vobs_copy[nchr][i]);
             }
+            // cout << obs_chr.size() << endl;
             vobs[nchr] = obs_chr;
          }
           // cout << endl;
+          if(debug){
+              cout << "Copy number matrix after bootstapping" << endl;
+              for(auto it : vobs){
+                  cout << it.first << "\t" << it.second.size() << endl;
+              }
+          }
       }
 
       evo_tree min_lnL_tree;
