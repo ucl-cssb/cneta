@@ -22,6 +22,7 @@ extern "C" {
   vector<double> tobs;
   // boost::numeric::ublas::matrix<double> qmat;
   int cn_max;
+  int only_seg;
   // double qmat;
   int Ns;
   int Nchar;
@@ -29,9 +30,6 @@ extern "C" {
   int model;
   int correct_bias;
   int age;
-  int has_wgd;
-  int has_chr_gain;
-  int has_chr_loss;
 }
 
 const double LARGE_LNL = -1e9;
@@ -121,20 +119,6 @@ int rchoose(gsl_rng* r, const vector<double>& rates){
   return ret;
 }
 
-
-int get_num_params(){
-    int num = 2;
-    if (has_wgd == 0){
-        num +=1;
-    }
-    if (has_chr_gain == 0){
-        num +=1;
-    }
-    if (has_chr_loss == 0){
-        num +=1;
-    }
-    return num;
-}
 
 // generate neutral coalescent trees
 // here nsample is the number of cancer samples (not including germline node)
@@ -316,23 +300,36 @@ evo_tree generate_coal_tree(const int& nsample){
 }
 
 
+// Check if there is negative branch length
+bool is_blen_valid(evo_tree& rtree){
+    for(int i=0; i<rtree.nedge; ++i){
+        if(rtree.edges[i].length < 0){
+            return false;
+        }
+    }
+    return true;
+}
+
+
 // update edge ending at i when its time is updated
 void update_edge_len(evo_tree& rtree, int i){
     for(int j = 0; j < rtree.nedge; j++){
         if (rtree.edges[j].end == i){
             rtree.edges[j].length = rtree.node_times[i] - rtree.node_times[rtree.edges[j].start];
         }
+        // assert(rtree.edges[j].length > 0);
     }
 }
 
 
-// Adjust the time of sample1 so that the difference between it and the other tip is always smaller than maximum value in tobs
+// Adjust the time of sample1 so that it is not after all other tips. Then the subsequent adjustment will be addition, not introducing negative values
 void adjust_sample1(evo_tree& rtree, vector<double>& tobs, int sample1){
-    // double max_tobs = *max_element(tobs.begin(), tobs.end());
+    // Find the maximum time differences to the first sample
     double max_diff = 0;
     for(int i = 0; i < tobs.size(); i++){
         // current differences to first sample
         double delta = rtree.node_times[i] - rtree.node_times[sample1];
+        // If delta is negative, there is no need to adjust node time of first sample
         if(delta > max_diff){
             max_diff = delta;
         }
@@ -347,17 +344,11 @@ void adjust_sample1(evo_tree& rtree, vector<double>& tobs, int sample1){
 }
 
 
+// Change the time and branch length for one tip
 void adjust_one_tip(evo_tree& rtree, vector<double>& tobs, int i, int sample1){
     int debug = 0;
-    double delta = rtree.node_times[i] - rtree.node_times[sample1];
-    if(fabs(delta-tobs[i]) <= SMALL_VAL){
-        return;
-    }
-    double diff = delta - tobs[i];
     for(int j = 0; j < rtree.nedge; j++){
         if (rtree.edges[j].end == i){
-            assert (diff <= SMALL_VAL);
-
             if(debug){
                 cout << "Adjust sample " << i << endl;
                 cout << "Sample time before " << rtree.node_times[i] << endl;
@@ -372,43 +363,84 @@ void adjust_one_tip(evo_tree& rtree, vector<double>& tobs, int i, int sample1){
 }
 
 
-// Adjust all tips so that tree height is smaller than age
+// Adjust all tips recursively so that tree height is smaller than age
 void adjust_all_tips(evo_tree& rtree, vector<double>& tobs, int age){
+    assert(is_blen_valid(rtree));
     int debug = 0;
     double ttime = rtree.get_total_time();
     if(ttime < age) return;
     if(debug) {
-        cout << "Age of patient " << age << endl;
+        // cout << "Age of patient " << age << endl;
         cout << "Time until first sample before " << ttime << endl;
     }
 
+    // Reduce diff from all tips
+    // Add SMALL_BLEN keep some distance from age
     double diff = ttime - age + SMALL_BLEN;
+
+    // Reduce some amount from terminal branches to keep all of them still positive
     vector<double> tip_blens;
     for(int j = 0; j < rtree.nedge; j++){
-        if (rtree.edges[j].end < Ns ){
-            tip_blens.push_back(rtree.edges[j].length);
+       if (rtree.edges[j].end < Ns ){
+           tip_blens.push_back(rtree.edges[j].length);
+       }
+    }
+    double min_tblen = *min_element(tip_blens.begin(), tip_blens.end());
+    if(min_tblen > diff + SMALL_BLEN){
+        if(debug) cout << "Only need to adjust tips " << endl;
+        for(int j = 0; j < rtree.nedge; j++){
+           if (rtree.edges[j].end < Ns ){
+               // Only need to update the time of tips
+               rtree.node_times[rtree.edges[j].end] =  rtree.node_times[rtree.edges[j].end] - diff;
+               rtree.edges[j].length = rtree.node_times[rtree.edges[j].end] - rtree.node_times[rtree.edges[j].start];
+           }
         }
     }
-    double min_tblen = *min_element(tip_blens.begin(), tip_blens.end()) - SMALL_BLEN;
-    double delta = ( 5*diff < min_tblen)? 5*diff: min_tblen;
-    if(debug) cout << "Reducing all tip branches by " << delta << endl;
+    // If there are still residuals, find some internal edge with larger length and reduce it
+    else{
+        double delta = diff - min_tblen;
+        vector<double> internal_blens;
+        for(int j = 0; j < rtree.nedge; j++){
+           if (rtree.edges[j].end > Ns){
+               internal_blens.push_back(rtree.edges[j].length);
+           }
+        }
+        double max_iblen = *max_element(internal_blens.begin(), internal_blens.end());
+        if(max_iblen > delta + SMALL_BLEN){
+            if(debug) cout << "Adjust one internal branch length " << endl;
+            for(int j = 0; j < rtree.nedge; j++){
+                if (rtree.edges[j].end > Ns && rtree.edges[j].length > delta + SMALL_BLEN ){
+                    rtree.edges[j].length = rtree.edges[j].length - delta;
+                    break;
+                }
+            }
+        }else{
+            if(debug) cout << "Adjust several internal branch lengths " << endl;
+            // All internal branch lengths are smaller than delta, so reduction has to be done multiple times
+            for(int j = 0; j < rtree.nedge; j++){
+                if (rtree.edges[j].end > Ns && rtree.edges[j].length > SMALL_BLEN){
+                    double diff = delta - (rtree.edges[j].length - SMALL_BLEN);
+                    if(diff > 0){   // need another reduction
+                        rtree.edges[j].length = SMALL_BLEN;
+                        delta = diff;
+                    }
+                    else{
+                        rtree.edges[j].length = rtree.edges[j].length - delta;
+                        delta = -1;
+                    }
+                    if(delta < 0) break;
+                }
+            }
+        }
 
-    for(int i = 0; i < rtree.nedge; i++){
-        int j = rtree.edges[i].end;
-        if (j < Ns){
-            // cout << "Adjusting tip " << j << endl;
-            // cout << "Time before  " << rtree.node_times[j] << endl;
-            rtree.node_times[j] =  rtree.node_times[j] - delta;
-            // cout << "Time after  " << rtree.node_times[j] << endl;
-            rtree.edges[j].length = rtree.node_times[j] - rtree.node_times[rtree.edges[i].start];
-        }
+        rtree.calculate_node_times();
     }
+    assert(is_blen_valid(rtree));
 
     if(debug) {
         // cout << "Age of patient " << age << endl;
         cout << "Time until first sample after " << rtree.get_total_time() << endl;
     }
-
 }
 
 
@@ -434,10 +466,11 @@ bool is_tip_valid(evo_tree& rtree, vector<double>& tobs, int sample1){
 
 // Adjust the terminal branch lengths of a tree with fixed topolgy when the constraints are violated
 // The initial or perturbed tree may not have tip nodes in accord with the sampling time informaton
-// New edge length may become negative
+// Ensure edge length keep positive
 void adjust_tree_tips(evo_tree& rtree){
+    assert(is_blen_valid(rtree));
     int debug = 0;
-    // find the minimal branch length
+    // find the first sample
     vector<double> tobs = rtree.tobs;
     int sample1 = 0;
     for(int i = 0; i < tobs.size(); i++){
@@ -453,13 +486,11 @@ void adjust_tree_tips(evo_tree& rtree){
 
     // Check the node times for tip nodes
     adjust_sample1(rtree, tobs, sample1);
-    // while(!is_tip_valid(rtree, tobs, sample1)){
-        for(int i = 0; i < tobs.size(); i++){
-            if(i==sample1) continue;
-            if(debug) cout << "Adjusting tip " << i << endl;
-            adjust_one_tip(rtree, tobs, i, sample1);
-        }
-    // }
+    for(int i = 0; i < tobs.size(); i++){
+        if(i==sample1) continue;
+        if(debug) cout << "Adjusting tip " << i << endl;
+        adjust_one_tip(rtree, tobs, i, sample1);
+    }
     adjust_all_tips(rtree, tobs, age);
 }
 
@@ -468,7 +499,7 @@ void adjust_tree_tips(evo_tree& rtree){
 // But after optimization, some branch lengths may become negative.
 // Increase all branch lengths with the same value to keep tip timing difference
 // The result tree may break the height constraint
-void adjust_tree_blens(evo_tree& rtree){
+void adjust_tree_blens_all(evo_tree& rtree){
     int debug = 0;
     vector<double> blens;
     for(int i=0; i<rtree.nedge; ++i){
@@ -485,11 +516,26 @@ void adjust_tree_blens(evo_tree& rtree){
         for(int i = 0; i<blens.size(); i++){
             if(rtree.edges[i].start == rtree.nleaf && rtree.edges[i].end == rtree.nleaf - 1) continue;
             blens[i] = blens[i] - delta;
+            rtree.node_times[rtree.edges[i].end] = rtree.node_times[rtree.edges[i].end] - delta;
         }
     }
     assert(blens.size() == rtree.nedge);
     for(int i=0; i<rtree.nedge; ++i){
         rtree.edges[i].length = blens[i];
+    }
+}
+
+
+
+// Only change negative branches. The tip differences will be adjusted later
+void adjust_tree_blens(evo_tree& rtree){
+    int debug = 1;
+    for(int i=0; i<rtree.nedge; ++i){
+        if(rtree.edges[i].length < 0){
+            if(debug) cout << "Negative length for edge " << i << endl;
+            rtree.edges[i].length = SMALL_BLEN;
+            rtree.node_times[rtree.edges[i].end] = rtree.node_times[rtree.edges[i].start] + SMALL_BLEN;
+        }
     }
 }
 
@@ -518,6 +564,7 @@ void adjust_tree_height(evo_tree& rtree, int scale = HEIGHT_SCALE){
             rtree.print();
         }
     }
+    assert(is_blen_valid(rtree));
 }
 
 //
@@ -855,7 +902,7 @@ double get_likelihood_site(vector<vector<double>>& L_sk_k, evo_tree& rtree, cons
 
 
 // Get the likelihood on a set of chromosmes
-double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, evo_tree& rtree, const vector<int>& knodes, map<double, double*>& pmats, const int has_wgd, const int model, const int cn_max){
+double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, evo_tree& rtree, const vector<int>& knodes, map<double, double*>& pmats, const int has_wgd, const int model, const int cn_max, int only_seg){
     int debug = 0;
     int nstate = cn_max + 1;
 
@@ -917,11 +964,13 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, evo_tree& rtree, 
       }
 
       double chr_normal = 1;
-      if(fabs(chr_loss-0) > SMALL_VAL){
-         chr_normal -= chr_loss;
-      }
-      if(fabs(chr_gain-0) > SMALL_VAL){
-         chr_normal -= chr_gain;
+      if(!only_seg){
+          if(fabs(chr_loss-0) > SMALL_VAL){
+             chr_normal -= chr_loss;
+          }
+          if(fabs(chr_gain-0) > SMALL_VAL){
+             chr_normal -= chr_gain;
+          }
       }
 
       chr_logL_normal = log(chr_normal) + site_logL;
@@ -932,118 +981,120 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, evo_tree& rtree, 
           cout << "Likelihood without chr gain/loss: " << chr_logL_normal << endl;
       }
 
-      if(fabs(chr_loss-0) > SMALL_VAL){
-          z = -1;
-          double site_logL = 0;   // log likelihood for all sites on a chromosme
-          // cout << " chromosme number change is " << z << endl;
-          for(int nc=0; nc<vobs[nchr].size(); nc++){
-              // cout << "Number of sites for this chr " << vobs[nchr].size() << endl;
-              // for each site of the chromosme
-              vector<int> obs = vobs[nchr][nc];
-              // construct a table for each state of each node
-              vector<vector<double>> L_sk_k( rtree.ntotn, vector<double>(nstate,0) );
-              for(int i=0; i<Ns; ++i){
-                  for(int j=0; j<nstate; ++j){
-                         if(j == obs[i])  L_sk_k[i][j] = 1.0;
+      if(!only_seg){
+          if(fabs(chr_loss-0) > SMALL_VAL){
+              z = -1;
+              double site_logL = 0;   // log likelihood for all sites on a chromosme
+              // cout << " chromosme number change is " << z << endl;
+              for(int nc=0; nc<vobs[nchr].size(); nc++){
+                  // cout << "Number of sites for this chr " << vobs[nchr].size() << endl;
+                  // for each site of the chromosme
+                  vector<int> obs = vobs[nchr][nc];
+                  // construct a table for each state of each node
+                  vector<vector<double>> L_sk_k( rtree.ntotn, vector<double>(nstate,0) );
+                  for(int i=0; i<Ns; ++i){
+                      for(int j=0; j<nstate; ++j){
+                             if(j == obs[i])  L_sk_k[i][j] = 1.0;
+                      }
                   }
-              }
-              // set unaltered
-              L_sk_k[Ns][2] = 1.0;
+                  // set unaltered
+                  L_sk_k[Ns][2] = 1.0;
 
-              if(debug){
-                cout << "\nLikelihood for tips:\n";
-                for(int i=0; i<rtree.ntotn; ++i){
-                for(int j=0; j<nstate; ++j){
-                  cout << "\t" << L_sk_k[i][j];
-                }
-                cout << endl;
-                }
-              }
-
-              get_likelihood_site(L_sk_k, rtree, knodes, pmats, has_wgd, z, model, cn_max);
-
-              if(debug) cout << "Likelihood char : " << nc << "\t" << L_sk_k[Ns+1][2] << endl;
-              if(L_sk_k[Ns+1][2] > 0) site_logL += log(L_sk_k[Ns+1][2]);
-              else site_logL += LARGE_LNL;
-
-              if(debug){
-                cout << "\nLikelihood so far:\n";
-                for(int i=0; i<rtree.ntotn; ++i){
+                  if(debug){
+                    cout << "\nLikelihood for tips:\n";
+                    for(int i=0; i<rtree.ntotn; ++i){
                     for(int j=0; j<nstate; ++j){
                       cout << "\t" << L_sk_k[i][j];
                     }
                     cout << endl;
-                }
-              }
-          } // for all sites on a chromosme
-
-          chr_logL_loss = log(chr_loss) + site_logL;
-          chr_logL +=  log(1 + exp(chr_logL_loss-chr_logL_normal));
-          if(debug){
-              cout << "\nLikelihood before chr loss for " << nchr << " is " << site_logL << endl;
-              cout << "\nLikelihood after chr loss: " << chr_logL_loss << endl;
-          }
-      } // for all chromosme loss
-
-      if(fabs(chr_gain-0) > SMALL_VAL){
-          z = 1;
-          double site_logL = 0;   // log likelihood for all sites on a chromosme
-          // cout << " chromosme number change is " << z << endl;
-          for(int nc=0; nc<vobs[nchr].size(); nc++){
-              // cout << "Number of sites for this chr " << vobs[nchr].size() << endl;
-              // for each site of the chromosme
-              vector<int> obs = vobs[nchr][nc];
-              // construct a table for each state of each node
-              vector<vector<double>> L_sk_k( rtree.ntotn, vector<double>(nstate,0) );
-              for(int i=0; i<Ns; ++i){
-                  for(int j=0; j<nstate; ++j){
-                         if(j == obs[i])  L_sk_k[i][j] = 1.0;
+                    }
                   }
+
+                  get_likelihood_site(L_sk_k, rtree, knodes, pmats, has_wgd, z, model, cn_max);
+
+                  if(debug) cout << "Likelihood char : " << nc << "\t" << L_sk_k[Ns+1][2] << endl;
+                  if(L_sk_k[Ns+1][2] > 0) site_logL += log(L_sk_k[Ns+1][2]);
+                  else site_logL += LARGE_LNL;
+
+                  if(debug){
+                    cout << "\nLikelihood so far:\n";
+                    for(int i=0; i<rtree.ntotn; ++i){
+                        for(int j=0; j<nstate; ++j){
+                          cout << "\t" << L_sk_k[i][j];
+                        }
+                        cout << endl;
+                    }
+                  }
+              } // for all sites on a chromosme
+
+              chr_logL_loss = log(chr_loss) + site_logL;
+              chr_logL +=  log(1 + exp(chr_logL_loss-chr_logL_normal));
+              if(debug){
+                  cout << "\nLikelihood before chr loss for " << nchr << " is " << site_logL << endl;
+                  cout << "\nLikelihood after chr loss: " << chr_logL_loss << endl;
               }
-              // set unaltered
-              L_sk_k[Ns][2] = 1.0;
+          } // for all chromosme loss
+
+          if(fabs(chr_gain-0) > SMALL_VAL){
+              z = 1;
+              double site_logL = 0;   // log likelihood for all sites on a chromosme
+              // cout << " chromosme number change is " << z << endl;
+              for(int nc=0; nc<vobs[nchr].size(); nc++){
+                  // cout << "Number of sites for this chr " << vobs[nchr].size() << endl;
+                  // for each site of the chromosme
+                  vector<int> obs = vobs[nchr][nc];
+                  // construct a table for each state of each node
+                  vector<vector<double>> L_sk_k( rtree.ntotn, vector<double>(nstate,0) );
+                  for(int i=0; i<Ns; ++i){
+                      for(int j=0; j<nstate; ++j){
+                             if(j == obs[i])  L_sk_k[i][j] = 1.0;
+                      }
+                  }
+                  // set unaltered
+                  L_sk_k[Ns][2] = 1.0;
+
+                  if(debug){
+                    cout << "\nLikelihood for tips:\n";
+                    for(int i=0; i<rtree.ntotn; ++i){
+                    for(int j=0; j<nstate; ++j){
+                      cout << "\t" << L_sk_k[i][j];
+                    }
+                    cout << endl;
+                    }
+                  }
+
+                  get_likelihood_site(L_sk_k, rtree, knodes, pmats, has_wgd, z, model, cn_max);
+
+                  if(debug) cout << "Likelihood char : " << nc << "\t" << L_sk_k[Ns+1][2] << endl;
+                  if(L_sk_k[Ns+1][2] > 0) site_logL += log(L_sk_k[Ns+1][2]);
+                  else site_logL += LARGE_LNL;
+
+                  if(debug){
+                    cout << "\nLikelihood so far:\n";
+                    for(int i=0; i<rtree.ntotn; ++i){
+                    for(int j=0; j<nstate; ++j){
+                      cout << "\t" << L_sk_k[i][j];
+                    }
+                    cout << endl;
+                    }
+                  }
+              } // for all sites on a chromosme
+
+              chr_logL_gain = log(chr_gain) + site_logL;
+              if(chr_logL_loss > 0){
+                  chr_logL += log(1 + 1 / (exp(chr_logL_normal-chr_logL_gain) + exp(chr_logL_loss-chr_logL_gain)));
+              }
+              else{
+                  chr_logL += log(1 + exp(chr_logL_gain-chr_logL_normal));
+              }
 
               if(debug){
-                cout << "\nLikelihood for tips:\n";
-                for(int i=0; i<rtree.ntotn; ++i){
-                for(int j=0; j<nstate; ++j){
-                  cout << "\t" << L_sk_k[i][j];
-                }
-                cout << endl;
-                }
+                  cout << "\nLikelihood before chr gain for " << nchr << " is " << site_logL << endl;
+                  cout << "\nLikelihood after chr gain: " << chr_logL_gain << endl;
               }
-
-              get_likelihood_site(L_sk_k, rtree, knodes, pmats, has_wgd, z, model, cn_max);
-
-              if(debug) cout << "Likelihood char : " << nc << "\t" << L_sk_k[Ns+1][2] << endl;
-              if(L_sk_k[Ns+1][2] > 0) site_logL += log(L_sk_k[Ns+1][2]);
-              else site_logL += LARGE_LNL;
-
-              if(debug){
-                cout << "\nLikelihood so far:\n";
-                for(int i=0; i<rtree.ntotn; ++i){
-                for(int j=0; j<nstate; ++j){
-                  cout << "\t" << L_sk_k[i][j];
-                }
-                cout << endl;
-                }
-              }
-          } // for all sites on a chromosme
-
-          chr_logL_gain = log(chr_gain) + site_logL;
-          if(chr_logL_loss > 0){
-              chr_logL += log(1 + 1 / (exp(chr_logL_normal-chr_logL_gain) + exp(chr_logL_loss-chr_logL_gain)));
-          }
-          else{
-              chr_logL += log(1 + exp(chr_logL_gain-chr_logL_normal));
-          }
-
-          if(debug){
-              cout << "\nLikelihood before chr gain for " << nchr << " is " << site_logL << endl;
-              cout << "\nLikelihood after chr gain: " << chr_logL_gain << endl;
-          }
-      } // for all chromosme loss
-      // chr_logL = chr_logL_normal + log(1 + exp(chr_logL_loss-chr_logL_normal)) + log(1 + 1 / (exp(chr_logL_normal-chr_logL_gain) + exp(chr_logL_loss-chr_logL_gain)));
+          } // for all chromosme loss
+          // chr_logL = chr_logL_normal + log(1 + exp(chr_logL_loss-chr_logL_normal)) + log(1 + 1 / (exp(chr_logL_normal-chr_logL_gain) + exp(chr_logL_loss-chr_logL_gain)));
+      }
       logL += chr_logL;
       if(debug){
           cout << "\nLikelihood with considering chr gain/loss for for " << nchr << " is " << logL << endl;
@@ -1128,7 +1179,7 @@ double get_likelihood_bias(map<int, vector<vector<int>>>& vobs, evo_tree& rtree,
 
 
 // Incorporate chromosme gain/loss and WGD
-double get_likelihood_revised(const int& Ns, const int& Nchar, const int& num_invar_bins, map<int, vector<vector<int>>>& vobs, evo_tree& rtree, int model, int cons, const int cn_max, int correct_bias = 0){
+double get_likelihood_revised(const int& Ns, const int& Nchar, const int& num_invar_bins, map<int, vector<vector<int>>>& vobs, evo_tree& rtree, const int model, const int cons, const int cn_max, const int only_seg, int correct_bias = 0){
   int debug = 0;
   if(debug) cout << "\tget_likelihood" << endl;
 
@@ -1198,23 +1249,24 @@ double get_likelihood_revised(const int& Ns, const int& Nchar, const int& num_in
 
   double logL = 0;
 
-  double wgd = rtree.wgd_rate;
   // cout << "WGD rate is " << wgd << endl;
-  if(fabs(wgd-0) > SMALL_VAL){
-       // cout << "Computing the likelihood with consideration of WGD" << endl;
-       logL += (1-wgd) * get_likelihood_chr(vobs, rtree, knodes, pmats, 0, model, cn_max);
-       logL += wgd * get_likelihood_chr(vobs, rtree, knodes, pmats, 1, model, cn_max);
+  if(only_seg){
+      if(debug) cout << "Computing the likelihood without consideration of WGD" << endl;
+      logL += get_likelihood_chr(vobs, rtree, knodes, pmats, 0, model, cn_max, only_seg);
   }
   else{
-      logL += get_likelihood_chr(vobs, rtree, knodes, pmats, 0, model, cn_max);
+      if(debug) cout << "Computing the likelihood with consideration of WGD" << endl;
+      logL += (1-rtree.wgd_rate) * get_likelihood_chr(vobs, rtree, knodes, pmats, 0, model, cn_max, only_seg);
+      logL += rtree.wgd_rate * get_likelihood_chr(vobs, rtree, knodes, pmats, 1, model, cn_max, only_seg);
   }
 
 
   if(debug) cout << "Final likelihood before correcting acquisition bias: " << logL << endl;
   if(correct_bias == 1){
       double bias = get_likelihood_bias(vobs, rtree, knodes, pmats, model, cn_max);
-      if(fabs(bias-0) > SMALL_VAL)
+      if(bias > 0)
         logL = logL - Nchar * bias;
+      if(debug) cout << "Final likelihood after correcting acquisition bias: " << logL << endl;
   }
 
   if(std::isnan(logL) || logL < SMALL_LNL) logL = SMALL_LNL;
@@ -1252,7 +1304,7 @@ double my_f (const gsl_vector *v, void *params){
   }
 
   // return -1.0*get_likelihood(Ns, Nchar, vobs, new_tree, model, 0, cn_max);
-  return -1.0*get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, new_tree, model, 0, cn_max, correct_bias);
+  return -1.0*get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, new_tree, model, 0, cn_max, only_seg, correct_bias);
 }
 
 double my_f_mu (const gsl_vector *v, void *params){
@@ -1280,7 +1332,7 @@ double my_f_mu (const gsl_vector *v, void *params){
   }
 
   // return -1.0*get_likelihood(Ns, Nchar, vobs, new_tree, model, 0, cn_max);
-  return -1.0*get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, new_tree, model, 0, cn_max, correct_bias);
+  return -1.0*get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, new_tree, model, 0, cn_max, only_seg, correct_bias);
 }
 
 double my_f_cons (const gsl_vector *v, void *params){
@@ -1316,7 +1368,7 @@ double my_f_cons (const gsl_vector *v, void *params){
   }
 
   // return -1.0*get_likelihood(Ns, Nchar, vobs, new_tree, model, 1, cn_max);
-  return -1.0*get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, new_tree, model, 1, cn_max, correct_bias);
+  return -1.0*get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, new_tree, model, 1, cn_max, only_seg, correct_bias);
 }
 
 double my_f_cons_mu (const gsl_vector *v, void *params){
@@ -1352,7 +1404,7 @@ double my_f_cons_mu (const gsl_vector *v, void *params){
   }
 
   // return -1.0*get_likelihood(Ns, Nchar, vobs, new_tree, model, 1, cn_max);
-  return -1.0*get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, new_tree, model, 1, cn_max, correct_bias);
+  return -1.0*get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, new_tree, model, 1, cn_max, only_seg, correct_bias);
 }
 
 // Output error informaton without aborting
@@ -1386,7 +1438,7 @@ void get_variables(evo_tree& rtree, int model, int cons, int maxj, double *x){
               new_tree.chr_gain_rate = rtree.chr_gain_rate;
               new_tree.chr_loss_rate = rtree.chr_loss_rate;
               new_tree.wgd_rate = rtree.wgd_rate;
-              new_tree.mu = new_tree.dup_rate + new_tree.del_rate + new_tree.chr_gain_rate + new_tree.chr_loss_rate + new_tree.wgd_rate;
+              new_tree.mu = 0;
           }
       }else{
           if(model == 0){
@@ -1402,7 +1454,7 @@ void get_variables(evo_tree& rtree, int model, int cons, int maxj, double *x){
               new_tree.chr_gain_rate = x[rtree.nedge+2];
               new_tree.chr_loss_rate = x[rtree.nedge+3];
               new_tree.wgd_rate = x[rtree.nedge+4];
-              new_tree.mu = new_tree.dup_rate + new_tree.del_rate + new_tree.chr_gain_rate + new_tree.chr_loss_rate + new_tree.wgd_rate;
+              new_tree.mu = 0;
               if(debug){
                   for(int i=0; i<rtree.nedge+2; i++){ cout << x[i] << '\n';}
                   cout << "dup_rate value so far: " << new_tree.dup_rate << endl;
@@ -1438,7 +1490,7 @@ void get_variables(evo_tree& rtree, int model, int cons, int maxj, double *x){
             new_tree.chr_gain_rate = rtree.chr_gain_rate;
             new_tree.chr_loss_rate = rtree.chr_loss_rate;
             new_tree.wgd_rate = rtree.wgd_rate;
-            new_tree.mu = new_tree.dup_rate + new_tree.del_rate + new_tree.chr_gain_rate + new_tree.chr_loss_rate + new_tree.wgd_rate;
+            new_tree.mu = 0;
         }
       }else{
         if(model == 0){
@@ -1454,7 +1506,7 @@ void get_variables(evo_tree& rtree, int model, int cons, int maxj, double *x){
             new_tree.chr_gain_rate = x[rtree.nintedge+4];
             new_tree.chr_loss_rate = x[rtree.nintedge+5];
             new_tree.wgd_rate = x[rtree.nintedge+6];
-            new_tree.mu = new_tree.dup_rate + new_tree.del_rate + new_tree.chr_gain_rate + new_tree.chr_loss_rate + new_tree.wgd_rate;
+            new_tree.mu = 0;
             if(debug){
                 for(int i=0; i<=rtree.nintedge+6; i++){ cout << x[i] << '\n';}
                 cout << "dup_rate value so far: " << new_tree.dup_rate << endl;
@@ -1510,7 +1562,7 @@ void get_variables_ntime(evo_tree& rtree, int model, int cons, int maxj, double 
               new_tree.chr_gain_rate = rtree.chr_gain_rate;
               new_tree.chr_loss_rate = rtree.chr_loss_rate;
               new_tree.wgd_rate = rtree.wgd_rate;
-              new_tree.mu = new_tree.dup_rate + new_tree.del_rate + new_tree.chr_gain_rate + new_tree.chr_loss_rate + new_tree.wgd_rate;
+              new_tree.mu = 0;
           }
       }else{
           if(model == 0){
@@ -1526,7 +1578,7 @@ void get_variables_ntime(evo_tree& rtree, int model, int cons, int maxj, double 
               new_tree.chr_gain_rate = x[rtree.nedge+2];
               new_tree.chr_loss_rate = x[rtree.nedge+3];
               new_tree.wgd_rate = x[rtree.nedge+4];
-              new_tree.mu = new_tree.dup_rate + new_tree.del_rate + new_tree.chr_gain_rate + new_tree.chr_loss_rate + new_tree.wgd_rate;
+              new_tree.mu = 0;
               if(debug){
                   for(int i=0; i<rtree.nedge+2; i++){ cout << x[i] << '\n';}
                   cout << "dup_rate value so far: " << new_tree.dup_rate << endl;
@@ -1579,9 +1631,9 @@ void get_variables_ntime(evo_tree& rtree, int model, int cons, int maxj, double 
       evo_tree new_tree(rtree.nleaf, enew, 1);
       new_tree.tobs = rtree.tobs;
 
+      adjust_tree_blens(new_tree);
       adjust_tree_height(new_tree);
       adjust_tree_tips(new_tree);
-      adjust_tree_blens(new_tree);
 
       int sample1 = 0;
       new_tree.get_ntime_interval(new_tree.nleaf - 1, sample1);
@@ -1602,7 +1654,7 @@ void get_variables_ntime(evo_tree& rtree, int model, int cons, int maxj, double 
             new_tree.chr_gain_rate = rtree.chr_gain_rate;
             new_tree.chr_loss_rate = rtree.chr_loss_rate;
             new_tree.wgd_rate = rtree.wgd_rate;
-            new_tree.mu = new_tree.dup_rate + new_tree.del_rate + new_tree.chr_gain_rate + new_tree.chr_loss_rate + new_tree.wgd_rate;
+            new_tree.mu = 0;
         }
       }else{
         if(model == 0){
@@ -1619,7 +1671,7 @@ void get_variables_ntime(evo_tree& rtree, int model, int cons, int maxj, double 
             new_tree.chr_gain_rate = x[rtree.nintedge+4];
             new_tree.chr_loss_rate = x[rtree.nintedge+5];
             new_tree.wgd_rate = x[rtree.nintedge+6];
-            new_tree.mu = new_tree.dup_rate + new_tree.del_rate + new_tree.chr_gain_rate + new_tree.chr_loss_rate + new_tree.wgd_rate;
+            new_tree.mu = 0;
             if(debug){
                 cout << "x values so far: " << endl;
                 for(int i=0; i<=rtree.nintedge+6; i++){ cout << x[i] << '\n';}
@@ -1642,11 +1694,11 @@ void get_variables_ntime(evo_tree& rtree, int model, int cons, int maxj, double 
     @param x the input vector x
     @return the function value at x
 */
-double targetFunk(evo_tree& rtree, const int model, const int cons, const int maxj, const int cn_max, const int correct_bias, double x[]) {
+double targetFunk(evo_tree& rtree, const int model, const int cons, const int maxj, const int cn_max, const int only_seg, const int correct_bias, double x[]) {
     // negative log likelihood
     // get_variables(rtree, model, cons, maxj, x);
     get_variables_ntime(rtree, model, cons, maxj, x);
-    return -1.0*get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, cn_max, correct_bias);
+    return -1.0*get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, cn_max, only_seg, correct_bias);
 }
 
 /**
@@ -1655,19 +1707,19 @@ double targetFunk(evo_tree& rtree, const int model, const int cons, const int ma
 	@param dfx the derivative at x
 	@return the function value at x
 */
-double derivativeFunk(evo_tree& rtree, const int model, const int cons, const int maxj, const int cn_max, const int correct_bias, int ndim, double x[], double dfx[]) {
+double derivativeFunk(evo_tree& rtree, const int model, const int cons, const int maxj, const int cn_max, const int only_seg, const int correct_bias, int ndim, double x[], double dfx[]) {
     int debug = 0;
 	double *h = new double[ndim+1];
     double temp;
     int dim;
-	double fx = targetFunk(rtree, model, cons, maxj, cn_max, correct_bias, x);
+	double fx = targetFunk(rtree, model, cons, maxj, cn_max, only_seg, correct_bias, x);
 	for (dim = 1; dim <= ndim; dim++ ){
 		temp = x[dim];
 		h[dim] = ERROR_X * fabs(temp);
 		if (h[dim] == 0.0) h[dim] = ERROR_X;
 		x[dim] = temp + h[dim];
 		h[dim] = x[dim] - temp;
-		dfx[dim] = (targetFunk(rtree, model, cons, maxj, cn_max, correct_bias, x));
+		dfx[dim] = (targetFunk(rtree, model, cons, maxj, cn_max, only_seg, correct_bias, x));
 		x[dim] = temp;
 	}
 	for (dim = 1; dim <= ndim; dim++ ){
@@ -1680,12 +1732,12 @@ double derivativeFunk(evo_tree& rtree, const int model, const int cons, const in
 	return fx;
 }
 
-double optimFunc(evo_tree& rtree, const int model, const int cons, const int maxj, const int cn_max, const int correct_bias, int nvar, double *vars) {
-    return targetFunk(rtree, model, cons, maxj, cn_max, correct_bias, vars-1);
+double optimFunc(evo_tree& rtree, const int model, const int cons, const int maxj, const int cn_max, const int only_seg, const int correct_bias, int nvar, double *vars) {
+    return targetFunk(rtree, model, cons, maxj, cn_max, only_seg, correct_bias, vars-1);
 }
 
-double optimGradient(evo_tree& rtree, const int model, const int cons, const int maxj, const int cn_max, const int correct_bias, int nvar, double *x, double *dfx) {
-    return derivativeFunk(rtree, model, cons, maxj, cn_max, correct_bias, nvar, x-1, dfx-1);
+double optimGradient(evo_tree& rtree, const int model, const int cons, const int maxj, const int cn_max, const int only_seg, const int correct_bias, int nvar, double *x, double *dfx) {
+    return derivativeFunk(rtree, model, cons, maxj, cn_max, only_seg, correct_bias, nvar, x-1, dfx-1);
 //    const double ERRORX = 1e-5;
 //	double fx = optimFunc(nvar, x);
 //	double h, temp;
@@ -1702,7 +1754,7 @@ double optimGradient(evo_tree& rtree, const int model, const int cons, const int
 }
 
 
-void lbfgsb(evo_tree& rtree, const int model, const int cons, const int maxj, const int cn_max, const int correct_bias, int n, int m, double *x, double *l, double *u, int *nbd,
+void lbfgsb(evo_tree& rtree, const int model, const int cons, const int maxj, const int cn_max, const int only_seg, const int correct_bias, int n, int m, double *x, double *l, double *u, int *nbd,
 		double *Fmin, int *fail,
 		double factr, double pgtol,
 		int *fncount, int *grcount, int maxit, char *msg,
@@ -1719,7 +1771,7 @@ void lbfgsb(evo_tree& rtree, const int model, const int cons, const int maxj, co
 	if(n == 0) { /* not handled in setulb */
 		*fncount = 1;
 		*grcount = 0;
-		*Fmin = optimFunc(rtree, model, cons, maxj, cn_max, correct_bias, n, u);
+		*Fmin = optimFunc(rtree, model, cons, maxj, cn_max, only_seg, correct_bias, n, u);
 		strcpy(msg, "NOTHING TO DO");
 		*fail = 0;
 		return;
@@ -1748,7 +1800,7 @@ void lbfgsb(evo_tree& rtree, const int model, const int cons, const int maxj, co
 		setulb(n, m, x, l, u, nbd, &f, g, factr, &pgtol, wa, iwa, task, tr, lsave, isave, dsave);
 		/*    Rprintf("in lbfgsb - %s\n", task);*/
 		if (strncmp(task, "FG", 2) == 0) {
-			f = optimGradient(rtree, model, cons, maxj, cn_max, correct_bias, n, x, g);
+			f = optimGradient(rtree, model, cons, maxj, cn_max, only_seg, correct_bias, n, x, g);
 			if (!isfinite(f)) {
 				cerr << "L-BFGS-B needs finite values of 'fn'" << endl;
 				exit(1);
@@ -1803,7 +1855,7 @@ void lbfgsb(evo_tree& rtree, const int model, const int cons, const int maxj, co
  @return minimized function value
  After the function is invoked, the values of x will be updated
 */
-double L_BFGS_B(evo_tree& rtree, const int model, const int cons, const int maxj, const int cn_max, const int correct_bias, int n, double* x, double* l, double* u, double pgtol, int maxit) {
+double L_BFGS_B(evo_tree& rtree, const int model, const int cons, const int maxj, const int cn_max, const int only_seg, const int correct_bias, int n, double* x, double* l, double* u, double pgtol, int maxit) {
     int debug = 0;
     int i;
 	double Fmin;
@@ -1843,7 +1895,7 @@ double L_BFGS_B(evo_tree& rtree, const int model, const int cons, const int maxj
 			factr, pgtol, &fncount, &grcount, maxit, msg, trace, nREPORT);
 #else*/
 
-	lbfgsb(rtree, model, cons, maxj, cn_max, correct_bias, n, m, x, l, u, nbd, &Fmin, &fail,
+	lbfgsb(rtree, model, cons, maxj, cn_max, only_seg, correct_bias, n, m, x, l, u, nbd, &Fmin, &fail,
 			factr, pgtol, &fncount, &grcount, maxit, msg, trace, nREPORT);
 //#endif
 
@@ -1863,7 +1915,7 @@ void initialise_variables_BFGS(/* arguments */) {
 
 // Using BFGS method to get the maximum likelihood with lower and upper bounds
 // Note: the topology of rtree is fixed
-evo_tree max_likelihood_BFGS(evo_tree& rtree, int model, double& minL, const double tolerance, const int miter,  int cons=0, int maxj=0, int cn_max=4, int correct_bias=1){
+evo_tree max_likelihood_BFGS(evo_tree& rtree, int model, double& minL, const double tolerance, const int miter,  int cons=0, int maxj=0, int cn_max=4, int only_seg=0, int correct_bias=1){
     int debug = 0;
     int npar_ne;
     int ndim = 0;
@@ -1943,25 +1995,6 @@ evo_tree max_likelihood_BFGS(evo_tree& rtree, int model, double& minL, const dou
       upper_bound = new double[ndim+1];
       lower_bound = new double[ndim+1];
 
-      // initialise the best guess branch length and mu if required
-      // rtree.print();
-      // for(i=0; i< rtree.nintedge; ++i){
-      //   variables[i+1] = rtree.intedges[i]->length;
-      //   lower_bound[i+1] = 0;
-      //   // upper_bound[i+1] = age + *max_element(rtree.tobs.begin(), rtree.tobs.end());
-      //   upper_bound[i+1] = age;
-      // }
-      //
-      // // initialise with current total tree time until first sample
-      // i = rtree.nintedge;
-      // variables[i+1] = rtree.get_total_time();
-      // // cout << "total time: " << variables[i+1] << endl;
-      // vector<int> internal_lens = rtree.get_internal_lengths();
-      // double max_ilen =  *max_element(internal_lens.begin(), internal_lens.end());
-      // // lower_bound[i+1] = *max_element(rtree.tobs.begin(), rtree.tobs.end());
-      // lower_bound[i+1] = max_ilen;
-      // upper_bound[i+1] = age;
-
       // estimate the top Ns intervals, which will be dynamic in different trees
       if(debug){
           cout << "Initializing the time intervals" << endl;
@@ -1980,7 +2013,7 @@ evo_tree max_likelihood_BFGS(evo_tree& rtree, int model, double& minL, const dou
         lower_bound[i+1] = SMALL_BLEN;
         // cout << "Starting node of the interval " << rtree.top_tnodes[i] << "\t" << rtree.node_times[rtree.top_tnodes[i]] << endl;
         upper_bound[i+1] = age + *max_element(rtree.tobs.begin(), rtree.tobs.end());
-        // When the interval is below the first sample, it should be smaller than delta_t
+        // When the interval is below the first sample, it should be smaller than the time difference between tip below it and 1st sample
         if(rtree.node_times[rtree.top_tnodes[i]] > rtree.node_times[sample1]){
             // Find the nodes below this node and gets its time
             // cout << "Tips below: " << endl;
@@ -1998,9 +2031,6 @@ evo_tree max_likelihood_BFGS(evo_tree& rtree, int model, double& minL, const dou
                 // return rtree;
             }
             upper_bound[i+1] = max_len;
-        }
-        else{
-            upper_bound[i+1] = age;
         }
       }
 
@@ -2060,7 +2090,7 @@ evo_tree max_likelihood_BFGS(evo_tree& rtree, int model, double& minL, const dou
     }
 
     // variables contains the parameters to estimate (branch length, mutation rate)
-    minL = L_BFGS_B(rtree, model, cons, maxj, cn_max, correct_bias, ndim, variables+1, lower_bound+1, upper_bound+1, tolerance, miter);
+    minL = L_BFGS_B(rtree, model, cons, maxj, cn_max, only_seg, correct_bias, ndim, variables+1, lower_bound+1, upper_bound+1, tolerance, miter);
     if (debug){
         // cout << "mu of current ML tree: " << rtree.mu << endl;
         cout << "lnL of current ML tree: " << minL << endl;
@@ -2076,7 +2106,7 @@ evo_tree max_likelihood_BFGS(evo_tree& rtree, int model, double& minL, const dou
 }
 
 // given a tree, maximise the branch lengths (and optionally mu) assuming branch lengths are independent or constrained in time
-evo_tree max_likelihood(evo_tree& rtree, int model, double& minL, const double ssize, const double tolerance, const int miter, int cons=0, int maxj=0, int cn_max=4, int correct_bias=1){
+evo_tree max_likelihood(evo_tree& rtree, int model, double& minL, const double ssize, const double tolerance, const int miter, int cons=0, int maxj=0, int cn_max=4, int only_seg=0, int correct_bias=1){
   int debug = 0;
   const gsl_multimin_fminimizer_type *T = gsl_multimin_fminimizer_nmsimplex2;
   gsl_multimin_fminimizer *s = NULL;
@@ -2239,7 +2269,7 @@ evo_tree max_likelihood(evo_tree& rtree, int model, double& minL, const double s
             new_tree.chr_gain_rate = rtree.chr_gain_rate;
             new_tree.chr_loss_rate = rtree.chr_loss_rate;
             new_tree.wgd_rate = rtree.wgd_rate;
-            new_tree.mu = new_tree.dup_rate + new_tree.del_rate + new_tree.chr_gain_rate + new_tree.chr_loss_rate + new_tree.wgd_rate;
+            new_tree.mu = 0;
         }
     }else{
         if(model==0){
@@ -2251,7 +2281,7 @@ evo_tree max_likelihood(evo_tree& rtree, int model, double& minL, const double s
             new_tree.chr_gain_rate = exp(gsl_vector_get(s->x, npar_ne+2));
             new_tree.chr_loss_rate = exp(gsl_vector_get(s->x, npar_ne+3));
             new_tree.wgd_rate = exp(gsl_vector_get(s->x, npar_ne+4));
-            new_tree.mu = new_tree.dup_rate + new_tree.del_rate + new_tree.chr_gain_rate + new_tree.chr_loss_rate + new_tree.wgd_rate;
+            new_tree.mu = 0;
         }
     }
 
@@ -2286,7 +2316,7 @@ evo_tree max_likelihood(evo_tree& rtree, int model, double& minL, const double s
             new_tree.chr_gain_rate = rtree.chr_gain_rate;
             new_tree.chr_loss_rate = rtree.chr_loss_rate;
             new_tree.wgd_rate = rtree.wgd_rate;
-            new_tree.mu = new_tree.dup_rate + new_tree.del_rate + new_tree.chr_gain_rate + new_tree.chr_loss_rate + new_tree.wgd_rate;
+            new_tree.mu = 0;
         }
     }else{
         if(model==0){
@@ -2298,7 +2328,7 @@ evo_tree max_likelihood(evo_tree& rtree, int model, double& minL, const double s
             new_tree.chr_gain_rate = exp(gsl_vector_get(s->x, npar_ne+2));
             new_tree.chr_loss_rate = exp(gsl_vector_get(s->x, npar_ne+3));
             new_tree.wgd_rate = exp(gsl_vector_get(s->x, npar_ne+4));
-            new_tree.mu = new_tree.dup_rate + new_tree.del_rate + new_tree.chr_gain_rate + new_tree.chr_loss_rate + new_tree.wgd_rate;
+            new_tree.mu = 0;
         }
     }
 

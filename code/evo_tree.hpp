@@ -18,7 +18,6 @@ const double SMALL_LEN = 1.0e-9;
 
 template <typename T>
 vector<size_t> sort_indexes(const vector<T> &v) {
-
   // initialize original index locations
   vector<size_t> idx(v.size());
   iota(idx.begin(), idx.end(), 0);
@@ -242,7 +241,6 @@ public:
   }
 
   void write_with_mut(ofstream& of, vector<int> nmuts){
-    assert(mu > 0);
     of << "start\tend\tlength\tnmut" << endl;
     for(int i=0; i<nedge; ++i){
       of << edges[i].start+1 << "\t" << edges[i].end+1 << "\t" << edges[i].length << "\t" << nmuts[i] << endl;

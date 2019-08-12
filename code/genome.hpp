@@ -283,6 +283,7 @@ public:
   }
 
   void write_allele_cn(ogzstream& of){
+    int debug = 0;
     calculate_allele_cn();
     assert(allele_cn_profile.size() == 44);
     // cout << "Writing allele-specific copy number " << endl;
@@ -290,7 +291,9 @@ public:
        map<int,int> segs1 = allele_cn_profile[i];
        map<int,int> segs2 = allele_cn_profile[i+22];
        // cout << i << "\t" << segs1.size() << "\t" << segs2.size() << endl;
-       int max_size = (segs1.size() >segs2.size())? segs1.size(): segs2.size();
+       // Find the id of the last segment since some segment may get lost
+       int max_size = chr_lengths[i];
+       if(debug) cout << i << "\t" << max_size << endl;
        for(int j=0; j < max_size; j++){
            int cn1, cn2;
            if (segs1.find(j) == segs1.end()) {

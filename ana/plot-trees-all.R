@@ -60,17 +60,18 @@ plot.tree.xlim <- function(tree) {
   print(p)
 }
 
-# Plot tree with xlim specified with age backwards
-plot.tree.xlim.age <- function(tree, ttime, age) {
+# Plot tree with xlim specified with age forwards
+plot.tree.xlim.age <- function(tree, diff, age) {
   p <- ggtree(tree, size = 0.5, linetype = 1)  #+ geom_rootedge()
-  # Add margin to show full name of labels  if (is.na(tree.max))
-  #   tree.max = max(node.depth.edgelength(tree)) + 20
+  # Add margin to show full name of labels
   tree.max = age + 10
-  p <- p + geom_tiplab(align = TRUE) + theme_tree2() + xlim(NA, tree.max)
+  # Shift all nodes by the difference between age util the first sample and node time of the first sample
+  p$data$x = p$data$x + diff
+  p <- p + geom_tiplab(align = TRUE) + theme_tree2() + xlim(0, tree.max)
   # p <- p + geom_text2(aes(subset=!isTip,label = node), hjust=-.3)
   edge = data.frame(tree$edge, edge_num = 1:nrow(tree$edge), edge_len = tree$edge.length)
   colnames(edge) = c("parent", "node", "edge_num", "edge_len")
-  p <- p %<+% edge + geom_text(aes(x = branch, label = edge_len), nudge_y = 0.1)
+  p <- p %<+% edge + geom_text(aes(x = branch, label = edge_len), nudge_y = 0.1, nudge_x = diff)
   print(p)
 }
 
@@ -101,7 +102,7 @@ plot.tree.bootstrap <- function(tree, with_title, mut_rate){
   print(p)
 }
 
-print.tree <- function(tree_file, tree_style, out_file = "", branch_num = 0, bstrap_dir = "", pattern = "", labels = NA, with_title = 0, mut_rate = 0, dup_rate = 0, del_rate = 0) {
+print.tree <- function(tree_file, tree_style, out_file = "", branch_num = 0, bstrap_dir = "", pattern = "", time_file="", labels = NA, with_title = 0, mut_rate = 0, dup_rate = 0, del_rate = 0) {
   dd <- read.table(tree_file, header = T)
   dir <- dirname(tree_file)
   stub <- file_path_sans_ext(basename(tree_file))
@@ -137,6 +138,16 @@ print.tree <- function(tree_file, tree_style, out_file = "", branch_num = 0, bst
   pdf(fout)
   if(tree_style=="simple") plot.tree(mytree)
   if(tree_style=="xlim") plot.tree.xlim(mytree)
+  if(tree_style=="age"){
+    # The lengths of tips are at the beginning
+    elens=node.depth.edgelength(mytree)
+    stime = read.table(time_file, header = F)
+    names(stime) = c("sample","tdiff","age")
+    s1_info = stime[stime$tdiff==0,]
+    diff = s1_info$age- elens[s1_info$sample]
+    age = max(stime$age)
+    plot.tree.xlim.age(mytree, diff, age)
+  }
   if(tree_style=="bootstrap"){  # bootstrap
     btrees = list()
     cat("Patterns to match bootstrapping trees: ", pattern, "\n")
@@ -173,6 +184,8 @@ option_list = list(
               help="The name of output file [default=%default]", metavar="character"),
   make_option(c("-a", "--annot_file"), type="character", default="",
               help="The file containing the labels of tip nodes [default=%default]", metavar="character"),
+  make_option(c("", "--time_file"), type="character", default="",
+              help="The file containing the sampling time information [default=%default]", metavar="character"),
   make_option(c("-d", "--tree_dir"), type="character", default="",
               help="The directory containing all the tree files to plot [default=%default]", metavar="character"),
   make_option(c("-s", "--bstrap_dir"), type="character", default="",
@@ -189,10 +202,12 @@ option_list = list(
               help="The segment deletion rate of somatic chromosomal aberrations [default=%default]", metavar="numeric"),
   make_option(c("-w", "--with_title"), type="integer", default = 0,
               help="Showing title or not (0: without title, 1: with title) [default=%default]", metavar="integer"),
+  # make_option(c("-g", "--use_age"), type="integer", default = 0,
+  #             help="Showing x-axis as the real age (0: default (root as beginning time), 1: x-axis as real age of the patient) [default=%default]", metavar="integer"),
   make_option(c("-t", "--plot_type"), type="character", default="single",
               help="The type of plot, including: all (plotting all tree files in a directory), single (plotting a single tree file), and bootstrap (plotting a single tree file with bootstrapping support) [default=%default]", metavar="character"),
   make_option(c("-l", "--tree_style"), type="character", default="simple",
-              help="The style of tree plot, including: simple (a simple tree with tip labels and branch lengths), xlim (adding xlim to the tree), and bootstrap (adding bootstrap support value to the tree) [default=%default]", metavar="character")
+              help="The style of tree plot, including: simple (a simple tree with tip labels and branch lengths), xlim (adding xlim to the tree), age (x-axis as real age of the patient), and bootstrap (adding bootstrap support value to the tree) [default=%default]", metavar="character")
 );
 
 opt_parser = OptionParser(option_list = option_list);
@@ -211,7 +226,7 @@ mut_rate = opt$mut_rate
 dup_rate = opt$dup_rate
 del_rate = opt$del_rate
 with_title =  opt$with_title
-
+time_file = opt$time_file
 # cat("Parameters used here:\n")
 # cat("tree_file:", tree_file, "\n")
 # cat("plot_type:", plot_type, "\n")
@@ -234,19 +249,20 @@ if (plot_type == "all"){
   for (f in files) {
     cat("running on:", f, "\n")
     fname = file.path(dir, f)
-    print.tree(fname, tree_style, branch_num = branch_num)
+    print.tree(fname, tree_style, branch_num = branch_num, time_file = time_file)
   }
 }
 
 if (plot_type == "single"){
   cat(paste0("Plotting the tree in ", tree_file))
   labels = get.labels(annot_file)
-  print.tree(tree_file, tree_style, out_file = out_file, branch_num = branch_num, labels = labels)
+  print.tree(tree_file, tree_style, out_file = out_file, branch_num = branch_num, labels = labels, time_file = time_file)
 }
+
 
 if (plot_type == "bootstrap"){
   cat(paste0("Plotting bootstrap values for the tree in ", tree_file))
   tree_style = "bootstrap"
   labels = get.labels(annot_file)
-  print.tree(tree_file, tree_style, out_file = out_file, branch_num = branch_num, bstrap_dir = bstrap_dir, pattern = pattern, labels = labels, with_title = with_title, mut_rate = mut_rate, dup_rate = dup_rate, del_rate = del_rate)
+  print.tree(tree_file, tree_style, out_file = out_file, branch_num = branch_num, bstrap_dir = bstrap_dir, pattern = pattern, labels = labels, with_title = with_title, mut_rate = mut_rate, dup_rate = dup_rate, del_rate = del_rate, time_file = time_file)
 }

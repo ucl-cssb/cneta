@@ -287,17 +287,13 @@ map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filenam
     int num_total_bin = 0;
     vector<vector<vector<int>>> s_info;
     num_invar_bins = 0;
-
     // data indexed by [sample][data][ chr, bid, cn ]
-    // for(int i=0; i<Ns; ++i) s_info.push_back( vector< vector<int> >(num_total_bin, vector<int>(3,0) ) );
-    for(int i=0; i<Ns; ++i) s_info.push_back( vector<vector<int>>());
-
-    //ifstream infile (filename.c_str());
+    for(int i=0; i<Ns; ++i) s_info.push_back(vector<vector<int>>());
     igzstream infile (filename.c_str());
-
     int counter = 0;
     std::string line;
     int prev_sample = 1;
+
     while(!getline(infile,line).eof()){
       if(line.empty()) continue;
 
@@ -334,27 +330,27 @@ map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filenam
     // Loop over and output only the regions that have varied
     vector<int> var_bins(num_total_bin, 0);
     for(int k=0; k<num_total_bin; ++k){
-    int sum = 0;
-    for(int i=0; i<Ns; ++i){
-      sum += abs(s_info[i][k][2]);
-    }
-    if(sum != 2*Ns){
-        var_bins[k] = 1;
-    }
-    else{
-        num_invar_bins += 1;
-    }
+        int sum = 0;
+        for(int i=0; i<Ns; ++i){
+          sum += abs(s_info[i][k][2]);
+        }
+        if(sum != 2*Ns){
+            var_bins[k] = 1;
+        }
+        else{
+            num_invar_bins += 1;
+        }
     }
 
     if(debug){
-    cout << "\tVariable bins found:" << endl;
-    for(int k=0; k<num_total_bin; ++k){
-      if(var_bins[k] == 1){
-    	cout << s_info[0][k][0] << "\t" << s_info[0][k][1];
-    	for(int i=0; i<Ns; ++i) cout << "\t" << s_info[i][k][2];
-    	cout << endl;
-      }
-    }
+        cout << "\tVariable bins found:" << endl;
+        for(int k=0; k<num_total_bin; ++k){
+          if(var_bins[k] == 1){
+        	cout << s_info[0][k][0] << "\t" << s_info[0][k][1];
+        	for(int i=0; i<Ns; ++i) cout << "\t" << s_info[i][k][2];
+        	cout << endl;
+          }
+        }
     }
 
     int nvar = accumulate(var_bins.begin(), var_bins.end(), 0);
@@ -365,56 +361,49 @@ map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filenam
     // We now need to convert runs of variable bins into segments of constant cn values, grouped by chromosme
     vector<vector<int>> segs;
     for(int k=0; k<num_total_bin;){
-    if(var_bins[k] == 1){
-      //in_seg = true;
-      int chr = s_info[0][k][0];
-      int seg_start = s_info[0][k][1];
-      int id_start = k;
+        if(var_bins[k] == 1){
+          //in_seg = true;
+          int chr = s_info[0][k][0];
+          int seg_start = s_info[0][k][1];
+          int id_start = k;
 
-      // hold the total copy number of the first bin. If this changes we need a new segment
-      // int seg_cn_tot = 0;
-      // for(int j=0; j<Ns; ++j) seg_cn_tot += s_info[j][k][2];
-      // hold all the sites in a bin
-      vector<int> prev_bin;
-      for(int j=0; j<Ns; ++j) prev_bin.push_back(s_info[j][k][2]);
+          // hold all the sites in a bin
+          vector<int> prev_bin;
+          for(int j=0; j<Ns; ++j) prev_bin.push_back(s_info[j][k][2]);
+          //cout << "seg_start: " << chr << "\t" << seg_start << ", cn= " << seg_cn_tot << endl;
 
-      //cout << "seg_start: " << chr << "\t" << seg_start << ", cn= " << seg_cn_tot << endl;
+          // Check the subsequent bins
+          bool const_cn = true;
+          k++;
+          while( var_bins[k] == 1 && const_cn == true){
+              vector<int> curr_bin;
+              for(int j=0; j<Ns; ++j) curr_bin.push_back(s_info[j][k][2]);
+              if(is_equal_vector(prev_bin, curr_bin) && s_info[0][k][0] == chr){
+            	  const_cn = true;
+            	  ++k;
+              }else{
+            	  const_cn = false;
+            	  //cout << "\tsplitting segment" << endl;
+              }
+          }
+          int seg_end = s_info[0][k-1][1];
+          int id_end = k-1;
 
-      bool const_cn = true;
-      while( var_bins[k] == 1 && s_info[0][k][0] == chr && const_cn == true){
-          vector<int> curr_bin;
-          for(int j=0; j<Ns; ++j) curr_bin.push_back(s_info[j][k][2]);
-          // calculate new total cn of next bin
-          // int cn_tot = 0;
-          // for(int j=0; j<Ns; ++j) cn_tot += s_info[j][k][2];
-          // //cout << "\tbin:\t" << k+1 << "\t" << cn_tot << endl;
-          // if( cn_tot == seg_cn_tot){
-          if(is_equal_vector(prev_bin, curr_bin)){
-    	  const_cn = true;
-    	  ++k;
-    	}else{
-    	  const_cn = false;
-    	  //cout << "\tsplitting segment" << endl;
-    	}
-      }
-      int seg_end = s_info[0][k-1][1];
-      int id_end = k-1;
+          //cout << "seg_end:\t" << seg_end << "\t" << k << endl;
+          //cout << endl;
 
-      //cout << "seg_end:\t" << seg_end << "\t" << k << endl;
-      //cout << endl;
+          vector<int> seg;
+          seg.push_back(chr);
+          seg.push_back(id_start);
+          seg.push_back(id_end);
+          seg.push_back(seg_start);
+          seg.push_back(seg_end);
+          segs.push_back(seg);
 
-      vector<int> seg;
-      seg.push_back(chr);
-      seg.push_back(id_start);
-      seg.push_back(id_end);
-      seg.push_back(seg_start);
-      seg.push_back(seg_end);
-      segs.push_back(seg);
-
-      // rewind k by one to get the split segment start correct
-      if(const_cn == false) k--;
-    }
-    ++k;
+          // rewind k by one to get the split segment start correct
+          if(const_cn == false) k--;
+        }
+        ++k;
     }
     cout << "\tFound segments:\t\t" << segs.size() << endl;
 

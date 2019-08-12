@@ -1286,6 +1286,7 @@ int main (int argc, char ** const argv) {
             results[j].write_allele_cn(out_allele_cn);
         }
         out_allele_cn.close();
+        sstm.str("");
 
       sstm << dir << prefix << "-info.txt";
       ofstream out_info(sstm.str());
