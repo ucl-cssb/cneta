@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <stack>
 #include <numeric>      // std::iota
+#include <string>
 
 #include <boost/format.hpp>
 #include <boost/algorithm/string.hpp>
@@ -63,6 +64,7 @@ public:
   }
 };
 
+
 class edge {
 public:
   int id;
@@ -108,13 +110,13 @@ public:
   int root_node_id;
   vector<vector<int>> chars;
   vector<double> tobs;
-  double score;
-  double mu;
-  double dup_rate;
-  double del_rate;
-  double chr_gain_rate;
-  double chr_loss_rate;
-  double wgd_rate;
+  double score = 0;
+  double mu = 0;
+  double dup_rate = 0;
+  double del_rate = 0;
+  double chr_gain_rate = 0;
+  double chr_loss_rate = 0;
+  double wgd_rate = 0;
   double tree_height;
   double total_time;
   vector<double> top_tinvls;
@@ -277,6 +279,7 @@ evo_tree::evo_tree(const evo_tree& _t2) {
   root_node_id = _t2.root_node_id;
   score = _t2.score;
   tobs = _t2.tobs;
+
   mu = _t2.mu;
   dup_rate = _t2.dup_rate;
   del_rate = _t2.del_rate;
@@ -311,6 +314,13 @@ evo_tree::evo_tree(const int& _nleaf, const vector<int>& _edges, const vector<do
   ntotn = 2*nleaf - 1; // all nodes
   nintedge = nedge - nleaf;
 
+  mu = 0;
+  dup_rate = 0;
+  del_rate = 0;
+  chr_gain_rate = 0;
+  chr_loss_rate = 0;
+  wgd_rate = 0;
+
   // create list of edges
   int count = 0;
   lengths.clear();
@@ -335,6 +345,13 @@ evo_tree::evo_tree(const int& _nleaf, const vector<edge>& _edges, int gen_node){
   ntotn = 2*nleaf - 1; // all nodes
   nintedge = nedge - nleaf;
 
+  mu = 0;
+  dup_rate = 0;
+  del_rate = 0;
+  chr_gain_rate = 0;
+  chr_loss_rate = 0;
+  wgd_rate = 0;
+
   edges.clear();
   edges.insert(edges.end(), _edges.begin(), _edges.end());
   lengths.clear();
@@ -358,6 +375,13 @@ evo_tree::evo_tree(const int& _nleaf, const vector<edge>& _edges, const double& 
   nedge = 2*nleaf - 2;
   ntotn = 2*nleaf - 1; // all nodes
   nintedge = nedge - nleaf;
+
+  mu = 0;
+  dup_rate = 0;
+  del_rate = 0;
+  chr_gain_rate = 0;
+  chr_loss_rate = 0;
+  wgd_rate = 0;
 
   edges.clear();
   edges.insert(edges.end(), _edges.begin(), _edges.end() );
@@ -891,6 +915,7 @@ void evo_tree::write_nexus(string newick, ofstream& fout){
 }
 
 
+// The string will be different for different labeled histories
 string create_tree_string( evo_tree tree ){
   stringstream sstm;
   for(int i=0; i<tree.ntotn; ++i){
@@ -903,16 +928,81 @@ string create_tree_string( evo_tree tree ){
   return sstm.str();
 }
 
+
+// The string will be unique for different topolies
+// The key is to name the internal node based on tips
+string create_tree_string_uniq(evo_tree tree){
+  int debug = 0;
+  stringstream sstm;
+  // Use a dictory to store the names of internal nodes;
+  map<int, string> names;
+  for(int i=0; i<tree.ntotn; ++i){
+    int nid = tree.nodes[i].id + 1;
+    if(nid <= tree.nleaf){
+        sstm << nid;
+    }
+    else if(nid == tree.nleaf + 1){  // root
+        sstm << nid << ";" << tree.nodes[i].daughters[0]+1 << ";" << tree.nodes[i].daughters[1]+1;
+    }
+    else{    // internal nodes
+        assert((tree.nodes[i].daughters.size() == 2));
+        // cout << "Converting internal nodes" << endl;
+        string pnode = "n_";
+        int d1 = tree.nodes[i].daughters[0] + 1;
+        int d2 = tree.nodes[i].daughters[1] + 1;
+        if(d1 <= tree.nleaf && d2 <= tree.nleaf){   // The first time seeing this internal node
+            // Sort the children so that the name is unique
+            int min_d = d1;
+            int max_d = d2;
+            if(d1 > d2){
+                 min_d = d2;
+                 max_d = d1;
+            }
+            pnode = pnode + to_string(min_d) + "-" + to_string(max_d);
+            // cout << nid << "\t" << pnode << endl;
+            names[nid] = pnode;
+            sstm << pnode << ";" << min_d << ";" << max_d;
+        }else{
+            // The internal nodes are numbered increasingly
+            // cout << nid << ";" << d1 << ";" << d2 << endl;
+            if(d1 > tree.nleaf && d2 <= tree.nleaf){
+                pnode = pnode + to_string(d2) + "-[" + names[d1] + "]";
+                // cout << nid << "\t" << pnode << "\t" <<  names[d1] << endl;
+                names[nid] = pnode;
+                sstm << pnode << ";" << d2 << ";" << names[d1];
+            }else if(d2 > tree.nleaf && d1 <= tree.nleaf){  // d2 > Ns
+                pnode = pnode + to_string(d1) + "-[" + names[d2] + "]";
+                // cout << nid << "\t" << pnode << "\t" <<  names[d2] << endl;
+                names[nid] = pnode;
+                sstm << pnode << ";" << d1 << ";" << names[d2];
+            }else{  // d2 > Ns
+                pnode = pnode + "[" + names[d1] + "]-[" + names[d2] + "]";
+                // cout << nid << "\t" << pnode << "\t" <<  names[d2] << endl;
+                names[nid] = pnode;
+                sstm << pnode << ";" << names[d1] << ";" << names[d2];
+            }
+        }
+    }
+    sstm << ":";
+  }
+
+  if(debug){
+      tree.print();
+      for(auto it: names){
+          cout << it.first << "\t" << it.second << endl;
+      }
+  }
+  return sstm.str();
+}
+
 string order_tree_string( string tree ){
   stringstream sstm;
-
   vector<string> split1;
   boost::split(split1, tree, [](char c){return c == ':';});
 
   for(int i=0; i<split1.size()-1; ++ i){     // split creates an empty string at the end
     //sstm << split1[i];
     //cout << "\t" << split1[i] << endl;
-
     vector<string> split2;
     boost::split(split2, split1[i], [](char c){return c == ';';});
 
@@ -921,10 +1011,13 @@ string order_tree_string( string tree ){
     }
     else{
       sstm << split2[0] << ";"; //  << split2[1] << ";" << split2[2];
-      if( atoi(split2[1].c_str() ) < atoi(split2[2].c_str() ) ){
-	sstm << split2[1] << ";" << split2[2];
+      string s1 = split2[1];
+      string s2 = split2[2];
+      // if( atoi(split2[1].c_str() ) < atoi(split2[2].c_str() ) ){
+      if( s1.compare(s2) < 0 ){
+	         sstm << split2[1] << ";" << split2[2];
       }else{
-	sstm << split2[2] << ";" << split2[1];
+	         sstm << split2[2] << ";" << split2[1];
       }
     }
     sstm << ":";

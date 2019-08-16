@@ -1273,9 +1273,13 @@ int main (int argc, char ** const argv) {
       out_cn.close();
 
       // re-read the cn data to get the segments
-      vector<vector<int> > seg_data = read_data_var_regions(sstm.str().c_str(), Ns, 4);
+      int num_invar_bins = 0;
+      int num_total_bins = 0;
+      vector<vector<int>> seg_data = read_data_var_regions(sstm.str().c_str(), Ns, cn_max, num_invar_bins, num_total_bins);
       int Nchar = seg_data.size();
-      cout << "#### Nchar: " << Nchar << endl;
+      cout << "#### Number of total bins: " << num_total_bins << endl;
+      cout << "#### Number of invariant bins: " << num_invar_bins << endl;
+      cout << "#### Number of segments (Nchar): " << Nchar << endl;
       sstm.str("");
 
         // cout << "Writing allele specific copy number " << endl;

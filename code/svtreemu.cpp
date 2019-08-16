@@ -99,8 +99,9 @@ int main (int argc, char ** const argv) {
   // vector<vector<int>> data = read_data_var_regions(datafile, Ns, CN_MAX);
   // Nchar = data.size();
   int num_invar_bins = 0;
+  int num_total_bins = 0;
   Nchar = 0;
-  map<int, vector<vector<int>>> data = read_data_var_regions_by_chr(datafile, Ns, cn_max, num_invar_bins);
+  map<int, vector<vector<int>>> data = read_data_var_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins);
 
   // tobs already defined globally
   tobs = read_time_info(timefile, Ns, age);

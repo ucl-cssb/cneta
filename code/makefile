@@ -1,6 +1,9 @@
 # CCC = icc		# Using intel complier
 CCC = g++
+# CCC = /usr/local/opt/llvm/bin/clang
 BOOST = /usr/local
+# omp = -fopenmp
+omp = 
 all: sveta svtreeml svtreemu svtreemcmc
 
 sveta: sveta.cpp
@@ -12,7 +15,7 @@ sveta: sveta.cpp
 svtreeml: svtreeml.cpp
 	cd gzstream/ && make
 	cd lbfgsb/ && cmake ./ && make
-	$(CCC) -std=gnu++11 -fopenmp svtreeml.cpp matexp/matrix_exponential.cpp matexp/r8lib.cpp -o svtreeml -L$(BOOST)/lib/ -lboost_filesystem -lboost_system -lboost_program_options -lgsl -lgslcblas -L./lbfgsb -llbfgsb -L./gzstream -lgzstream -lz -I./ -I$(BOOST)/include -I./gzstream -I./lbfgsb
+	$(CCC) -std=gnu++11 $(omp) svtreeml.cpp matexp/matrix_exponential.cpp matexp/r8lib.cpp -o svtreeml -L$(BOOST)/lib/ -lboost_filesystem -lboost_system -lboost_program_options -lgsl -lgslcblas -L./lbfgsb -llbfgsb -L./gzstream -lgzstream -lz -I./ -I$(BOOST)/include -I./gzstream -I./lbfgsb
 
 svtreemu: svtreemu.cpp
 	cd gzstream/ && make

@@ -11,7 +11,7 @@ input=$dir/"$prefix"-cn.txt.gz
 times=$dir/"$prefix"-rel-times.txt
 # rtree=$dir/"$prefix"-tree.txt
 rtreefile=""
-nsample=5
+nsample=4
 
 odir=$dir/mcmc
 mkdir -p $odir
