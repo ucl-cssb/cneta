@@ -154,7 +154,7 @@ vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int &num_tot
       prev_sample = sample;
     }
 
-    cout << "\tSuccessfully read input file" << endl;
+    // cout << "\tSuccessfully read input file" << endl;
 
     return s_info;
 }
@@ -239,6 +239,86 @@ vector<vector<int>> get_invar_segs(const vector<vector<vector<int>>>& s_info, in
         }
         ++k;
     }
+    cout << "\tFound segments:\t\t" << segs.size() << endl;
+
+    return segs;
+}
+
+
+vector<vector<int>> get_all_segs(const vector<vector<vector<int>>>& s_info, int Ns, int num_total_bins, int& num_invar_bins, int incl_all){
+    num_invar_bins = 0;
+    // Find the number of invariable sites for each character (state)
+    // Loop over and output only the regions that have varied
+    vector<int> var_bins(num_total_bins, 0);
+    for(int k=0; k<num_total_bins; ++k){
+        int sum = 0;
+        for(int i=0; i<Ns; ++i){
+          sum += abs(s_info[i][k][2]);
+        }
+        if(sum != 2*Ns){
+            var_bins[k] = 1;
+        }
+        else{
+            num_invar_bins += 1;
+        }
+    }
+
+    if(debug){
+        cout << "\tVariable bins found:" << endl;
+        for(int k=0; k<num_total_bins; ++k){
+          if(var_bins[k] == 1){
+            cout << s_info[0][k][0] << "\t" << s_info[0][k][1];
+            for(int i=0; i<Ns; ++i) cout << "\t" << s_info[i][k][2];
+            cout << endl;
+          }
+        }
+    }
+
+    int nvar = accumulate(var_bins.begin(), var_bins.end(), 0);
+    cout << "\tTotal number of bins:\t" << num_total_bins << endl;
+    cout << "\tFound variable bins:\t" << nvar << endl;
+    cout << "\tFound invariable bins:\t" << num_invar_bins << endl;
+
+    vector<vector<int>> segs;
+    if(incl_all){
+        for(int k=0; k<num_total_bins; k++){
+              int chr = s_info[0][k][0];
+              int seg_start = s_info[0][k][1];
+              int id_start = k;
+              int seg_end = s_info[0][k][1];
+              int id_end = k;
+              //cout << "seg_end:\t" << seg_end << "\t" << k << endl;
+              //cout << endl;
+              vector<int> seg;
+              seg.push_back(chr);
+              seg.push_back(id_start);
+              seg.push_back(id_end);
+              seg.push_back(seg_start);
+              seg.push_back(seg_end);
+              segs.push_back(seg);
+        }
+    }
+    else{
+        for(int k=0; k<num_total_bins; k++){
+            if(var_bins[k] == 1){
+                int chr = s_info[0][k][0];
+                int seg_start = s_info[0][k][1];
+                int id_start = k;
+                int seg_end = s_info[0][k][1];
+                int id_end = k;
+                //cout << "seg_end:\t" << seg_end << "\t" << k << endl;
+                //cout << endl;
+                vector<int> seg;
+                seg.push_back(chr);
+                seg.push_back(id_start);
+                seg.push_back(id_end);
+                seg.push_back(seg_start);
+                seg.push_back(seg_end);
+                segs.push_back(seg);
+            }
+        }
+    }
+
     cout << "\tFound segments:\t\t" << segs.size() << endl;
 
     return segs;
@@ -354,11 +434,12 @@ vector<vector<int>> group_segs(const vector<vector<int>>& segs, const vector<vec
 }
 
 // Read the input copy numbers
-vector<vector<int>> read_data_var_regions(const string& filename, const int& Ns, const int& max_cn, int &num_invar_bins, int &num_total_bins){
+vector<vector<int>> read_data_var_regions(const string& filename, const int& Ns, const int& max_cn, int &num_invar_bins, int &num_total_bins, int &seg_size){
     cout << "reading data and calculating CNA regions" << endl;
     vector<vector<vector<int>>> s_info = read_cn(filename, Ns, num_total_bins);
     // We now need to convert runs of variable bins into segments of constant cn values, grouped by chromosme
     vector<vector<int>> segs = get_invar_segs(s_info, Ns, num_total_bins, num_invar_bins);
+    seg_size = segs.size();
 
     vector<vector<int>> ret = group_segs(segs, s_info, Ns, max_cn);
 
@@ -368,11 +449,26 @@ vector<vector<int>> read_data_var_regions(const string& filename, const int& Ns,
 
 
 // Read the input copy numbers and group them by chromosme
-map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filename, const int& Ns, const int& max_cn, int &num_invar_bins, int &num_total_bins){
+map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filename, const int& Ns, const int& max_cn, int &num_invar_bins, int &num_total_bins, int &seg_size){
     cout << "reading data and calculating CNA regions by chromosme" << endl;
     vector<vector<vector<int>>> s_info = read_cn(filename, Ns, num_total_bins);
     // We now need to convert runs of variable bins into segments of constant cn values, grouped by chromosme
     vector<vector<int>> segs = get_invar_segs(s_info, Ns, num_total_bins, num_invar_bins);
+    seg_size = segs.size();
+
+    map<int, vector<vector<int>>> ret = group_segs_by_chr(segs, s_info, Ns, max_cn);
+
+    return ret;
+}
+
+
+// Read the input copy numbers as they are and group them by chromosme
+map<int, vector<vector<int>>> read_data_regions_by_chr(const string& filename, const int& Ns, const int& max_cn, int &num_invar_bins, int &num_total_bins, int &seg_size, int incl_all=1){
+    cout << "reading data and calculating CNA regions by chromosme" << endl;
+    vector<vector<vector<int>>> s_info = read_cn(filename, Ns, num_total_bins);
+    // We now need to convert runs of variable bins into segments of constant cn values, grouped by chromosme
+    vector<vector<int>> segs = get_all_segs(s_info, Ns, num_total_bins, num_invar_bins, incl_all);
+    seg_size = segs.size();
 
     map<int, vector<vector<int>>> ret = group_segs_by_chr(segs, s_info, Ns, max_cn);
 

@@ -13,7 +13,8 @@ using namespace std;
 
 //enum mutation_type {duplication, deletion, chr_loss, chr_gain, wgd };
 const int N_MUT_TYPE = 5;
-
+const int NUM_CHR = 22;
+const int NORM_PLOIDY = 2;
 
 class mutation {
 public:
@@ -111,11 +112,34 @@ public:
       for(int j=0; j < _nseg; ++j){
         chr.push_back( segment(i,j) );
         cn_profile[i][j] = 0;
+        allele_cn_profile[i][j] = 0;
       }
       //fill_n (std::back_inserter(chrs), 1, chr);
       chrs.push_back(chr);
     }
 
+    for(int i=0; i<N_MUT_TYPE; ++i) nmuts.push_back(0);
+  }
+
+  // create a genome with nchr x nseg_i, allowing different germline ploidy
+  // allow different number of segs on different chromosmes
+  genome(const int& _nchr, const vector<int>& _nsegs, const int& ploidy){
+    for( int p=0; p<ploidy; ++p){
+        for(int i=0; i<_nchr; ++i){
+          chr_lengths.push_back(_nsegs[i]);
+
+          vector<segment> chr;
+          for(int j=0; j < _nsegs[i]; ++j){
+            chr.push_back( segment(i,j) );
+            cn_profile[i][j] = 0;
+            allele_cn_profile[i+_nchr*ploidy][j] = 0;
+            cout << i+_nchr*ploidy << "\t" << j << endl;
+          }
+          //fill_n (std::back_inserter(chrs), 1, chr);
+          chrs.push_back(chr);
+        }
+    }
+    assert(allele_cn_profile.size() == ploidy * _nchr);
     for(int i=0; i<N_MUT_TYPE; ++i) nmuts.push_back(0);
   }
 
@@ -128,6 +152,7 @@ public:
       for(int j=0; j < _chr_lens[i]; ++j){
         chr.push_back( segment(i,j) );
         cn_profile[i][j] = 0;
+        allele_cn_profile[i][j] = 0;
       }
       chrs.push_back(chr);
     }
@@ -137,7 +162,6 @@ public:
 
   // allow different germline ploidy
   genome(const vector<int>& _chr_lens, const int& ploidy){
-
     for( int p=0; p<ploidy; ++p){
       for(int i=0; i<_chr_lens.size(); ++i){
         chr_lengths.push_back(_chr_lens[i]);
@@ -146,6 +170,7 @@ public:
         for(int j=0; j < _chr_lens[i]; ++j){
           chr.push_back( segment(i,j) );
           cn_profile[i][j] = 0;
+          allele_cn_profile[i+_chr_lens.size()*ploidy][j] = 0;
         }
         chrs.push_back(chr);
       }
@@ -195,8 +220,13 @@ public:
 
  // Compute allele-specific copy number
   void calculate_allele_cn(){
-    allele_cn_profile.clear();
-    assert(allele_cn_profile.size()==0);
+    map<int, map<int,int> >::iterator nit1;
+    map<int,int>::iterator nit2;
+    for(nit1 = allele_cn_profile.begin(); nit1 != allele_cn_profile.end(); ++nit1){
+        for(nit2 = nit1->second.begin(); nit2 != nit1->second.end(); ++nit2){
+            nit2->second = 0;
+        }
+    }
 
     // cout << "Computing allele-specific copy number " << endl;
     // cout << chrs.size() << endl;
@@ -285,7 +315,7 @@ public:
   void write_allele_cn(ogzstream& of){
     int debug = 0;
     calculate_allele_cn();
-    assert(allele_cn_profile.size() == 44);
+
     // cout << "Writing allele-specific copy number " << endl;
     for(int i=0; i < allele_cn_profile.size()/2; i++){
        map<int,int> segs1 = allele_cn_profile[i];

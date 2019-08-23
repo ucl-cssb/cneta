@@ -1769,7 +1769,7 @@ int main (int argc, char ** const argv) {
     int num_invar_bins = 0;
     int num_total_bins = 0;
     Nchar = 0;
-    map<int, vector<vector<int>>> data = read_data_var_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins);
+    map<int, vector<vector<int>>> data = read_data_var_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins, Nchar);
     // Nchar = data.size();
 
     // tobs already defined globally
@@ -1791,7 +1791,7 @@ int main (int argc, char ** const argv) {
     int total_chr = data.rbegin()->first;
     for(int nchr=1; nchr<=total_chr; nchr++){
       vector<vector<int>> obs_chr;
-      Nchar += data[nchr].size();
+      // Nchar += data[nchr].size();
       for(int nc=0; nc<data[nchr].size(); ++nc){
           vector<int> obs;
           for(int i=0; i<Ns; ++i){
