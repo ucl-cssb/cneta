@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <iostream>
 #include <iomanip>
-#include <string.h>
 #include <vector>
 #include <map>
 #include <random>
@@ -33,13 +32,15 @@
 using namespace std;
 
 int debug = 0;
-// The number of bins for each chromosme. Each bin corresponds to a window of size 500,000 bp.
+// The number of bins for each chromosome. Each bin corresponds to a window of size 500,000 bp.
 static const int BIN_SIZE[] = {367, 385, 335, 316, 299, 277, 251, 243, 184, 210, 215, 213, 166, 150, 134, 118, 121, 127, 79, 106, 51, 54};
 vector<int> CHR_BIN_SIZE(BIN_SIZE, BIN_SIZE + sizeof(BIN_SIZE) / sizeof(BIN_SIZE[0]));
 const int NODE_MIN_TIME = 1000;
 
+// key: chr, seg, copy_number
+typedef map<int, map<int,int>> copy_number;
 
-// Find the number of a specific chromosme
+// Find the number of a specific chromosome
 int get_ploidy_at_chr(genome& g, int c){
     int ploidy_at_c = 0;
     for(int i=0; i<g.chrs.size(); i++){
@@ -50,7 +51,7 @@ int get_ploidy_at_chr(genome& g, int c){
     return ploidy_at_c;
 }
 
-// Find the current maximum copy number for one chromosme
+// Find the current maximum copy number for one chromosome
 int get_max_cn_chr(genome& g, int c){
     g.calculate_cn();
     vector<segment> segs = g.chrs[c];
@@ -67,6 +68,7 @@ int get_max_cn_chr(genome& g, int c){
     return max_cn;
 }
 
+// Find the maximum copy number of a segment on a specified chromosome
 int get_max_seg_num_chr(genome& g, int c){
     g.calculate_cn();
     map<int, int> seg_cn;     // record seg_id and current copy number
@@ -93,7 +95,7 @@ int get_max_seg_num_chr(genome& g, int c){
     return num_mseg;
 }
 
-// Find the current maximum copy number for one segment on a chromosme
+// Find the current maximum copy number for one interval on a chromosome, assuming the interval contains several segments
 int get_max_cn_chr_seg(genome& g, int c, int loc, int len){
     if(g.chrs[c].size() <= 0){
         return 0;
@@ -115,12 +117,14 @@ int get_max_cn_chr_seg(genome& g, int c, int loc, int len){
 }
 
 
-int get_max_seg_num_seg(genome& g, int c, int loc, int len){
-    g.calculate_cn();
+// Check the maximum copy number of the interval to duplicate when the interval has multiple different segments
+// Assume the copy number profile is updated
+int get_max_seg_num_seg(genome& g, int c, int ins_start, int len){
+    // g.calculate_cn();
     // Some segments may not have the largest copy number for now. But there current copy number plus the multiplicity will make the new copy number larger than specified.
     map<int, int> seg_cn;     // record seg_id and current copy number
     vector<int> segs;     // record seg_id and current multiplicity
-    for (int i=loc; i < loc + len + 1; i++){
+    for (int i=ins_start; i < ins_start + len + 1; i++){
         int sid = g.chrs[c][i].seg_id;
         int cn = g.cn_profile[c%22][sid];
         seg_cn.insert(pair<int, int>(sid, cn));
@@ -159,23 +163,20 @@ int get_max_cn_genome(genome& g){
     return max_cn;
 }
 
-
 // rates: The rate of all events (segment duplication, segment deletion)
-double get_site_rates(vector<double>& rates, const vector<double>& rate_constants, int model, int state, int cn_max){
-    double rate;
+double get_site_rates(const vector<double>& rate_consts, int model, int stateA, int stateB, int cn_max){
+    double rate = 0;
 
-    if(model == 0){ // JC69
+    if(model == 0){ // Mk
         // assume duplication rate equals deletion rate
-        assert(rate_constants[0] == rate_constants[1]);
-        for(int i=0; i<2; ++i){
-          rates.push_back(rate_constants[i]);
-        }
-        rate = 4 * rate_constants[0] / 5;
+        assert(rate_consts[0] == rate_consts[1]);
+        rate = 4 * rate_consts[0] / 5;
     }
 
-    if(model == 1){ // bounded
-        double dup_rate = rate_constants[0];
-        double del_rate = rate_constants[1];
+    if(model == 1){ // bounded total
+        double dup_rate = rate_consts[0];
+        double del_rate = rate_consts[1];
+        int state = stateA + stateB;
 
         if(state == 0){
             rate =  0;
@@ -187,32 +188,63 @@ double get_site_rates(vector<double>& rates, const vector<double>& rate_constant
             rate =  2 * state * dup_rate + 2 * state * del_rate;
         }
     }
+
+    if(model == 2){ // bounded allele specific
+        double dup_rate = rate_consts[0];
+        double del_rate = rate_consts[1];
+
+        if(stateA == 0 && stateB == 0){
+            rate =  0;
+        }
+        else if(stateA + stateB == cn_max){
+            if(stateA == 0 || stateB == 0){
+                rate =  del_rate;
+            }else{
+                rate =  2 * del_rate;
+            }
+        }
+        else{
+            if(stateA == 0 || stateB == 0){
+                rate =  dup_rate + del_rate;
+            }else{
+                rate =  2 * (dup_rate + del_rate);
+            }
+        }
+    }
+
     return rate;
 }
 
 
 // rates: The total rate at each site in the genome, used for randomly selecting a site
-double get_total_rates(genome& g, vector<double>& rates, const vector<double>& rate_constants, int model, int cn_max){
-    assert(rate_constants.size() == 5);
-    double chr_gain_rate = rate_constants[2];
-    double chr_loss_rate = rate_constants[3];
-    double wgd_rate = rate_constants[4];
+// The site is pre-specified at the beginning, denoted by each segment ID
+double get_total_rates_allele_specific(genome& g, vector<double>& rates, const vector<double>& rate_consts, int model, int cn_max){
+    assert(rate_consts.size() == 5);
+    double chr_gain_rate = rate_consts[2];
+    double chr_loss_rate = rate_consts[3];
+    double wgd_rate = rate_consts[4];
 
     g.calculate_cn(); // Find the current state of the genome before computing rates (affected by copy number)
+    g.calculate_allele_cn();
     vector<double> rates_chrs;
+    int s = 0;
     // Tranverse all the sites in the genome to get their rates
     for(int i=0; i < g.cn_profile.size(); ++i){   // For each chromosome
         vector<double> rates_chr_sites;
         for(int j=0; j < g.cn_profile[i].size(); ++j){    // For each segment in the chromosome
             // Get the copy number of this segment
-            int state = g.cn_profile[i][j];
-            vector<double> site_rates;
-            double rate = get_site_rates(site_rates, rate_constants, model, state, cn_max);
-            // cout << "Rate on chr " << i << " seg " << j << " state " << state << " is " << rate << endl;
+            int stateA = g.allele_cn_profile[i][j];
+            int stateB = g.allele_cn_profile[i + NUM_CHR][j];
+            double rate = get_site_rates(rate_consts, model, stateA, stateB, cn_max);
+            if(debug){
+                cout << "Rate on chr " << i << " seg " << j << " site " << s++ << " stateA " << stateA << " stateB " << stateB << " is " << rate << endl;
+            }
             rates.push_back(rate);
             rates_chr_sites.push_back(rate);
         }
+        // Get the rate on one chromosome
         double rate_c = accumulate(rates_chr_sites.begin(), rates_chr_sites.end(), 0.0);
+        // Get the maximum copy number on the chromosome
         double max_cn_c = get_max_cn_chr(g, i);
         double max_snum = get_max_seg_num_chr(g, i);
         if(max_cn_c > 0){
@@ -241,6 +273,7 @@ double get_total_rates(genome& g, vector<double>& rates, const vector<double>& r
 
 
 // Note: the sites are counted for all the haplotypes. The positions on different haplotypes are counted as one site.
+// The starting point of sites is 0
 void site2chr(int site, int& chr, int& seg, const vector<int>& chr_lengths){
     if(debug) cout << "Site to convert is " << site << endl;
     if(site >= 0 && site < chr_lengths[0]){
@@ -252,19 +285,22 @@ void site2chr(int site, int& chr, int& seg, const vector<int>& chr_lengths){
         for(int i=0; i<chr_lengths.size(); i++){
             int sum1 = accumulate(chr_lengths.begin(), chr_lengths.begin() + i + 1, 0);
             int sum2 = accumulate(chr_lengths.begin(), chr_lengths.begin() + i + 2, 0);
-            // cout << "Size for chr " << i+1 << " is " << chr_lengths[i] << endl;
-            // cout << "sum until chromosome " << i + 1 << " is " << sum1 << endl;
-            // cout << "sum until chromosome " << i + 2 << " is " << sum2 << endl;
-            if(site > sum1 && site < sum2){
+            if(debug){
+                cout << "Size for chr " << i+1 << " is " << chr_lengths[i] << endl;
+                cout << "sum until chromosome " << i + 1 << " is " << sum1 << endl;
+                cout << "sum until chromosome " << i + 2 << " is " << sum2 << endl;
+            }
+            if(site >= sum1 && site < sum2){
                 chr = i + 1;
                 seg = site - sum1;
                 break;
             }
         }
     }
+    assert(seg < chr_lengths[chr]);
 }
 
-// Find the number of chromosmes with segments
+// Find the number of chromosomes with segments
 int get_num_chr(genome& g){
     int n = 0;
     for(int i=0; i<g.chrs.size(); i++){
@@ -275,7 +311,7 @@ int get_num_chr(genome& g){
     return n;
 }
 
-// Find the ID of chromosmes with segments
+// Find the ID of chromosomes with segments
 void get_available_chr(genome& g, vector<int>& available_chrs){
     available_chrs.clear();
     for(int i=0; i<g.chrs.size(); i++){
@@ -286,8 +322,11 @@ void get_available_chr(genome& g, vector<int>& available_chrs){
     }
 }
 
-int generate_duplication(genome& g, int c, int loc, int model, int cn_max, int debug){
-    if( g.chrs[c].size() <= 0 || loc >= g.chrs[c].size()){
+
+// input: c -- chromosome number (for each haplotype); seg_id -- location on a chromosome (should be intepreted as segment ID)
+int generate_duplication(genome& g, int c, int seg_id, int model, int cn_max, int debug){
+    if(g.chrs[c].size()<=0){
+        cout << "All segments on chr " << c << " has lost" << endl;
         return 0;
     }
     if(debug){
@@ -298,7 +337,7 @@ int generate_duplication(genome& g, int c, int loc, int model, int cn_max, int d
     // mean variant size in bins
     double mdup = g.mean_dup_size;
     int len = 0;
-    if(mdup > 1)    len = gsl_ran_exponential(r, mdup);
+    if(mdup > 1) len = gsl_ran_exponential(r, mdup);
 
     if(debug){
       cout << "before dup, Chr " << c << " has " << g.chrs[c].size() << " segments" << endl;
@@ -309,23 +348,40 @@ int generate_duplication(genome& g, int c, int loc, int model, int cn_max, int d
       cout << "dup len:" << len << endl;
     }
 
-    if( loc + len >= g.chrs[c].size() ){
-      return 0;
-    }
-
-    if(debug) cout << "\tSV: duplicating segment, chr, start, len: " << c << "\t" << loc << "\t" << len+1 << endl;
+    if(debug) cout << "\tSV: duplicating segment, chr, seg_id, len: " << c << "\t" << seg_id << "\t" << len+1 << endl;
     //cout << "SV: insert: " << loc+len+1 << "\t" << loc << "\t" << loc+len+1 << endl;
     // Find the number of copies
-    int state = g.cn_profile[c%22][g.chrs[c][loc].seg_id];
+    // int state = g.cn_profile[c%22][g.chrs[c][loc].seg_id];
+    int state = g.cn_profile[c%22][seg_id];
     if(debug){
         cout << "Previous state: ";
-        for(int i=0; i<len+1; i++){
-            cout << "\t " << g.cn_profile[c%22][g.chrs[c][loc + i].seg_id];
-        }
+        // for(int i=0; i<len+1; i++){
+            cout << "\t " << g.cn_profile[c%22][seg_id];
+        // }
         cout << endl;
     }
-
-    int li = loc+len+1; //assume tandom duplication
+    if(state >= cn_max) {
+        // cout << "cn_max is " << cn_max << endl;
+        return 0;
+    }
+    int ins_start = 0;
+    double u = runiform(r, 0, 1);
+    if(u<0.5){
+        // randomly select a position
+        if(debug) cout << "nontandem duplication" << endl;
+        ins_start = gsl_rng_uniform_int(r, g.chrs[c].size());
+    }
+    else{ // tandem duplication
+        // Find the location of seg_id in the genome
+        for(int i = 0; i < g.chrs[c].size(); i++){
+            if(g.chrs[c][i].seg_id == seg_id){
+                ins_start = i;
+                break;
+            }
+        }
+    }
+    int ins_end = ins_start+len+1; //assume tandem duplication
+    if(debug) cout << "insertion start " << ins_start << ", end " << ins_end << endl;
 
     if(model == 0){
         vector<int> possible_states;
@@ -346,51 +402,46 @@ int generate_duplication(genome& g, int c, int loc, int model, int cn_max, int d
             pstate = state + 1;
         }
         // Ensure there are "state" copy of the region
-        if(debug){
-            cout << "copy start " << g.chrs[c][loc].seg_id << endl;
-            cout << "copy end " << g.chrs[c][loc+len].seg_id << endl;
-        }
-
+        // if(debug){
+        //     cout << "copy start " << g.chrs[c][loc].seg_id << endl;
+        //     cout << "copy end " << g.chrs[c][loc+len].seg_id << endl;
+        // }
         if(pstate-state <= 0){
+            cout << "no possible states" << '\n';
             return 0;
         }
-        // assume tandom duplication
+        // assume tandem duplication
         for(int j=0; j < pstate-state; j++){
-            g.chrs[c].insert(g.chrs[c].begin()+loc+(len+1)*(j+1), g.chrs[c].begin()+loc, g.chrs[c].begin()+loc+len+1);
+            // g.chrs[c].insert(g.chrs[c].begin()+loc+(len+1)*(j+1), g.chrs[c].begin()+loc, g.chrs[c].begin()+loc+len+1);
+            g.chrs[c].insert(g.chrs[c].begin()+ins_start+(len+1)*j, len+1, segment(c%22, seg_id));
 
             if(debug){
                 cout << j+1 << "th dup" << endl;
                 int it;
-                it = g.chrs[c][loc+(len+1)*(j+1)].seg_id;
+                it = g.chrs[c][ins_start+(len+1)*j].seg_id;
                 cout << "dup start " << it << endl;
-                it = g.chrs[c][loc+(len+1)*(j+1)+len].seg_id;
+                it = g.chrs[c][ins_start+(len+1)*j+len].seg_id;
                 cout << "dup end " << it << endl;
             }
         }
     }
 
-    if(model == 1){
-        // int max_state = get_max_cn_chr_seg(g, c, loc, len);
-        int max_snum = get_max_seg_num_seg(g, c, loc, len);
-        // cout << "cn_max is " << cn_max << endl;
-        if(max_snum > cn_max){
-            return 0;
-        }
-        // tandom duplication
-        // double u = runiform(r, 0, 1);
-        // if(u<0.5){
-        //     // randomly select a position
-        //     li = gsl_rng_uniform_int(r, g.chrs[c].size());
+    if(model == 1 || model == 2){
+        // int max_state = get_max_cn_chr_seg(g, c, seg_id, len);
+        // int max_snum = get_max_seg_num_seg(g, c, seg_id, len);
+        // // cout << "cn_max is " << cn_max << endl;
+        // if(max_snum > cn_max){
+        //     return 0;
         // }
-        g.chrs[c].insert(g.chrs[c].begin()+li, g.chrs[c].begin()+loc, g.chrs[c].begin()+loc+len+1);
-        g.calculate_cn();   // compute copy number after each mutation event
+        // g.chrs[c].insert(g.chrs[c].begin()+ins_end, g.chrs[c].begin()+loc, g.chrs[c].begin()+loc+len+1);
+        g.chrs[c].insert(g.chrs[c].begin()+ins_start, len + 1, segment(c%22, seg_id));
 
         if(debug){
-            cout << "End position " << loc+len+1 << endl;
-            cout << "Insertion position " << li << endl;
+            cout << "End position " << ins_start+len+1 << endl;
+            cout << "Insertion position " << ins_start << endl;
             cout << "Current state: ";
             for(int i=0; i<len+1; i++){
-                cout << "\t " << g.cn_profile[c%22][g.chrs[c][li + i].seg_id];
+                cout << "\t " << g.cn_profile[c%22][g.chrs[c][ins_start + i].seg_id];
             }
             cout << endl;
             set<double> segs;
@@ -401,6 +452,9 @@ int generate_duplication(genome& g, int c, int loc, int model, int cn_max, int d
         }
     }
     // }
+
+    g.calculate_cn();   // compute copy number after each mutation event
+
     if(debug){
         cout << "GENOME AFTER duplication " << endl;
         // g.print();
@@ -410,8 +464,9 @@ int generate_duplication(genome& g, int c, int loc, int model, int cn_max, int d
 }
 
 
-int generate_deletion(genome& g, int c, int loc, int model, int cn_max, int debug){
-    if( g.chrs[c].size() <= 0 || loc >= g.chrs[c].size()){
+int generate_deletion(genome& g, int c, int seg_id, int model, int cn_max, int debug){
+    if(g.chrs[c].size()<=0){
+        cout << "All segments on chr " << c << " has lost" << endl;
         return 0;
     }
     if(debug){
@@ -433,12 +488,32 @@ int generate_deletion(genome& g, int c, int loc, int model, int cn_max, int debu
       cout << "del len:" << len << endl;
     }
 
-    if( len + loc >= g.chrs[c].size() ){
-        return 0;
+    int del_start = 0;
+    int del_msize = 0;
+    for(int i = 0; i < g.chrs[c].size(); i++){
+        if(g.chrs[c][i].seg_id == seg_id){
+            if(g.chrs[c][i-1].seg_id != seg_id){
+                del_start = i;
+                del_msize = 0;
+            }
+            del_msize++;
+            if(g.chrs[c][i+1].seg_id != seg_id){
+                break;
+            }
+        }
     }
+    // if( len + del_start >= g.chrs[c].size() ){
+    if( del_msize < len ){
+        cout << "Not enough size to delete " << len << ", delete " << del_msize << endl;
+        len = del_msize;
+        // return 0;
+    }
+    int del_end = del_start + len + 1;
+    if(debug) cout << "deletion start " << del_start << ", end " << del_end << endl;
 
     if(model == 0){
-        int state = g.cn_profile[c%22][g.chrs[c][loc].seg_id];
+        // int state = g.cn_profile[c%22][g.chrs[c][loc].seg_id];
+        int state = g.cn_profile[c%22][seg_id];
         // Find the number of segments in other haplotypes
         int hap_state = 0;
         int ploidy_at_c = get_ploidy_at_chr(g, c);
@@ -448,7 +523,7 @@ int generate_deletion(genome& g, int c, int loc, int model, int cn_max, int debu
             int hap = c % 22 + j * 22;
             // cout << "Alternative haplotype " << hap << endl;
             for(int i=0; i<g.chrs[hap].size();i++){
-                if(g.chrs[hap][i].seg_id == loc)
+                if(g.chrs[hap][i].seg_id == seg_id)
                 {
                     hap_state++;
                 }
@@ -456,7 +531,7 @@ int generate_deletion(genome& g, int c, int loc, int model, int cn_max, int debu
         }
         if(debug){
             cout << "Copies in other haplotypes: " << hap_state << endl;
-            cout << "\tSV: deleting segment, chrs, start, len: " << c << "\t" << loc << "\t" << len+1 << endl;
+            cout << "\tSV: deleting segment, chrs, seg_id, len: " << c << "\t" << seg_id << "\t" << len+1 << endl;
         }
 
         vector<int> possible_states;
@@ -482,8 +557,8 @@ int generate_deletion(genome& g, int c, int loc, int model, int cn_max, int debu
                 pstate = possible_states[0];
             }
             // Ensure there are "state" copy of the region
-            int start = g.chrs[c][loc].seg_id;
-            int end = g.chrs[c][loc+len].seg_id;
+            int start = g.chrs[c][del_start].seg_id;
+            int end = g.chrs[c][del_start + len].seg_id;
             if(debug){
                 cout << "del start " << start << endl;
                 cout << "del end " << end << endl;
@@ -509,25 +584,25 @@ int generate_deletion(genome& g, int c, int loc, int model, int cn_max, int debu
         }
     } // model == 0
 
-    if(model == 1){
-        // Find the minimum copy number of the region to delete
-        int min_state = g.cn_profile[c%22][g.chrs[c][loc].seg_id];
-        for (int i = loc; i < loc + len + 1; i++){
-            int state = g.cn_profile[c%22][g.chrs[c][i].seg_id];
-            if(state < min_state){
-                min_state = state;
-            }
-        }
-        if(min_state <= 0){
-            return 0;
-        }
-        g.chrs[c].erase(g.chrs[c].begin()+loc, g.chrs[c].begin()+loc+len+1);
+    if(model == 1 || model == 2){
+        // Find the minimum copy number of the region to delete when the interval to delete has different segments
+        // int min_state = g.cn_profile[c%22][g.chrs[c][loc].seg_id];
+        // for (int i = loc; i < loc + len + 1; i++){
+        //     int state = g.cn_profile[c%22][g.chrs[c][i].seg_id];
+        //     if(state < min_state){
+        //         min_state = state;
+        //     }
+        // }
+        // if(min_state <= 0){
+        //     return 0;
+        // }
+        g.chrs[c].erase(g.chrs[c].begin() + del_start, g.chrs[c].begin() + del_end);
     }
 
     g.calculate_cn();   // compute copy number after each mutation event
 
     if(debug){
-        cout << "Current state: " << g.cn_profile[c%22][g.chrs[c][loc].seg_id] << endl;
+        cout << "Current state: " << g.cn_profile[c%22][seg_id] << endl;
         set<double> segs;
         for(int i=0; i<g.chrs[c].size(); i++){
             segs.insert(g.chrs[c][i].seg_id);
@@ -546,13 +621,13 @@ int generate_chr_gain(genome& g, int cn_max, int debug){
     vector<int> available_chrs;
     get_available_chr(g, available_chrs);
     if(available_chrs.size()<=0){
-        // cout << "No available chromosmes!" << endl;
+        // cout << "No available chromosomes!" << endl;
         return 0;
     }
     int ci = gsl_rng_uniform_int(r, available_chrs.size());
     int c = available_chrs[ci];
     // int max_cn_c = get_max_cn_chr(g, c);
-    // Some segments with maximum copy number may have several copies and hence have copy number larger than specified value when having a chromosme gain
+    // Some segments with maximum copy number may have several copies and hence have copy number larger than specified value when having a chromosome gain
     int max_snum = get_max_seg_num_chr(g, c);
     if( g.chrs[c].size() <= 0 || max_snum > cn_max){
         return 0;
@@ -571,7 +646,7 @@ int generate_chr_gain(genome& g, int cn_max, int debug){
       }
     }
     // cout << "ID of new chr " << new_chr << endl;
-    for(int i=orig_size; i<=new_chr; i++){ // Fill the position for other chromosmes before the one to duplicate so that the chromosme ID follows the pattern
+    for(int i=orig_size; i<=new_chr; i++){ // Fill the position for other chromosomes before the one to duplicate so that the chromosome ID follows the pattern
       vector<segment> e;
       g.chrs.insert(g.chrs.end(), e);
       // cout << "Size of chr " <<  i << " is " << g.chrs[i].size() << endl;
@@ -594,14 +669,14 @@ int generate_chr_loss(genome& g, int debug) {
     vector<int> available_chrs;
     get_available_chr(g, available_chrs);
     if(available_chrs.size()<=0){
-        // cout << "No available chromosmes!" << endl;
+        // cout << "No available chromosomes!" << endl;
         return 0;
     }
     int ci = gsl_rng_uniform_int(r, available_chrs.size());
     int c = available_chrs[ci];
     // int c = gsl_rng_uniform_int(r, g.chrs.size() );
     int orig_num_chr = get_num_chr(g);
-    // Delete the segments in the chromosme, but keep the chromosme ID so that it can be remapped by 22
+    // Delete the segments in the chromosome, but keep the chromosome ID so that it can be remapped by 22
     g.chrs[c].erase(g.chrs[c].begin(), g.chrs[c].end());
     g.calculate_cn();   // compute copy number after each mutation event
 
@@ -624,7 +699,7 @@ int generate_wgd(genome& g, int cn_max, int debug) {
     int orig_num_chr = get_num_chr(g);
     int orig_size = g.chrs.size();
     g.chrs.insert(g.chrs.end(), g.chrs.begin(), g.chrs.end());
-    // replicate the segments for each chromosme
+    // replicate the segments for each chromosome
     for(int i=0; i<orig_size; i++){
          g.chrs[i + orig_size].insert(g.chrs[i + orig_size].begin(), g.chrs[i].begin(), g.chrs[i].end());
     }
@@ -641,56 +716,397 @@ int generate_wgd(genome& g, int cn_max, int debug) {
 }
 
 
-// Simulate mutations under different models
-vector<mutation> generate_mutation_by_model(genome& g, const int& edge_id, const double& blength, const double& node_time, const vector<int>& chr_lengths, const vector<double>& rate_constants, int model, int cn_max){
+
+// Simulate copy number matrices directly
+// Each genome/node is represented by a vector
+vector<vector<int>> simulate_cn(const int& edge_id, const double& blength, int model, int cn_max, int num_seg){
+    // Compute the transition probability matrix
+
+    // For each site
+
+}
+
+// Set the initial copy number matrix
+copy_number initialize_cn(const vector<int>& chr_lengths, int num_seg, int model){
+    copy_number cn;
+
+    for(int i=0; i<chr_lengths.size(); ++i){
+      int num_seg = chr_lengths[i];
+      for(int j=0; j<num_seg; j++){
+          if(model == 1){
+              cn[i][j] = 2;
+          }
+          else{
+             cn[i][j] = 4;
+          }
+       }
+    }
+
+    return cn;
+}
+
+// Convert the allele-specific state to total copy number
+int state2tcn(int state, int cn_max){
+    int cn = 0;
+    vector<int> sums;
+    // cout << "Sums of state: ";
+    for(int i=1; i<=(cn_max+1); i++){
+        int s = i * (i+1) / 2;
+        sums.push_back(s);
+        // cout << "\t" << s;
+    }
+    // cout << endl;
+    if(state < sums[0]) return 0;
+    int i = 1;
+    do{
+        if (state >= sums[i-1] && state < sums[i]) return i;
+        i++;
+    }while (i<=cn_max);
+    // cout << state << "\t" <<
+}
+
+
+void get_rate_matrix(double* qmat, int cn_max, int model, const vector<double>& rate_consts) {
+    int nstate = cn_max + 1;
+    if(model==2) nstate = (cn_max + 1) * (cn_max + 2) / 2;
+
+    if(model > 0){
+        double dup_rate = rate_consts[0];
+        double del_rate = rate_consts[1];
+        if(debug){
+            cout << "Getting rate matrix" << endl;
+        }
+        if(model==2){
+            get_rate_matrix_allele_specific(qmat, dup_rate, del_rate, cn_max);
+        }else{
+            get_rate_matrix_bounded(qmat, dup_rate, del_rate, cn_max);
+        }
+    }
+}
+
+
+void print_cn_state(copy_number curr_cn){
+    for(auto cn_profile : curr_cn){
+        int chr = cn_profile.first;
+        map<int, int> segs = cn_profile.second;
+        for(auto seg: segs){
+            cout << chr << "\t"  << seg.first << "\t" << seg.second << endl;
+        }
+    }
+}
+
+// Compute the probabilities of all possible state changes along a tree
+void get_state_change_probabilities(const int& node_id, const evo_tree& tree, double* qmat, int cn_max, int nstate, const vector<double>& rate_consts, ofstream& fout){
+    if( !tree.nodes[node_id].isRoot ){
+        double rate = accumulate(rate_consts.begin(), rate_consts.end(), 0.0);
+        // cout << "mutation rate " << rate << endl;
+        double pmat[(nstate)*(nstate)];
+        memset(pmat, 0, (nstate)*(nstate)*sizeof(double));
+        int edge_id = tree.nodes[node_id].e_in;
+        double blen = tree.edges[edge_id].length;
+        int parent = tree.edges[edge_id].start;
+        // copy_number curr_cn = cn_matrix[parent];
+        // copy_number next_cn(curr_cn);
+        if(debug) cout << "Probabilities for node " << node_id << endl;
+
+        if(blen > 0){
+            double pmat[(nstate)*(nstate)];
+            memset(pmat, 0, (nstate)*(nstate)*sizeof(double));
+            get_transition_matrix_bounded(qmat, pmat, blen, nstate);
+            // mutate the sequence
+            // for(int i=0; i < num_seg; i++){
+            int i = 0;
+            for(int si = 0; si<nstate; si++){
+                // double probs[nstate];
+                // memset(probs, 0, nstate);
+                // cout << "Probabilities for site " << i << ": " << endl;
+                for(int sk=0; sk<nstate; ++sk){
+                    double prob = get_transition_prob_bounded(pmat, si, sk, nstate);
+                    // probs[sk] = prob;
+                    // cout << edge_id << "\t" << si << "\t" << sk << "\t" << state2tcn(si, cn_max) << "\t" << state2tcn(sk, cn_max) << "\t" << prob << endl;
+                    fout << edge_id << "\t" << si << "\t" << sk << "\t" << state2tcn(si, cn_max) << "\t" << state2tcn(sk, cn_max) << "\t" << prob << endl;
+                }
+            }
+        }
+    }
+    if( tree.nodes[ node_id ].daughters.size() == 0 ){
+      // we are done
+      return;
+    }else{
+      get_state_change_probabilities(tree.nodes[ node_id ].daughters[0], tree, qmat, cn_max, nstate, rate_consts, fout);
+      get_state_change_probabilities(tree.nodes[ node_id ].daughters[1], tree, qmat, cn_max, nstate, rate_consts, fout);
+    }
+    return;
+}
+
+
+// Envolving sequences along the tree (available for bounded model)
+void evolve_sequences(map<int, copy_number>& cn_matrix, const int& node_id, const evo_tree& tree, double* qmat, int nstate, int num_seg, const vector<double>& rate_consts, map<int, int>& num_muts){
+    if(!tree.nodes[node_id].isRoot){
+        double rate = accumulate(rate_consts.begin(), rate_consts.end(), 0.0);
+        // cout << "mutation rate " << rate << endl;
+        double pmat[(nstate)*(nstate)];
+        memset(pmat, 0, (nstate)*(nstate)*sizeof(double));
+        int edge_id = tree.nodes[node_id].e_in;
+        double blen = tree.edges[edge_id].length;
+        int parent = tree.edges[edge_id].start;
+        copy_number curr_cn = cn_matrix[parent];
+        copy_number next_cn(curr_cn);
+        if(debug) cout << "Evolve for node " << node_id << endl;
+
+        if(blen > 0){
+            double pmat[(nstate)*(nstate)];
+            memset(pmat, 0, (nstate)*(nstate)*sizeof(double));
+            get_transition_matrix_bounded(qmat, pmat, blen, nstate);
+            // mutate the sequence
+            // for(int i=0; i < num_seg; i++){
+            int i = 0;
+            for(auto cn_profile : curr_cn){
+                int chr = cn_profile.first;
+                map<int, int> segs = cn_profile.second;
+                for(auto seg: segs){
+                    i++;
+                    int seg_id = seg.first;
+                    int si = seg.second;
+                    double probs[nstate];
+                    memset(probs, 0, nstate);
+                    // cout << "Probabilities for site " << i << ": " << endl;
+                    for(int sk=0; sk<nstate; ++sk){
+                        double prob = get_transition_prob_bounded(pmat, si, sk, nstate);
+                        probs[sk] = prob;
+                        // cout << si << "\t" << sk << "\t" << probs[sk] << endl;
+                    }
+                    // Randomly select the next state
+                    gsl_ran_discrete_t *  dis = gsl_ran_discrete_preproc(nstate, probs);
+                    int sel = gsl_ran_discrete(r, dis);
+                    // cout << "Selected state is " << sel << endl;
+                    next_cn[chr][seg_id] = sel;
+                }
+            }
+            // Compute the number of mutations by Poisson distribution
+            int num_mut_mean = num_seg * rate * blen * NORM_PLOIDY;
+            int num_mut = gsl_ran_poisson(r, num_mut_mean);
+            num_muts[edge_id] = num_mut;
+            if(debug) cout << "Number of mut: " << edge_id << "\t" << num_mut << "\t" << num_seg << "\t" << rate << "\t" << blen << endl;
+        }
+
+        if(debug){
+            cout << "Current copy number state is: ";
+            print_cn_state(curr_cn);
+
+            cout << "Next copy number state after time " << blen << " is: ";
+            print_cn_state(next_cn);
+        }
+        cn_matrix[node_id] = next_cn;
+    }
+    if( tree.nodes[ node_id ].daughters.size() == 0 ){
+      return;
+    }else{
+      evolve_sequences(cn_matrix, tree.nodes[ node_id ].daughters[0], tree, qmat, nstate, num_seg, rate_consts, num_muts);
+      evolve_sequences(cn_matrix, tree.nodes[ node_id ].daughters[1], tree, qmat, nstate, num_seg, rate_consts, num_muts);
+    }
+    return;
+}
+
+
+void write_cn(map<int, copy_number> cn_matrix, int node_id, ogzstream& out, int cn_max, int model){
+    copy_number cn_profile = cn_matrix[node_id];
+    for(auto c : cn_profile){
+        // cout << c.first << endl;
+        map<int, int> segs = c.second;
+        for(auto s : segs){
+            int cn = s.second;
+            if(model == 2) cn = state2tcn(s.second, cn_max);
+            // node_id, chr, seg_id, copy number
+            // cout << node_id + 1 << "\t" << c.first << "\t" << s.first << "\t" << s.second << "\t" << cn << endl;
+            out << node_id + 1 << "\t" << c.first << "\t" << s.first << "\t" << cn << endl;
+        }
+    }
+}
+
+
+// Print the simulated copy numbers
+void print_sequences(const map<int, copy_number>& cn_matrix, int cn_max, int model, int num_seg, map<int, int> num_muts, evo_tree& test_tree, string dir, string prefix, int age, int print_nex){
+    stringstream sstm;
+
+    sstm << dir << prefix << "-cn.txt.gz";
+    ogzstream out_cn(sstm.str().c_str());
+    for(int j=0; j<test_tree.nleaf; ++j){
+        write_cn(cn_matrix, j, out_cn, cn_max, model);
+    }
+    out_cn.close();
+    int num_total_bins = 0;
+    int num_invar_bins = 0;
+    cout << "reading data and calculating CNA regions" << endl;
+    vector<vector<vector<int>>> s_info = read_cn(sstm.str(), test_tree.nleaf-1, num_total_bins);
+    // We now need to convert runs of variable bins into segments of constant cn values, grouped by chromosome
+    vector<vector<int>> segs;
+    segs = get_all_segs(s_info, test_tree.nleaf-1, num_total_bins, num_invar_bins, 1);
+    int seg_size = segs.size();
+    sstm.str("");
+
+    // Output the copy numbers for internal nodes
+    sstm << dir << prefix << "-inodes-cn.txt.gz";
+    //ofstream out_cn(sstm.str());
+    ogzstream out_cn_inodes(sstm.str().c_str());
+    for(int j=test_tree.nleaf; j<test_tree.ntotn; ++j){
+        write_cn(cn_matrix, j, out_cn_inodes, cn_max, model);
+    }
+    out_cn_inodes.close();
+    sstm.str("");
+
+
+    sstm << dir << prefix << "-info.txt";
+    ofstream out_info(sstm.str());
+    out_info << "NODE TIMES:";
+    out_info << "\tnid\ttime" << endl;
+    for(int j=0; j< test_tree.node_times.size(); ++j){
+        out_info << "\t" << j+1 << "\t" << test_tree.node_times[j] << endl;
+    }
+    out_info << endl;
+    out_info << "SEGMENTS: " << seg_size << endl;
+    out_info << endl;
+    for(int i=0; i<test_tree.nleaf; ++i){
+        test_tree.print_ancestral_edges( i, out_info );
+    }
+    out_info << endl;
+
+    out_info.close();
+    sstm.str("");
+
+    sstm << dir << prefix << "-tree.txt";
+    ofstream out_tree(sstm.str());
+    //test_tree.write(out_tree);
+    out_tree << "start\tend\tlength\teid\tnmut" << endl;
+    for(int i=0; i<test_tree.nedge; ++i){
+        out_tree << test_tree.edges[i].start+1 << "\t" << test_tree.edges[i].end+1 << "\t" << test_tree.edges[i].length << "\t" << test_tree.edges[i].id+1 << "\t" << num_muts[test_tree.edges[i].id] << endl;
+    }
+    out_tree.close();
+    sstm.str("");
+
+    if(print_nex){
+        sstm << dir << prefix << "-tree.nex";
+        ofstream nex_tree(sstm.str());
+        int precision = 5;
+        string newick = test_tree.make_newick(precision);
+        test_tree.write_nexus(newick, nex_tree);
+        nex_tree.close();
+        sstm.str("");
+
+        // sstm << dir << prefix << "-tree-nmut.nex";
+        // ofstream nex_tree2(sstm.str());
+        // precision = 0;
+        // newick = test_tree.make_newick_nmut(precision, num_muts);
+        // test_tree.write_nexus(newick, nex_tree2);
+        // nex_tree2.close();
+        // sstm.str("");
+    }
+
+    sstm << dir << prefix << "-rel-times.txt";
+    double node_min = NODE_MIN_TIME;
+    for(int j=0; j<test_tree.nleaf-1; ++j){
+        if( test_tree.node_times[j] < node_min ) node_min = test_tree.node_times[j];
+    }
+    //cout << "leaf minimum: " << node_min << endl;
+    ofstream out_rel(sstm.str());
+    for(int j=0; j<test_tree.nleaf-1; ++j){
+        double delta = test_tree.node_times[j] - node_min;
+        if(delta < SMALL_VAL) delta = 0;
+        out_rel << j+1 << "\t" << delta << "\t" << ceil(age + delta) << endl;
+    }
+    out_rel.close();
+    sstm.str("");
+
+    // Print total number of mutations and total branch length
+    int total_mut = 0;
+    double total_blen = 0;
+    for(int i=0; i<test_tree.nedge; ++i){
+        total_blen += test_tree.edges[i].length;
+        total_mut += num_muts[test_tree.edges[i].id];
+    }
+    double mu_est = total_mut / total_blen / num_seg / NORM_PLOIDY;
+    cout << "The total number of mutations along branches is: " << total_mut << endl;
+    cout << "The total branch length is: " << total_blen << endl;
+    cout << "The estimated mutation rate per segment per year is: " << mu_est << endl;
+}
+
+// Simulate mutations under different models by simulating waiting times of a Markov chain
+// Each mutation occur at some sites on one chromosome (allele-specific)
+vector<mutation> generate_mutation_by_model(genome& g, const int& edge_id, const double& blength, const double& node_time, const vector<int>& chr_lengths, const vector<double>& rate_consts, int model, int cn_max, int& num_fail){
     vector<mutation> ret;
     if(debug) cout << "\tGenerate_mutations, blength:" << "\t" << blength << endl;
-
-    vector<double> site_rates;
-    if(debug){
-      cout << "\tComputing total mutation rate on the genome " << endl;
-    }
-    double rate = get_total_rates(g, site_rates, rate_constants, model, cn_max);
-    // cout << "Total mutation rate on the genome " << rate << endl;
+    double avg_rate = 0;  // The mean of genome mutation rates;
 
     // Simulate the waiting times of a Markov chain
     double time = 0.0;
+    int count = 0;  // Count the number of mutations
     while( time < blength ){
+        vector<double> site_rates;  // The rate is dynamically changing according to the status of each site
+        if(debug){
+          cout << "\tComputing total mutation rate on the genome " << endl;
+        }
+        double rate = get_total_rates_allele_specific(g, site_rates, rate_consts, model, cn_max);
+        if(rate == 0){
+            if(debug) cout << "This genome cannot be mutated any more on edge " << edge_id << endl;
+            break;
+        }
+        avg_rate = avg_rate + rate;
+        count++;
+        // cout << "Total mutation rate on the genome " << rate << endl;
+        if(debug){
+            cout << "Site rates:";
+            for(int i = 0; i< site_rates.size(); i++){
+                cout << "\t" << site_rates[i];
+            }
+            cout << endl;
+        }
+
         double tevent = gsl_ran_exponential(r, 1/rate);
         time += tevent;
         // choose type of event
-        int e = rchoose(r, rate_constants);     // assign the event to a site with probabilities proportional to the rates at the site
+        int e = rchoose(r, rate_consts);     // assign the event to a site with probabilities proportional to the rates at the site
 
         // Randomly select a site for duplication or deletion. Convert the site position back to chromosome ID and segment ID
         int site = 0;
         int c = 0;
-        int loc = 0;
+        int seg_id = 0;
         int ploidy_at_c = 0;
         if(e == 0 || e == 1){
             site = rchoose(r, site_rates);
-            site2chr(site, c, loc, chr_lengths);
+            site2chr(site, c, seg_id, chr_lengths);
             // Randomly choose a haplotype
             double x = runiform(r, 0, 1);
-            // Find the number of possible haplotype of this chromosme
+            // Find the number of possible haplotype of this chromosome
             ploidy_at_c = get_ploidy_at_chr(g, c);
-            if(ploidy_at_c == 0) {  // The chromosme has been completely lost
-                continue;
+            if(ploidy_at_c == 0) {  // The chromosome has been completely lost (should not been selected)
+                cout << "The chromosome " << c << "has been completely lost" << endl;
+                exit(1);
             }
-            int haplotype = myrng(ploidy_at_c);
-            c += 22 * haplotype;
+            int hap_c = c;
+            vector<int> haps;   // possible haplotypes
+            for(int h = 0; h < ploidy_at_c; h++){
+                haps.push_back(h);
+            }
+            random_shuffle(haps.begin(), haps.end(), fp);
+            for(int h = 0; h < ploidy_at_c; h++){
+                // cout << "All segments on chr " << c << " has lost" << endl;
+                hap_c = c + NUM_CHR * haps[h];
+                if(g.chrs[hap_c].size() > 0)    break;
+            }
+            c = hap_c;
             if(debug){
                 cout << "There are " << g.chrs.size() << " chromosome IDs now" << endl;
-                cout << "site " << site << " is at chr " << c << " pos " << loc << " haplotype " << haplotype << " ploidy " << ploidy_at_c << endl;
+                cout << "chosen site " << site << " is at chr " << c << " seg " << seg_id << " ploidy " << ploidy_at_c << endl;
             }
         }
 
         int res = 0;
         if(e == 0){   //duplications
-            res = generate_duplication(g, c, loc, model, cn_max, debug);
+            res = generate_duplication(g, c, seg_id, model, cn_max, debug);
         }
         else if( e == 1 ){   //deletions
             // make sure a deletion somewhere is possible
-            res = generate_deletion(g, c, loc, model, cn_max, debug);
+            res = generate_deletion(g, c, seg_id, model, cn_max, debug);
         }
         else if( e == 2 ){   //chr gain
             res = generate_chr_gain(g, cn_max, debug);
@@ -713,20 +1129,36 @@ vector<mutation> generate_mutation_by_model(genome& g, const int& edge_id, const
             g.mutations.push_back(mut);
             // time += tevent;
         }else{
-             if(debug) cout << "\tMutation failed:" << endl;
+             // if(debug)
+             // cout << "\tMutation failed:" << endl;
+             cout << "failed: tevent, total time, time/branch len, event, chr, site, loc/seg_id, copy_number\n" << tevent << "\t" << time << "\t" << blength << "\t" << e << "\t" << c << "\t" << site << "\t" << seg_id << "\t" << g.cn_profile[c%22][seg_id] << endl;
+             cout << "all segments on chr " << c << ":";
+             for(int i = 0; i<g.chrs[c].size(); i++){
+                 cout << "\t" << g.chrs[c][i].seg_id;
+             }
+             cout << endl;
+
+             g.print_cn();
+             // time -= tevent;
+             num_fail++;
              continue;
         }
 
         if(debug){
-            cout << "mut times, tevent, total time, time/branch len, event, chr, loc\t" << tevent << "\t" << time << "\t" << blength << "\t" << e << "\t" << c << "\t" << loc << endl;
+            cout << "mut times, tevent, total time, time/branch len, event, chr, loc\t" << tevent << "\t" << time << "\t" << blength << "\t" << e << "\t" << c << "\t" << seg_id << endl;
         }
     }
+
+    if(count > 0){
+        avg_rate = avg_rate / count;
+    }
+    cout << "Average genome mutation rate on edge " << edge_id << " is: " << avg_rate << endl;
 
     return ret;
 }
 
 
-vector<mutation> generate_mutation_times(const int& edge_id, const double& blength, const double& node_time, const vector<double>& rate_constants ){
+vector<mutation> generate_mutation_times(const int& edge_id, const double& blength, const double& node_time, const vector<double>& rate_consts ){
   bool print = false;
 
   if(print) cout << "\tgenerate_mutations, blength:" << "\t" << blength << endl;
@@ -737,8 +1169,8 @@ vector<mutation> generate_mutation_times(const int& edge_id, const double& bleng
   double time = 0.0;
   while( time < blength ){
     vector<double> rates;
-    for(int i=0; i<rate_constants.size(); ++i){
-      rates.push_back(rate_constants[i]/2.0);        // in coalescent Nmut ~ Pois( theta*l/2 )
+    for(int i=0; i<rate_consts.size(); ++i){
+      rates.push_back(rate_consts[i]/2.0);        // in coalescent Nmut ~ Pois( theta*l/2 )
       //cout << "##:\t" << rates[i] << endl;
     }
 
@@ -868,7 +1300,7 @@ void apply_mutations( const vector<mutation>& muts, genome& g, bool print = fals
       if( g.chrs.size() > 0 ){
           int orig_num_chr = g.chrs.size();
           g.chrs.insert(g.chrs.end(), g.chrs.begin(), g.chrs.end());
-          // replicate the segments for each chromosme
+          // replicate the segments for each chromosome
           for(int i=0; i<orig_num_chr; i++){
                g.chrs[i + orig_num_chr].insert(g.chrs[i + orig_num_chr].begin(), g.chrs[i].begin(), g.chrs[i].end());
           }
@@ -881,8 +1313,9 @@ void apply_mutations( const vector<mutation>& muts, genome& g, bool print = fals
   }
 }
 
-void traverse_tree_mutating(const int& node_id, const evo_tree& tree, const vector<int>& chr_lengths, const vector<double>& rate_constants,
-        map<int, vector<mutation>>& all_muts, vector<genome>& genomes, int model, int cn_max){
+
+
+void traverse_tree_mutating(const int& node_id, const evo_tree& tree, const vector<int>& chr_lengths, const vector<double>& rate_consts, map<int, vector<mutation>>& all_muts, map<int, int>& failed_muts, vector<genome>& genomes, int model, int cn_max){
   //cout << "\ttraverse_tree: " << node_id+1 << endl;
   if( !tree.nodes[node_id].isRoot ){
     // copy the parent
@@ -893,16 +1326,17 @@ void traverse_tree_mutating(const int& node_id, const evo_tree& tree, const vect
     //cout << "MUTATING genome: " << tree.nodes[node_id].parent+1 << " -> " << node_id+1 << "\t edge id: " << tree.nodes[node_id].e_in+1 << endl;
     int edge_id = tree.nodes[node_id].e_in;
     vector<mutation> muts;
+    int num_fail = 0;
     if( tree.edges[edge_id].length > 0 ){
         if(debug){
             cout << "Generating mutations for node " << node_id << endl;
         }
-        if(model == 2){
-            muts = generate_mutation_times(edge_id, tree.edges[edge_id].length, tree.node_times[ tree.nodes[node_id].parent ], rate_constants);
+        if(model == 3){
+            muts = generate_mutation_times(edge_id, tree.edges[edge_id].length, tree.node_times[ tree.nodes[node_id].parent ], rate_consts);
             apply_mutations( muts, genomes[ node_id ] );
         }
         else{
-            muts = generate_mutation_by_model(genomes[node_id], edge_id, tree.edges[edge_id].length, tree.node_times[ tree.nodes[node_id].parent], chr_lengths, rate_constants, model, cn_max);
+            muts = generate_mutation_by_model(genomes[node_id], edge_id, tree.edges[edge_id].length, tree.node_times[ tree.nodes[node_id].parent], chr_lengths, rate_consts, model, cn_max, num_fail);
         }
         // Print out copy number for checking
         if(debug){
@@ -917,19 +1351,22 @@ void traverse_tree_mutating(const int& node_id, const evo_tree& tree, const vect
         }
     }
     all_muts[edge_id] = muts;
+    failed_muts[edge_id] = num_fail;
   }
 
   if( tree.nodes[ node_id ].daughters.size() == 0 ){
     // we are done
     return;
   }else{
-    traverse_tree_mutating(tree.nodes[ node_id ].daughters[0], tree, chr_lengths, rate_constants, all_muts, genomes, model, cn_max);
-    traverse_tree_mutating(tree.nodes[ node_id ].daughters[1], tree, chr_lengths, rate_constants, all_muts, genomes, model, cn_max);
+    traverse_tree_mutating(tree.nodes[ node_id ].daughters[0], tree, chr_lengths, rate_consts, all_muts, failed_muts, genomes, model, cn_max);
+    traverse_tree_mutating(tree.nodes[ node_id ].daughters[1], tree, chr_lengths, rate_consts, all_muts, failed_muts, genomes, model, cn_max);
   }
   return;
 }
 
-void simulate_samples(vector<genome>& genomes, map<int,vector<mutation> >& muts, const evo_tree& tree, genome& germline, const vector<int>& chr_lengths, const vector<double>& rate_constants, int model, int cn_max, bool print = true){
+
+
+void simulate_samples(vector<genome>& genomes, map<int,vector<mutation>>& muts, map<int,int>& failed_muts, const evo_tree& tree, genome& germline, const vector<int>& chr_lengths, const vector<double>& rate_consts, int model, int cn_max, bool print = true){
   // assign the germline to the root of the tree
   germline.node_id = tree.root_node_id;
 
@@ -943,7 +1380,7 @@ void simulate_samples(vector<genome>& genomes, map<int,vector<mutation> >& muts,
   }
 
   // move through the evolutionary tree mutating genomes
-  traverse_tree_mutating(tree.root_node_id, tree, chr_lengths, rate_constants, muts, genomes, model, cn_max);
+  traverse_tree_mutating(tree.root_node_id, tree, chr_lengths, rate_consts, muts, failed_muts, genomes, model, cn_max);
 
   // final samples returned, print out leaf nodes
   if(print == true){
@@ -971,7 +1408,7 @@ void simulate_samples(vector<genome>& genomes, map<int,vector<mutation> >& muts,
 
 
 //void run_sample_set(int Ns, double* prc, double* pvs, double* ptree, double* pl, int* ret){
-void run_sample_set(int Ns, double* prc, double* pvs, int* ret){
+void run_sample_set(int Ns, int Ne, double beta, double* prc, double* pvs, int* ret){
   static const int arr[] = {367, 385, 335, 316, 299, 277, 251, 243, 184, 210, 215, 213, 166, 150, 134, 118, 121, 127, 79, 106, 51, 54};
   vector<int> chr_lengths (arr, arr + sizeof(arr) / sizeof(arr[0]) );
 
@@ -990,11 +1427,12 @@ void run_sample_set(int Ns, double* prc, double* pvs, int* ret){
   vector<double> node_times;
   stringstream sstm;
   vector<genome> results;
-  map<int, vector<mutation> > muts;
+  map<int, vector<mutation>> muts;
+  map<int, int> failed_muts;
   //cout << "\n\n###### New sample collection ######" << endl;
   //cout << "###### Ns+1= " << Ns+1 << endl;
 
-  generate_coal_tree(Ns, edges, lengths, epoch_times, node_times);
+  generate_coal_tree(Ns, edges, lengths, epoch_times, node_times, Ne, beta);
   evo_tree test_tree(Ns+1, edges, lengths);
 
   //for(int i=0; i<6; ++i) epars.push_back( ptree[i] );
@@ -1002,7 +1440,7 @@ void run_sample_set(int Ns, double* prc, double* pvs, int* ret){
   //evo_tree test_tree = construct_tree(Ns, epars, lengths, node_times );
 
   test_tree.node_times = node_times;
-  simulate_samples(results, muts, test_tree, germline, chr_lengths, rate_consts, model, cn_max, false);
+  simulate_samples(results, muts, failed_muts, test_tree, germline, chr_lengths, rate_consts, model, cn_max, false);
 
   int nbins = 4401;
   for(int i=0; i<(test_tree.nleaf-1); ++i){
@@ -1024,6 +1462,15 @@ void run_sample_set(int Ns, double* prc, double* pvs, int* ret){
   return;
 }
 
+
+int get_num_seg(const vector<int>& chr_lengths){
+    int total_seg = 0;
+    for(int i = 0; i<NUM_CHR; i++){
+        total_seg += chr_lengths[i];
+        // cout << alpha[i] << "\t" << theta[i] << "\t" << chr_lengths[i] << endl;
+    }
+    return total_seg;
+}
 
 
 void run_test(int mode, string dir){
@@ -1090,12 +1537,14 @@ void run_test(int mode, string dir){
     if(mode == 4){
       stringstream sstm;
       int Ns = 4;
+      int Ne = 0;
+      double beta = 0;
       double prc[] = {0.1, 0.1, 0.1, 0.1, 0.05};
       double pvs[] = {30.0, 30.0};
 
       for(int i=0; i<10; ++i){
         int* ret = new int[Ns*4401];
-        run_sample_set(Ns, prc, pvs, &(ret[0]) );
+        run_sample_set(Ns, Ne, beta, prc, pvs, &(ret[0]));
 
         sstm << dir << "sim-data-" << i+1 << "-cn.txt";
         ofstream out_cn(sstm.str());
@@ -1112,8 +1561,8 @@ void run_test(int mode, string dir){
 
 // randomly assign leaf edges to time points t0, t1, t2, t3, ...
 void assign_tip_times(double delta_t, int Ns, vector<double>& tobs, const vector<int>& edges, vector<double>& lengths){
-    tobs.clear(); // clear the sample time differences
     if(delta_t > 0){
+      tobs.clear(); // clear the sample time differences
       cout << "assigning temporal structure" << endl;
       bool assign0 = false;
       int bcount = 0;
@@ -1136,15 +1585,11 @@ void assign_tip_times(double delta_t, int Ns, vector<double>& tobs, const vector
         }
         bcount++;
       }
-    }else{
-      for(int i=0; i<Ns; i++){
-          tobs.push_back(0);
-      }
     }
 }
 
 
-void print_simulations(int mode, vector<genome>& results, map<int, vector<mutation>>& muts, evo_tree& test_tree, string dir, string prefix, int age, int print_allele, int print_mut, int print_nex){
+void print_simulations(int mode, int num_seg, vector<genome>& results, map<int, vector<mutation>>& muts, map<int, int>& failed_muts, evo_tree& test_tree, string dir, string prefix, int age, int print_allele, int print_mut, int print_nex){
     stringstream sstm;
 
     sstm << dir << prefix << "-cn.txt.gz";
@@ -1157,7 +1602,7 @@ void print_simulations(int mode, vector<genome>& results, map<int, vector<mutati
     int num_invar_bins = 0;
     cout << "reading data and calculating CNA regions" << endl;
     vector<vector<vector<int>>> s_info = read_cn(sstm.str(), test_tree.nleaf-1, num_total_bins);
-    // We now need to convert runs of variable bins into segments of constant cn values, grouped by chromosme
+    // We now need to convert runs of variable bins into segments of constant cn values, grouped by chromosome
     vector<vector<int>> segs;
     if(mode == 0){
         segs = get_invar_segs(s_info, test_tree.nleaf-1, num_total_bins, num_invar_bins);
@@ -1225,9 +1670,9 @@ void print_simulations(int mode, vector<genome>& results, map<int, vector<mutati
     vector<int> nmuts;
     ofstream out_tree(sstm.str());
     //test_tree.write(out_tree);
-    out_tree << "start\tend\tlength\teid\tnmut" << endl;
+    out_tree << "start\tend\tlength\teid\tnmut\tnfailed" << endl;
     for(int i=0; i<test_tree.nedge; ++i){
-        out_tree << test_tree.edges[i].start+1 << "\t" << test_tree.edges[i].end+1 << "\t" << test_tree.edges[i].length << "\t" << test_tree.edges[i].id+1 << "\t" << muts[test_tree.edges[i].id].size() << endl;
+        out_tree << test_tree.edges[i].start+1 << "\t" << test_tree.edges[i].end+1 << "\t" << test_tree.edges[i].length << "\t" << test_tree.edges[i].id+1 << "\t" << muts[test_tree.edges[i].id].size() << "\t" << failed_muts[test_tree.edges[i].id] << endl;
       nmuts.push_back(muts[test_tree.edges[i].id].size());
     }
     out_tree.close();
@@ -1273,15 +1718,79 @@ void print_simulations(int mode, vector<genome>& results, map<int, vector<mutati
     ofstream out_rel(sstm.str());
     for(int j=0; j<test_tree.nleaf-1; ++j){
         double delta = test_tree.node_times[j] - node_min;
+        if(delta < SMALL_VAL) delta = 0;
         out_rel << j+1 << "\t" << delta << "\t" << ceil(age + delta) << endl;
     }
     out_rel.close();
     sstm.str("");
 
+    // Print total number of mutations and total branch length
+    int total_mut = 0;
+    int failed_mut = 0;
+    int succ_mut = 0;
+    double total_blen = 0;
+    for(int i=0; i<test_tree.nedge; ++i){
+        total_blen += test_tree.edges[i].length;
+        total_mut += muts[test_tree.edges[i].id].size();
+        total_mut += failed_muts[test_tree.edges[i].id];
+        succ_mut += muts[test_tree.edges[i].id].size();
+        failed_mut += failed_muts[test_tree.edges[i].id];
+    }
+    double mu_est = total_mut / total_blen / num_seg / NORM_PLOIDY;
+    cout << "The total number of mutations along branches is: " << total_mut << endl;
+    cout << "The total number of successful mutations is: " << succ_mut << endl;
+    cout << "The total number of failed mutations is: " << failed_mut << endl;
+    cout << "The total branch length is: " << total_blen << endl;
+    cout << "The estimated mutation rate per segment per year is: " << mu_est << endl;
 }
 
 
-void run_simulations(int mode, const vector<int>& chr_lengths, int Ns, int Nsims, int model, int cons, int cn_max, int Ne, double delta_t, int age, const vector<double>& rate_consts, const vector<double>& var_size, string dir, string prefix, int print_allele, int print_mut, int print_nex){
+evo_tree generate_random_tree(int Ns, int Ne, int age, double beta, double delta_t, int cons){
+    vector<int> edges;
+    vector<double> lengths;
+    vector<double> epoch_times;
+    vector<double> node_times;
+
+    generate_coal_tree(Ns, edges, lengths, epoch_times, node_times, Ne, beta);
+    if(debug){
+      cout << "Initial coalescence tree: " << endl;
+      evo_tree test_tree0(Ns+1, edges, lengths);
+      test_tree0.print();
+    }
+
+    if(cons == 0){
+        age = MAX_AGE;
+        tobs = vector<double>(Ns, 0);
+    }
+    assign_tip_times(delta_t, Ns, tobs, edges, lengths);
+
+    evo_tree test_tree(Ns+1, edges, lengths);
+    if(debug){
+      cout << "Tree after tip sampling: " << endl;
+      test_tree.print();
+    }
+    // Ensure that the rescaled tree by age has a height smaller than the age of last sample
+    // Need tobs to get the miminmal tree height
+    if(cons == 1){
+      double min_height = *max_element(tobs.begin(), tobs.end());
+      double max_height = age + min_height;
+      double tree_height = runiform(r, min_height, max_height);
+      double old_tree_height = test_tree.get_tree_height();
+      double ratio = tree_height/old_tree_height;
+      // test_tree.scale_time(ratio);
+      // Only scaling internal nodes to allow large differences at the tip
+      test_tree.scale_time_internal(ratio);
+      if(debug){
+          cout << "Tree height before scaling " << old_tree_height << endl;
+          cout << "Scaling ratio " << ratio << endl;
+          test_tree.print();
+      }
+    }
+    return test_tree;
+}
+
+
+void run_simulations(string tree_file, int mode, int method, const vector<int>& chr_lengths, int num_seg, int Ns, int Nsims, int cn_max, int model, int cons, int Ne, double beta, double delta_t, int age, const vector<double>& rate_consts, const vector<double>& var_size, string dir, string prefix, int print_allele, int print_mut, int print_nex){
     // can specify the germline in a number of different ways
     //genome germline(1,10);
     //genome germline(42,1000);
@@ -1290,13 +1799,9 @@ void run_simulations(int mode, const vector<int>& chr_lengths, int Ns, int Nsims
     germline.mean_dup_size = var_size[0];
     germline.mean_del_size = var_size[1];
 
-    vector<int> edges;
-    vector<double> lengths;
-    vector<double> epoch_times;
-    vector<double> node_times;
-
     vector<genome> results;
     map<int, vector<mutation>> muts;   // hold all mutations by edge id
+    map<int, int> failed_muts;  // the number of failed mutations on each edge
     string orig_prefix = prefix;
 
     for(int i=0; i<Nsims; ++i){
@@ -1306,51 +1811,68 @@ void run_simulations(int mode, const vector<int>& chr_lengths, int Ns, int Nsims
           prefix = "sim-data-" + to_string(int(i+1));
         }
         cout << "Prefix of output file: " << prefix <<endl;
-        generate_coal_tree(Ns, edges, lengths, epoch_times, node_times);
-        if(debug){
-          cout << "Initial coalescence tree: " << endl;
-          evo_tree test_tree0(Ns+1, edges, lengths);
-          test_tree0.print();
+        evo_tree test_tree;
+        if(tree_file != ""){
+            test_tree = read_tree_info(tree_file, Ns);
+        }else{
+            test_tree = generate_random_tree(Ns, Ne, age, beta, delta_t, cons);
+        }
+        cout << "Simulated tree height " << test_tree.get_tree_height() << endl;
+
+        if(method == 0){
+            simulate_samples(results, muts, failed_muts, test_tree, germline, chr_lengths, rate_consts, model, cn_max, false);
+            int num_seg = get_num_seg(chr_lengths);
+            print_simulations(mode, num_seg, results, muts, failed_muts, test_tree, dir, prefix, age, print_allele, print_mut, print_nex);
+
+            int root = Ns + 1;
+
+            int nstate = cn_max + 1;
+            if(model==2) nstate = (cn_max + 1) * (cn_max + 2) / 2;
+
+            double qmat[(nstate)*(nstate)];
+            memset(qmat, 0, (nstate)*(nstate)*sizeof(double));
+            get_rate_matrix(qmat, cn_max, model, rate_consts);
+
+            string fname = dir + prefix + "-prob.txt";
+            ofstream fout(fname);
+            get_state_change_probabilities(root, test_tree, qmat, cn_max, nstate, rate_consts, fout);
+            fout.close();
+        }
+        else{
+            int root = Ns + 1;
+
+            int nstate = cn_max + 1;
+            if(model==2) nstate = (cn_max + 1) * (cn_max + 2) / 2;
+
+            double qmat[(nstate)*(nstate)];
+            memset(qmat, 0, (nstate)*(nstate)*sizeof(double));
+            get_rate_matrix(qmat, cn_max, model, rate_consts);
+
+            map<int, copy_number> cn_matrix; // copy number matrix for each node
+            map<int, int> num_muts; // number of mutations on each edge
+            copy_number  init_cn = initialize_cn(chr_lengths, num_seg, model);
+            if(debug){
+                cout << "Initial copy number state: " << endl;
+                print_cn_state(init_cn);
+            }
+            cn_matrix[root] = init_cn;
+
+            evolve_sequences(cn_matrix, root, test_tree, qmat, nstate, num_seg, rate_consts, num_muts);
+            print_sequences(cn_matrix, cn_max, model, num_seg, num_muts, test_tree, dir, prefix, age, print_nex);
+
+            string fname = dir + prefix + "-prob.txt";
+            ofstream fout(fname);
+            get_state_change_probabilities(root, test_tree, qmat, cn_max, nstate, rate_consts, fout);
+            fout.close();
         }
 
-        // Scale branch lengths by Ne
-        for(int l = 0; l < lengths.size(); ++l) lengths[l] = lengths[l] * Ne;
+        // edges.clear();
+        // lengths.clear();
+        // epoch_times.clear();
+        // node_times.clear();
 
-        assign_tip_times(delta_t, Ns, tobs, edges, lengths);
-
-        evo_tree test_tree(Ns+1, edges, lengths);
-        if(debug){
-          cout << "Tree after tip sampling: " << endl;
-          test_tree.print();
-        }
-        // Ensure that the rescaled tree by age has a height smaller than the age of last sample
-        // Need tobs to get the miminmal tree height
-        if(cons){
-          double min_height = *max_element(tobs.begin(), tobs.end());
-          double max_height = age + min_height;
-          double tree_height = runiform(r, min_height, max_height);
-          double old_tree_height = test_tree.get_tree_height();
-          double ratio = tree_height/old_tree_height;
-          // test_tree.scale_time(ratio);
-          // Only scaling internal nodes to allow large differences at the tip
-          test_tree.scale_time_internal(ratio);
-          if(debug){
-              cout << "Tree height before scaling " << old_tree_height << endl;
-              cout << "Scaling ratio " << ratio << endl;
-              test_tree.print();
-          }
-          cout << "Simulated tree height " << test_tree.get_tree_height() << endl;
-        }
-
-        simulate_samples(results, muts, test_tree, germline, chr_lengths, rate_consts, model, cn_max, false);
-        print_simulations(mode, results, muts, test_tree, dir, prefix, age, print_allele, print_mut, print_nex);
-
-        edges.clear();
-        lengths.clear();
         results.clear();
         muts.clear();
-        epoch_times.clear();
-        node_times.clear();
     }
 }
 
@@ -1380,12 +1902,14 @@ int main (int argc, char ** const argv) {
     double dup_size, del_size;
     // effective population size
     int Ne;
+    double beta;    // population growth rate
     // relative timing difference
     double delta_t;
-    int seed, mode;
+    int seed, mode, method;
     int model, cons;
-    int cn_max, seg_max;
+    int cn_max, seg_max, fix_seg;
     int print_allele, print_mut, print_nex;
+    string tree_file;
 
     namespace po = boost::program_options;
     po::options_description generic("Generic options");
@@ -1399,15 +1923,19 @@ int main (int argc, char ** const argv) {
        ;
     po::options_description optional("Optional parameters");
     optional.add_options()
+      ("tree_file", po::value<string>(&tree_file)->default_value(""), "input tree file ")
       ("mode", po::value<int>(&mode)->default_value(0), "running mode of the program (0: Simuting genomes in fix-sized bins, 1: Simulating genomes in random segments, 2 to 4: Test)")
+      ("method", po::value<int>(&method)->default_value(0), "method of simulation (0: simulating waiting times, 1: Simulating sequences directly)")
 
-      ("model,d", po::value<int>(&model)->default_value(0), "model of evolution (0: JC69, 1: 1-step bounded, 2: Poisson)")
+      ("model,d", po::value<int>(&model)->default_value(0), "model of evolution (0: Mk, 1: one-step bounded (total), 2: one-step bounded (allele-specific), 3: Poisson)")
       ("age,a", po::value<int>(&age)->default_value(100), "age of the patient to simulate")
       ("epop,e", po::value<int>(&Ne)->default_value(2), "effective population size")
+      ("beta,b", po::value<double>(&beta)->default_value(0), "population growth rate")
       ("tdiff,t", po::value<double>(&delta_t)->default_value(1), "relative timing difference")
       ("constrained", po::value<int>(&cons)->default_value(1), "constraints on branch length (0: none, 1: fixed total time)")
       ("cn_max", po::value<int>(&cn_max)->default_value(4), "maximum copy number of a segment")
       ("seg_max", po::value<int>(&seg_max)->default_value(100), "maximum number of segments to simulate")
+      ("fix_seg", po::value<int>(&fix_seg)->default_value(1), "whether or not to fix the number of segments to simulate")
 
       ("nregion,r", po::value<int>(&Ns)->default_value(5), "number of regions")
       ("nsim,n", po::value<int>(&Nsims)->default_value(1), "number of multi-region samples")
@@ -1457,14 +1985,24 @@ int main (int argc, char ** const argv) {
   }
 
   vector<int> chr_lengths = CHR_BIN_SIZE;
+  int num_seg = 0;
+
+  if(method==1) {   // when simulating sequences directly, each site is a final segment
+      mode = 1;
+  }
+
   if(mode==1){
-      cout << "Under this model, each site is treated as a final segment. The mean duplication/deletion size is currently fixed to be 1" << endl;
+      cout << "Under this mode, each site is treated as a final segment. The mean duplication/deletion size is currently fixed to be 1" << endl;
       dup_size = 1;
       del_size = 1;
       // Randomly generate the number of segments
-      int num_seg = runiform(r, 0.2, 0.8) * seg_max;
+      if(fix_seg){
+           num_seg = seg_max;
+      }else{
+           num_seg = runiform(r, 0.2, 0.8) * seg_max;
+      }
       // cout << "Approximate number of segments to simulate is " << num_seg << endl;
-      // Distribute the segments according to the size of chromosmes
+      // Distribute the segments according to the size of chromosomes
       double theta[NUM_CHR] = {};
       double alpha[NUM_CHR] = {};
       // int bin_size = accumulate(CHR_BIN_SIZE.begin(), CHR_BIN_SIZE.end(), 0);
@@ -1480,11 +2018,36 @@ int main (int argc, char ** const argv) {
           total_seg += chr_lengths[i];
           // cout << alpha[i] << "\t" << theta[i] << "\t" << chr_lengths[i] << endl;
       }
-      cout << "Number of segments simulated is " << total_seg << endl;
+      if(total_seg > num_seg){
+          int diff = total_seg - num_seg;
+          while(diff != 0){
+              for(int i = 0; i<NUM_CHR; i++){
+                  if(chr_lengths[i] > 1){
+                      chr_lengths[i] -= 1;
+                      diff--;
+                  }
+                  if(diff == 0) break;
+              }
+          }
+      }
+      cout << "Number of segments simulated is " << num_seg << endl;
+  }else{    // When simulating waiting times, only simulate allele-specific model
+    if(model == 1) model = 2;
   }
+
+  cout << "Maximum copy number of a segment is " << cn_max << endl;
+
   vector<double> var_size = {dup_size, del_size};
   vector<double> rate_consts = {dup_rate, del_rate, chr_gain, chr_loss, wgd};
 
+  if(method == 0){
+      cout << "Simulating waiting times" << endl;
+  }
+  else{
+      cout << "Simulating sequences directly" << endl;
+  }
+
+  cout << "Evolution model simulated: " << model << endl;
   // priors on rates
   //vector<double> pars;
   //read_params(argv[4],pars);
@@ -1493,7 +2056,10 @@ int main (int argc, char ** const argv) {
 
   // simulate coalescent tree and apply SVs
   if(mode >= 0){
-      run_simulations(mode, chr_lengths, Ns, Nsims, model, cons, cn_max, Ne, delta_t, age, rate_consts, var_size, dir, prefix, print_allele, print_mut, print_nex);
+      if(beta > 0){
+          cout << "Simulating exponential growth" << endl;
+      }
+      run_simulations(tree_file, mode, method, chr_lengths, num_seg, Ns, Nsims, cn_max, model, cons, Ne, beta, delta_t, age, rate_consts, var_size, dir, prefix, print_allele, print_mut, print_nex);
   }
   else{
       run_test(mode, dir);

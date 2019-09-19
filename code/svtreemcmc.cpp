@@ -280,50 +280,6 @@ gsl_vector* initialize_branch_length(evo_tree& rtree, int cons=0)
 }
 
 
-// Create a new tree with the same topology as input tree but different branch lengths
-evo_tree create_new_tree(gsl_vector* blens, evo_tree& rtree, int cons){
-    // create a new tree
-    vector<edge> enew;
-    // cout << "copy original edges" << endl;
-    for(int i=0; i<rtree.nedge; ++i){
-      enew.push_back( rtree.edges[i] );
-    }
-    if(cons){
-        // cout << "branches constrained" << endl;
-        int count = 0;
-        for(int i=0; i<rtree.nedge-1; ++i){
-            if(enew[i].end > Ns){
-                // cout << "count " << count << endl;
-                enew[i].length = gsl_vector_get(blens, count);
-                count++;
-            }else{
-                enew[i].length = 0;
-            }
-        }
-
-        // Time to first sample
-        // cout << "time to 1st sample: " << total_time << endl;
-        evo_tree new_tree(rtree.nleaf, enew, rtree.get_total_time(), rtree.tobs);
-        new_tree.mu = rtree.mu;
-        new_tree.dup_rate = rtree.dup_rate;
-        new_tree.del_rate = rtree.del_rate;
-
-        return new_tree;
-    }
-    else{
-        // cout << "branches unconstrained" << endl;
-        for(int i=0; i<rtree.nedge-1; ++i){
-            enew[i].length = gsl_vector_get(blens,i);
-        }
-
-        evo_tree new_tree(Ns+1, enew);
-        new_tree.mu = rtree.mu;
-        new_tree.dup_rate = rtree.dup_rate;
-        new_tree.del_rate = rtree.del_rate;
-
-        return new_tree;
-    }
-}
 
 evo_tree create_new_coal_tree(int nsample, int Ne){
   //cout << "GENERATING COAL TREE" << endl;
@@ -1607,6 +1563,143 @@ vector<double> get_vertex_indices(string const& pointLine)
 }
 
 
+// Read parsimony trees built by other tools
+evo_tree read_reference_tree(const string& tree_file, int Ns, const vector<double>& rates, const vector<double>& tobs){
+    int debug = 0;
+    if(debug)   cout << tree_file << endl;
+    evo_tree rtree = read_tree_info(tree_file, Ns);
+    // for(int i=0; i<tobs.size();i++){
+    //     cout << tobs[i] << endl;
+    // }
+    rtree.tobs = tobs;
+    if(debug) rtree.print();
+
+    if(rates.size()>1){
+      rtree.dup_rate = rates[0];
+      rtree.del_rate = rates[1];
+      if(rates.size() > 2){
+          rtree.chr_gain_rate = rates[2];
+          rtree.chr_loss_rate = rates[3];
+          rtree.wgd_rate = rates[4];
+      }
+    }
+    else{
+      rtree.mu = rates[0];
+    }
+
+    rtree.tree_height = rtree.get_tree_height();
+    rtree.total_time = rtree.get_total_time();
+    cout << "Tree height " << rtree.tree_height << endl;
+    cout << "Total time " << rtree.total_time << endl;
+
+    return rtree;
+}
+
+
+void revise_init_tree(evo_tree& rtree, const vector<double> rates, int cons){
+        if(rates.size()>1){
+          rtree.dup_rate = rates[0];
+          rtree.del_rate = rates[1];
+          if(rates.size() > 2){
+              rtree.chr_gain_rate = rates[2];
+              rtree.chr_loss_rate = rates[3];
+              rtree.wgd_rate = rates[4];
+          }
+        }
+        else{
+          rtree.mu = rates[0];
+        }
+
+        if(cons){
+            adjust_tree_height(rtree);
+            adjust_tree_tips(rtree);
+            adjust_tree_blens(rtree);
+        }
+        rtree.tree_height = rtree.get_tree_height();
+        rtree.total_time = rtree.get_total_time();
+        cout << "Total time of random tree " << rtree.total_time << endl;
+
+}
+
+
+void run_with_reference_tree(string rtreefile, int Ns, int Nchar, int num_invar_bins, int fix_topology, int model, int cons, int maxj, int cn_max, int only_seg, int correct_bias, const vector<double>& ref_rates, const vector<double>& tobs, const vector<double>& rates, int n_draws, int n_burnin, int n_gap, const vector<double>& proposal_parameters, const vector<double>& prior_parameters_blen, const vector<double>& prior_parameters_height, const vector<double>& alphas, const vector<double>& prior_parameters_mut, double lambda_topl, string trace_param_file, string trace_tree_file, int sample_prior){
+    // MLE testing
+    // read in true tree
+    evo_tree test_tree = read_reference_tree(rtreefile, Ns, ref_rates, tobs);
+    double Ls = 0.0;
+    Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, test_tree, model, cons, cn_max, only_seg, correct_bias);
+    // cout << "\nOriginal tree likelihood: " << Ls << endl;
+    cout << 0 << "\t" << Ls  << "\t" << test_tree.mu << "\t" << test_tree.dup_rate << "\t" << test_tree.del_rate;
+    // Output the original tree length
+    double avg_blen = 0;
+    for(int i=0; i<test_tree.nedge; ++i){
+      avg_blen += test_tree.edges[i].length;
+      cout << "\t" << test_tree.edges[i].length;
+    }
+    avg_blen = avg_blen/test_tree.nedge;
+    cout << "\t" << avg_blen;
+    cout << endl;
+    cout << "Internal EDGES:" << endl;
+    cout << "\tid\tstart\tend\tlength" << endl;
+    for(int i=0; i<test_tree.nintedge; ++i){
+      cout << "\t" << test_tree.intedges[i]->id+1 << "\t" << test_tree.intedges[i]->start+1 << "\t" << test_tree.intedges[i]->end+1 << "\t" << test_tree.intedges[i]->length << endl;
+    }
+
+    double Lf = 0;
+    stringstream sstm;
+    ofstream out_tree;
+
+    cout << "Generate the start tree" << endl;
+    // start with a random coalescence tree
+    evo_tree rtree;
+    // start with a random tree with the same topology
+    if(fix_topology){
+        gsl_vector* rblens = gsl_vector_alloc(test_tree.nedge);
+        for(int i=0; i<test_tree.nedge; ++i){
+          gsl_vector_set(rblens, i, runiform(r, 1, age));
+        }
+        rtree = create_new_tree(rblens, test_tree, 0);
+    }
+    else{
+        rtree = generate_coal_tree(Ns);
+    }
+    revise_init_tree(rtree, rates, cons);
+
+    // sstm << "./test1/sim-data-" << cons << maxj << "-mcmc-tree-start.txt";
+    // out_tree.open(sstm.str());
+    // rtree.write(out_tree);
+    // out_tree.close();
+    // sstm.str("");
+
+    // Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, cn_max, only_seg, correct_bias);
+    Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, 0, cn_max, only_seg, correct_bias);
+    cout << "\nRandom tree likelihood: " << Ls << endl;
+
+    // Estimate branch length with MCMC
+    cout << "\n\n### Running MCMC" << endl;
+    run_mcmc(rtree, model, n_draws, n_burnin, n_gap, proposal_parameters, prior_parameters_blen, prior_parameters_height, alphas, prior_parameters_mut, lambda_topl, trace_param_file, trace_tree_file, sample_prior, fix_topology, cons, maxj, cn_max, only_seg, correct_bias);
+    // cout << "\nMinimised tree likelihood by MCMC / mu : " << Lf << "\t" << min_tree.mu*Nchar <<  endl;
+
+    // cout << "\n\n### Running ML" << endl;
+    // // evo_tree min_tree_ml = max_likelihood(rtree, model, Lf, 0.01, 0.01, 2000, cons, maxj);
+    // evo_tree min_tree_ml = max_likelihood_BFGS(rtree, model, Lf, 0.01, 0.01, cons, maxj);
+    // if(model==0){
+    //     cout << "\nMinimised tree likelihood by ML / mu : " << Lf << "\t" << min_tree_ml.mu <<  endl;
+    // }
+    // if(model==1){
+    //     cout << "\nMinimised tree likelihood by ML / dup_rate / del_rate : " << Lf << "\t" << min_tree_ml.dup_rate << "\t" << min_tree_ml.del_rate <<  endl;
+    // }
+    //
+    // //min_tree.print();
+    // sstm << "./test1/sim-data-" << cons << maxj << "-ML-tree.txt";
+    // out_tree.open(sstm.str());
+    // min_tree_ml.write(out_tree);
+    // out_tree.close();
+    // sstm.str("");
+}
+
+
+
 int main (int argc, char ** const argv) {
     int n_draws, n_burnin, n_gap, model, cons, maxj, seed, clock, cn_max, correct_bias;
     double lambda, sigma_blen, mbactrian, lambda_topl, sigma_height;
@@ -1619,6 +1712,7 @@ int main (int argc, char ** const argv) {
     double mu, dup_rate, del_rate, chr_gain_rate, chr_loss_rate, wgd_rate;
     double sigma_mut, sigma_dup, sigma_del, sigma_gain, sigma_loss, sigma_wgd;
     double sigma_lmut, sigma_ldup, sigma_ldel, sigma_lgain, sigma_lloss, sigma_lwgd;
+    int is_bin, incl_all;
 
     namespace po = boost::program_options;
     po::options_description generic("Generic options");
@@ -1636,6 +1730,8 @@ int main (int argc, char ** const argv) {
             ("config_file", po::value<string>(&config_file)->default_value(""), "configuration file of input parameters")
             ("nsample,s", po::value<int>(&Ns)->default_value(5), "number of samples or regions")
             ("cn_max", po::value<int>(&cn_max)->default_value(4), "maximum copy number of a segment")
+            ("is_bin", po::value<int>(&is_bin)->default_value(1), "whether or not the input copy number is for each bin. If not, the input copy number is read as it is")
+            ("incl_all", po::value<int>(&incl_all)->default_value(1), "whether or not to include all the input copy numbers without further propressing")
 
             ("trace_param_file", po::value<string>(&trace_param_file)->default_value("trace-mcmc-params.txt"), "output trace file of parameter values")
             ("trace_tree_file", po::value<string>(&trace_tree_file)->default_value("trace-mcmc-trees.txt"), "output trace file of trees")
@@ -1732,16 +1828,16 @@ int main (int argc, char ** const argv) {
     setup_rng(seed);
 
     if(model==0){
-        cout << "Assuming JC69 model " << endl;
+        cout << "Assuming Mk model " << endl;
     }
-    if(model==1){
-        cout << "Assuming Bounded model " << endl;
-    }
+    if(model==1) cout << "Assuming One-step Bounded model " << endl;
+    if(model==2) cout << "Assuming One-step allele-specific model " << endl;
+
     if (cons==0){
         cout << "Assuming the tree is unconstrained " << endl;
     }
     else{
-        cout << "Assuming the tree is constrained by age " << endl;
+        cout << "Assuming the tree is constrained by age at sampling time" << endl;
     }
 
     if (maxj==0){
@@ -1765,12 +1861,22 @@ int main (int argc, char ** const argv) {
         cout << "Estimating mutation rates for segment duplication/deletion " << endl;
     }
 
-    // vector<vector<int> > data = read_data_var_regions(datafile, Ns, cn_max);
-    int num_invar_bins = 0;
     int num_total_bins = 0;
     Nchar = 0;
-    map<int, vector<vector<int>>> data = read_data_var_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins, Nchar);
-    // Nchar = data.size();
+    num_invar_bins = 0;
+    map<int, vector<vector<int>>> data;
+    if(is_bin==1){
+        cout << "Merging consecutive bins in the input" << endl;
+        data = read_data_var_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins, Nchar);
+    }else{
+        if(incl_all==1){
+            cout << "Using all input segments. There will be no bias correction " << endl;
+            correct_bias = 0;
+        }else{
+            cout << "Using variant input segments " << endl;
+        }
+        data = read_data_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins, Nchar, incl_all);
+    }
 
     // tobs already defined globally
     tobs = read_time_info(timefile, Ns, age);
@@ -1778,29 +1884,7 @@ int main (int argc, char ** const argv) {
         cout << "The age of patient at the first sampling time: " << age << endl;
     }
 
-    //vector<vector<int> > vobs; // already defined globally
-    // for(int nc=0; nc<Nchar; ++nc) {
-    //     vector<int> obs;
-    //     for(int i=0; i<Ns; ++i) {
-    //             obs.push_back(data[nc][i+3]);
-    //     }
-    //     vobs.push_back(obs);
-    // }
-
-    // Construct the CN matrix by chromosme
-    int total_chr = data.rbegin()->first;
-    for(int nchr=1; nchr<=total_chr; nchr++){
-      vector<vector<int>> obs_chr;
-      // Nchar += data[nchr].size();
-      for(int nc=0; nc<data[nchr].size(); ++nc){
-          vector<int> obs;
-          for(int i=0; i<Ns; ++i){
-            obs.push_back( data[nchr][nc][i+3] );
-          }
-          obs_chr.push_back( obs );
-      }
-      vobs[nchr] = obs_chr;
-    }
+    vobs = get_obs_vector_by_chr(data);
 
     // parameters for proposal distribution
     vector<double> proposal_parameters({lambda, mbactrian, sigma_blen});
@@ -1858,140 +1942,39 @@ int main (int argc, char ** const argv) {
     prior_parameters_height.push_back(min_height);
     prior_parameters_height.push_back(max_height);
 
+    vector<double> rates;
+    if(model==0){
+        rates.push_back(mu);
+    }else{
+        rates.push_back(dup_rate);
+        rates.push_back(del_rate);
+        if(!only_seg){
+            rates.push_back(chr_gain_rate);
+            rates.push_back(chr_loss_rate);
+            rates.push_back(wgd_rate);
+        }
+    }
+
     if(rtreefile!="") {
-            // MLE testing
-            // read in true tree
-            evo_tree test_tree = read_tree_info(rtreefile, Ns);
-            test_tree.print();
-            if(model==0){
-                test_tree.mu = rmu;
+        vector<double> ref_rates;
+        if(model==0){
+            ref_rates.push_back(rmu);
+        }else{
+            ref_rates.push_back(rdup_rate);
+            ref_rates.push_back(rdel_rate);
+            if(!only_seg){
+                ref_rates.push_back(rgain_rate);
+                ref_rates.push_back(rloss_rate);
+                ref_rates.push_back(rwgd_rate);
             }
-            if(model==1){
-                test_tree.dup_rate = rdup_rate;
-                test_tree.del_rate = rdel_rate;
-                test_tree.chr_gain_rate = chr_gain_rate;
-                test_tree.chr_loss_rate = chr_loss_rate;
-                test_tree.wgd_rate = wgd_rate;
-                test_tree.mu =dup_rate + del_rate + chr_gain_rate + chr_loss_rate + wgd_rate;
-            }
-            test_tree.tobs = tobs;
-            test_tree.tree_height = test_tree.get_tree_height();
-            test_tree.total_time = test_tree.get_total_time();
-            cout << "Tree height " << test_tree.tree_height << endl;
-            cout << "Total time " << test_tree.total_time << endl;
-            double Ls = 0.0;
-            Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, test_tree, model, cons, cn_max, only_seg, correct_bias);
-            // cout << "\nOriginal tree likelihood: " << Ls << endl;
-            cout << 0 << "\t" << Ls  << "\t" << test_tree.mu << "\t" << test_tree.dup_rate << "\t" << test_tree.del_rate;
-            // Output the original tree length
-            double avg_blen = 0;
-            for(int i=0; i<test_tree.nedge; ++i){
-              avg_blen += test_tree.edges[i].length;
-              cout << "\t" << test_tree.edges[i].length;
-            }
-            avg_blen = avg_blen/test_tree.nedge;
-            cout << "\t" << avg_blen;
-            cout << endl;
-            cout << "Internal EDGES:" << endl;
-            cout << "\tid\tstart\tend\tlength" << endl;
-            for(int i=0; i<test_tree.nintedge; ++i){
-              cout << "\t" << test_tree.intedges[i]->id+1 << "\t" << test_tree.intedges[i]->start+1 << "\t" << test_tree.intedges[i]->end+1 << "\t" << test_tree.intedges[i]->length << endl;
-            }
-
-            double Lf = 0;
-            stringstream sstm;
-            ofstream out_tree;
-
-            cout << "Generate the start tree" << endl;
-            // start with a random coalescence tree
-            evo_tree rtree;
-            // start with a random tree with the same topology
-            if(fix_topology){
-                gsl_vector* rblens = gsl_vector_alloc(test_tree.nedge);
-                for(int i=0; i<test_tree.nedge; ++i){
-                  gsl_vector_set(rblens, i, runiform(r, 1, age));
-                }
-                rtree = create_new_tree(rblens, test_tree, 0);
-            }
-            else{
-                rtree = generate_coal_tree(Ns);
-            }
-            if(model==0){
-                rtree.mu = mu;
-            }
-            if(model==1){
-                rtree.dup_rate = dup_rate;
-                rtree.del_rate = del_rate;
-                rtree.mu = rtree.dup_rate + rtree.del_rate;
-            }
-            rtree.tobs = tobs;
-            if(cons){
-                adjust_tree_height(rtree);
-                adjust_tree_tips(rtree);
-                adjust_tree_blens(rtree);
-            }
-            rtree.tree_height = rtree.get_tree_height();
-            rtree.total_time = rtree.get_total_time();
-            cout << "Total time of random tree " << rtree.total_time << endl;
-
-
-            sstm << "./test1/sim-data-" << cons << maxj << "-mcmc-tree-start.txt";
-            out_tree.open(sstm.str());
-            rtree.write(out_tree);
-            out_tree.close();
-            sstm.str("");
-
-            // Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, cn_max, only_seg, correct_bias);
-            Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, 0, cn_max, only_seg, correct_bias);
-            cout << "\nRandom tree likelihood: " << Ls << endl;
-
-            // Estimate branch length with MCMC
-            cout << "\n\n### Running MCMC" << endl;
-            run_mcmc(rtree, model, n_draws, n_burnin, n_gap, proposal_parameters, prior_parameters_blen, prior_parameters_height, alphas, prior_parameters_mut, lambda_topl, trace_param_file, trace_tree_file, sample_prior, fix_topology, cons, maxj, cn_max, only_seg, correct_bias);
-            // cout << "\nMinimised tree likelihood by MCMC / mu : " << Lf << "\t" << min_tree.mu*Nchar <<  endl;
-
-            // cout << "\n\n### Running ML" << endl;
-            // // evo_tree min_tree_ml = max_likelihood(rtree, model, Lf, 0.01, 0.01, 2000, cons, maxj);
-            // evo_tree min_tree_ml = max_likelihood_BFGS(rtree, model, Lf, 0.01, 0.01, cons, maxj);
-            // if(model==0){
-            //     cout << "\nMinimised tree likelihood by ML / mu : " << Lf << "\t" << min_tree_ml.mu <<  endl;
-            // }
-            // if(model==1){
-            //     cout << "\nMinimised tree likelihood by ML / dup_rate / del_rate : " << Lf << "\t" << min_tree_ml.dup_rate << "\t" << min_tree_ml.del_rate <<  endl;
-            // }
-            //
-            // //min_tree.print();
-            // sstm << "./test1/sim-data-" << cons << maxj << "-ML-tree.txt";
-            // out_tree.open(sstm.str());
-            // min_tree_ml.write(out_tree);
-            // out_tree.close();
-            // sstm.str("");
+        }
+        run_with_reference_tree(rtreefile, Ns, Nchar, num_invar_bins, fix_topology, model, cons, maxj, cn_max, only_seg, correct_bias, ref_rates, tobs, rates, n_draws,  n_burnin,  n_gap, proposal_parameters, prior_parameters_blen, prior_parameters_height, alphas, prior_parameters_mut, lambda_topl, trace_param_file, trace_tree_file, sample_prior);
     }
     else{
         cout << "Generate the start tree" << endl;
         // start with a random coalescence tree
         evo_tree rtree = generate_coal_tree(Ns);
-
-        if(model==0){
-            rtree.mu = mu;
-        }
-        if(model==1){
-            rtree.dup_rate = dup_rate;
-            rtree.del_rate = del_rate;
-            rtree.chr_gain_rate = chr_gain_rate;
-            rtree.chr_loss_rate = chr_loss_rate;
-            rtree.wgd_rate = wgd_rate;
-            rtree.mu = rtree.dup_rate + rtree.del_rate + rtree.chr_gain_rate + rtree.chr_loss_rate + rtree.wgd_rate;
-        }
-        rtree.tobs = tobs;
-
-        adjust_tree_height(rtree);
-        adjust_tree_tips(rtree);
-        adjust_tree_blens(rtree);
-
-        rtree.tree_height = rtree.get_tree_height();
-        rtree.total_time = rtree.get_total_time();
-        cout << "Total hight of random tree " << rtree.tree_height << endl;
+        revise_init_tree(rtree, rates, cons);
 
         // double Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, cn_max, only_seg, correct_bias);
         double Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, cn_max, only_seg, correct_bias);

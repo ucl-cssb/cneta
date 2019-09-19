@@ -125,7 +125,7 @@ int rchoose(gsl_rng* r, const vector<double>& rates){
 // generate neutral coalescent trees
 // here nsample is the number of cancer samples (not including germline node)
 // here we directly calculate the edges in the tree
-void generate_coal_tree(const int& nsample, vector<int>& edges, vector<double>& lengths, vector<double>& epoch_times, vector<double>& times){
+void generate_coal_tree(const int& nsample, vector<int>& edges, vector<double>& lengths, vector<double>& epoch_times, vector<double>& times, int Ne, double beta = 0){
   //cout << "GENERATING COAL TREE" << endl;
   int nlin = nsample;
   vector<int> nodes;
@@ -146,9 +146,11 @@ void generate_coal_tree(const int& nsample, vector<int>& edges, vector<double>& 
   while(nlin > 1){
     // sample a time from Exp( combinations(k,2) )
     double lambda = fact(nlin)/( 2*fact(nlin-2) );
+    if(beta > 0){  // simulate exponential growth
+        lambda = lambda * exp(beta * t_tot);
+    }
     double t = gsl_ran_exponential(r, 1/lambda);
     t_tot += t;
-
     // choose two random nodes from available list
     random_shuffle(nodes.begin(), nodes.end(),fp);
 
@@ -174,8 +176,12 @@ void generate_coal_tree(const int& nsample, vector<int>& edges, vector<double>& 
     nlin--;
   }
 
+  cout << "TMRCA of tumour samples (scaled by 2N): " << t_tot << endl;
   // create the root and germline nodes and edges
   double lambda = 1;
+  if(beta > 0){  // simulate exponential growth
+      lambda = lambda * exp(beta * t_tot);
+  }
   double t = gsl_ran_exponential(r, 1/lambda);
   t_tot += t;
   epoch_times.push_back(t_tot);
@@ -197,6 +203,9 @@ void generate_coal_tree(const int& nsample, vector<int>& edges, vector<double>& 
     times[i] = t_tot - times[i];
   }
 
+  for(int l = 0; l < lengths.size(); ++l){
+      lengths[l] = lengths[l] * Ne * 2;
+  }
   //cout << "total time of tree: " << t_tot << " : ";
   //for(int i=0; i<epoch_times.size(); ++i) cout << "\t" << epoch_times[i];
   //cout << endl;
@@ -299,6 +308,52 @@ evo_tree generate_coal_tree(const int& nsample){
 
   evo_tree ret(nsample+1, edges, lengths);
   return ret;
+}
+
+
+// Create a new tree with the same topology as input tree but different branch lengths
+evo_tree create_new_tree(gsl_vector* blens, evo_tree& rtree, int cons){
+    // create a new tree
+    vector<edge> enew;
+    // cout << "copy original edges" << endl;
+    for(int i=0; i<rtree.nedge; ++i){
+      enew.push_back( rtree.edges[i] );
+    }
+    if(cons){
+        // cout << "branches constrained" << endl;
+        int count = 0;
+        for(int i=0; i<rtree.nedge-1; ++i){
+            if(enew[i].end > Ns){
+                // cout << "count " << count << endl;
+                enew[i].length = gsl_vector_get(blens, count);
+                count++;
+            }else{
+                enew[i].length = 0;
+            }
+        }
+
+        // Time to first sample
+        // cout << "time to 1st sample: " << total_time << endl;
+        evo_tree new_tree(rtree.nleaf, enew, rtree.get_total_time(), rtree.tobs);
+        new_tree.mu = rtree.mu;
+        new_tree.dup_rate = rtree.dup_rate;
+        new_tree.del_rate = rtree.del_rate;
+
+        return new_tree;
+    }
+    else{
+        // cout << "branches unconstrained" << endl;
+        for(int i=0; i<rtree.nedge-1; ++i){
+            enew[i].length = gsl_vector_get(blens,i);
+        }
+
+        evo_tree new_tree(Ns+1, enew);
+        new_tree.mu = rtree.mu;
+        new_tree.dup_rate = rtree.dup_rate;
+        new_tree.del_rate = rtree.del_rate;
+
+        return new_tree;
+    }
 }
 
 
@@ -675,10 +730,12 @@ void get_rate_matrix_bounded(double* m, double dup_rate, double del_rate, const 
 }
 
 
+// A matrix with dimension (cn_max + 1) * (cn_max + 2) / 2
+// Suppose copy number configuration is in specific order such as:  0/0	0/1	1/0	0/2	 1/1	2/0	0/3	 1/2	 2/1	3/0	0/4	 1/3	  2/2	 3/1	4/0
 void get_rate_matrix_allele_specific(double* m, double dup_rate, double del_rate, const int cn_max) {
     int debug = 0;
     int ncol = (cn_max + 1) * (cn_max + 2) / 2;
-    if(debug) cout << "Total number of stats is " << ncol << endl;
+    if(debug) cout << "Total number of states is " << ncol << endl;
 
     for (unsigned i = 0; i < ncol; ++ i){
         for (unsigned j = 0; j < ncol; ++ j){

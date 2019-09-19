@@ -975,8 +975,13 @@ string create_tree_string_uniq(evo_tree tree){
                 // cout << nid << "\t" << pnode << "\t" <<  names[d2] << endl;
                 names[nid] = pnode;
                 sstm << pnode << ";" << d1 << ";" << names[d2];
-            }else{  // d2 > Ns
-                pnode = pnode + "[" + names[d1] + "]-[" + names[d2] + "]";
+            }else{  // both nodes are not tips
+                // Ensure pnode is unique by sorting names of daughters
+                if(names[d1].compare(names[d2]) < 0){
+                    pnode = pnode + "[" + names[d1] + "]-[" + names[d2] + "]";
+                }else{
+                    pnode = pnode + "[" + names[d2] + "]-[" + names[d1] + "]";
+                }
                 // cout << nid << "\t" << pnode << "\t" <<  names[d2] << endl;
                 names[nid] = pnode;
                 sstm << pnode << ";" << names[d1] << ";" << names[d2];
@@ -1000,6 +1005,38 @@ string order_tree_string( string tree ){
   vector<string> split1;
   boost::split(split1, tree, [](char c){return c == ':';});
 
+  for(int i=0; i<split1.size()-1; ++ i){     // split creates an empty string at the end
+    //sstm << split1[i];
+    //cout << "\t" << split1[i] << endl;
+    vector<string> split2;
+    boost::split(split2, split1[i], [](char c){return c == ';';});
+
+    if( split2.size() == 1){
+      sstm << split1[i];
+    }
+    else{
+      sstm << split2[0] << ";"; //  << split2[1] << ";" << split2[2];
+      string s1 = split2[1];
+      string s2 = split2[2];
+      // if( atoi(split2[1].c_str() ) < atoi(split2[2].c_str() ) ){
+      if( s1.compare(s2) < 0 ){
+	         sstm << split2[1] << ";" << split2[2];
+      }else{
+	         sstm << split2[2] << ";" << split2[1];
+      }
+    }
+    sstm << ":";
+  }
+  return sstm.str();
+}
+
+// Sort the parent nodes at first
+string order_tree_string_uniq( string tree ){
+  stringstream sstm;
+  vector<string> split1;
+  boost::split(split1, tree, [](char c){return c == ':';});
+  // Sort split1
+  sort(split1.begin(), split1.end());
   for(int i=0; i<split1.size()-1; ++ i){     // split creates an empty string at the end
     //sstm << split1[i];
     //cout << "\t" << split1[i] << endl;

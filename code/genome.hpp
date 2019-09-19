@@ -319,7 +319,7 @@ public:
     // cout << "Writing allele-specific copy number " << endl;
     for(int i=0; i < allele_cn_profile.size()/2; i++){
        map<int,int> segs1 = allele_cn_profile[i];
-       map<int,int> segs2 = allele_cn_profile[i+22];
+       map<int,int> segs2 = allele_cn_profile[i+NUM_CHR];
        // cout << i << "\t" << segs1.size() << "\t" << segs2.size() << endl;
        // Find the id of the last segment since some segment may get lost
        int max_size = chr_lengths[i];
