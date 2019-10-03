@@ -119,7 +119,7 @@ public:
   double wgd_rate = 0;
   double tree_height;
   double total_time;
-  vector<double> top_tinvls;
+  vector<double> top_tinvls;    // Top Ns+1 intervals for optimization with constaints on tip times
   vector<int> top_tnodes;
 
   evo_tree(){}

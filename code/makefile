@@ -2,8 +2,8 @@
 CCC = g++
 # CCC = /usr/local/opt/llvm/bin/clang
 BOOST = /usr/local
-# omp = -fopenmp
-omp = 
+omp = -fopenmp
+# omp = 
 all: sveta svtreeml svtreemu svtreemcmc
 
 sveta: sveta.cpp

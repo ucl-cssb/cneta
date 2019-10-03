@@ -338,7 +338,7 @@ public:
            else{
                cn2 = segs2[j];
            }
-          of << node_id+1 << "\t" << i+1 << "\t" << j+1 << "\t" << cn1 << "\t" << cn2 << endl;
+          of << node_id+1 << "\t" << i+1 << "\t" << j << "\t" << cn1 << "\t" << cn2 << endl;
       }
     }
   }
