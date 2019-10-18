@@ -1,6 +1,9 @@
 library(copynumber)
 library(reshape)
 library(tools)
+library(tidyr)
+library(dplyr)
+library(purrr)
 
 if(!require(optparse)){
     install.packages("optparse")
@@ -60,7 +63,33 @@ print.cn <- function(in_file, out_file=""){
 
   md <- melt(d, id=c("sample","chromosome","index"))
   data <- cast(md,chromosome+index~sample)
-  data <- cbind(bins_4401, data)
+  data %>% group_by(chromosome) %>% count() -> bin_count
+  bins_4401 %>% group_by(chromosome) %>% count() -> ref_bin_count
+
+  if(sum(bin_count$n) == sum(ref_bin_count$n)){
+    # When the input data have 4401 bins
+    data <- cbind(bins_4401, data)
+  }
+  else{ # When the data have less bins
+    # Change reference bins to the desired number
+    # adapted from https://jennybc.github.io/purrr-tutorial/ls12_different-sized-samples.html
+    nested_bins <- bins_4401 %>%
+      group_by(chromosome) %>%   # prep for work by Species
+      nest() %>%              # --> one row per Species
+      ungroup() %>%
+      mutate(n=bin_count$n) # add sample sizes
+
+    sampled_bins <- nested_bins %>%
+      mutate(samp = map2(data, n, sample_n))
+
+    sampled_bins %<>%
+      select(-data) %>%
+      unnest(samp) %>% arrange(chromosome, start) %>% select(-c(n))
+
+    data <- cbind(sampled_bins, data)
+ }
+
+
   data <- data[,-c(3,4,5)]
 
   #par(ask=F)

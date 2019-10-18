@@ -77,7 +77,7 @@ evo_tree read_tree_info(const string& filename, const int& Ns){
   }
 
   evo_tree new_tree(Ns+1, edges);
-  //new_tree.print();
+  if(debug) new_tree.print();
 
   return new_tree;
 }

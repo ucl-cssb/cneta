@@ -17,7 +17,8 @@ seg_max=100 # Maximum number of segments on the genome
 fix_seg=1 # Whether or not to fix the number of segments to be seg_max
 
 # The output directory
-dir="./example/method${method}"
+# dir="./example/method${method}"
+dir="./example"
 mkdir -p $dir
 
 tree_file=""  # The input tree file. If given, mutations will be generated along this tree
@@ -27,7 +28,7 @@ tree_file=""  # The input tree file. If given, mutations will be generated along
 prefix=""
 
 # The number of regions to sample. Output will be Nr+1 including germline
-Ns=4
+Ns=3
 # The number of simulations. Number of tumours to simulate
 Nsim=1
 
@@ -35,15 +36,17 @@ Nsim=1
 age=60
 # Maximum copy number allowed
 cn_max=6
+
 # rates of duplication, deletion, chromosome gain, chromosome loss, wgd
-r1=0.001
-r2=0.001
+r1=0.0001
+r2=0.0001
 r3=0
 r4=0
 r5=0
 # mean of exponential distributions of duplication and deletion size in bins
 s1=50
-s2=50
+s2=
+
 # effective population size for the coalescence tree
 Ne=90000
 beta=1.563e-3  # exponential growth rate
@@ -66,9 +69,8 @@ prefix=sim-data-1
 # Simulted sampling time informaton
 tfile=$dir/${prefix}-rel-times.txt
 ofile=$dir/"$prefix"-tree.txt
+cfile=$dir/"$prefix"-cn.txt.gz
 Rscript ana/plot-trees-all.R -f $ofile -b 0 -t "single" -l "xlim" --time_file $tfile # >& /dev/null
 # Plot simulated tree with the number of mutations on the branch
 Rscript ana/plot-trees-all.R -f $ofile -b 1 -t "single"  # >& /dev/null
-if [[ mode == 0 ]]; then
-  Rscript ana/plot-cns.R -d $dir -b ana/bin_locations_4401.Rdata -p "${prefix}-cn.txt.gz" # >& /dev/null
-fi
+Rscript ana/plot-cns.R -f $cfile -b ana/bin_locations_4401.Rdata # >& /dev/null

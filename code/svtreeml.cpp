@@ -52,7 +52,7 @@ const int MAX_TREE2 = 5;
 const int MAX_PERTURB = 10;
 const double MAX_NLNL = 1e20;
 const int MAX_OPT = 10; // max number of optimization for each tree
-const int PRINT_PRECISION = 4;
+const int PRINT_PRECISION = 10;
 int debug = 0;
 
 // global value for tree search
@@ -307,7 +307,7 @@ evo_tree read_parsimony_tree(const string& tree_file, int Ns, const vector<doubl
 
 // Generate initial set of unique trees, at most Npop trees
 vector<evo_tree> get_initial_trees(int init_tree, string dir_itrees, int Npop, const vector<double>& rates, int max_tree_num, int cons, int Ne = 1, double beta = 0, double gtime=1){
-    int debug = 1;
+    int debug = 0;
     vector<evo_tree> trees;
 
     if(init_tree == 1){
@@ -499,6 +499,7 @@ evo_tree do_exhaustive_search(string real_tstring, int Ngen, const int init_tree
 
 // Npop determines the maximum number of unique trees to try
 evo_tree do_hill_climbing(const int Npop, const int Ngen, const int init_tree, const string& dir_itrees, const int& max_static, const vector<double>& rates, const double ssize, const double tolerance, const int miter, const int optim, const int model, const int cons, const int maxj, const int cn_max, const int only_seg, int correct_bias, int is_total=1, int Ne = 1, double beta = 0, double gtime=1){
+    int debug = 0;
     // initialize candidate tree set
     int max_tree_num = INT_MAX;
     // cout << "Maximum number of possible trees to explore " << max_tree_num << endl;
@@ -588,7 +589,7 @@ evo_tree do_hill_climbing(const int Npop, const int Ngen, const int init_tree, c
 
         // cout << "Optimized score before " << trees3[i].score << endl;
         ttree.score = trees3[i].score;
-        evo_tree otree = get_local_optimal_tree(ttree, Ngen, max_perturb, max_static, ssize, tolerance, miter, optim, model, cons, maxj, cn_max, only_seg, correct_bias);
+        evo_tree otree = get_local_optimal_tree(ttree, Ngen, max_perturb, max_static, ssize, tolerance, miter, optim, model, cons, maxj, cn_max, only_seg, correct_bias, is_total);
         // cout << "Optimized score after " << otree.score << endl;
         evo_tree btree = find_best_trees(trees3, lnLs3, index3, 1)[0];
         assert(btree.score == lnLs3[index3[0]]);
@@ -623,11 +624,13 @@ evo_tree do_hill_climbing(const int Npop, const int Ngen, const int init_tree, c
     cout << "FINISHED. MIN -ve logL = " << min_lnL << endl;
 
     // print out searched trees
-    ofstream out_tree("./test/searched_trees.txt");
-    for(auto it : searched_trees){
-        out_tree << it.first << endl;
+    if(debug){
+        ofstream out_tree("./searched_trees.txt");
+        for(auto it : searched_trees){
+            out_tree << it.first << endl;
+        }
+        out_tree.close();
     }
-    out_tree.close();
 
     return min_lnL_tree;
 }
@@ -1222,7 +1225,7 @@ int main (int argc, char ** const argv) {
     ("wgd_rate", po::value<double>(&wgd_rate)->default_value(0), "WGD (whole genome doubling) rate")
     // ("max_rate", po::value<double>(&max_rate)->default_value(0.05), "The maximum rate of a mutation event (upper bound of BFGS optimization)")
 
-    ("model,d", po::value<int>(&model)->default_value(1), "model of evolution (0: Mk, 1: one-step bounded (total), 2: one-step bounded (allele-specific)")
+    ("model,d", po::value<int>(&model)->default_value(2), "model of evolution (0: Mk, 1: one-step bounded (total), 2: one-step bounded (allele-specific)")
     ("constrained", po::value<int>(&cons)->default_value(1), "constraints on branch length (0: none, 1: fixed total time)")
     ("fixm", po::value<int>(&maxj)->default_value(0), "estimation of mutation rate (0: mutation rate fixed to be the given value, 1: estimating mutation rate)")
     ("optim", po::value<int>(&optim)->default_value(1), "method of optimization (0: Simplex, 1: L-BFGS-B)")
