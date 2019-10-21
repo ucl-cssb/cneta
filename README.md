@@ -156,11 +156,13 @@ With a reference tree, the tree topolgy is fixed.
 
 
 ## Output
-There are two output files:
-* trace-mcmc-params_*, which records the traces of parameters
-* trace-mcmc-trees_*, which records the sampled trees
+There are two output files in a format similar to that of MrBayes:
+* *.p, which records the traces of parameters
+* *.t, which records the sampled trees
 
 <!-- ## How to analyze the results of svtreemcmc -->
-trace-mcmc-params_* can be imported into [Tracer](https://beast.community/tracer) to check the convergence of the chains.
+The output can be analyzed by [RWTY](https://github.com/danlwarren/RWTY). Please see script ana/check_convergence.R for reference.
 
-trace-mcmc-trees_* can be analyzed by [TreeAnnotator](https://beast.community/treeannotator) to get a summary tree (maximum credibility tree).
+*.p can be imported into [Tracer](https://beast.community/tracer) to check the convergence of the chains.
+
+*.t can be analyzed by [TreeAnnotator](https://beast.community/treeannotator) to get a summary tree (maximum credibility tree).
