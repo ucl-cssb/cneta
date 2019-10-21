@@ -28,11 +28,12 @@ for i in {1..2..1}
 do
   # seed=$i
   echo $i
-  trace_param_file=$odir/trace-mcmc-params_"$suffix"_${i}.txt
-  trace_tree_file=$odir/trace-mcmc-trees_"$suffix"_${i}.txt
-  sum_tree_file=$odir/sum-mcmc-trees_"$suffix"_${i}.txt
+  # Use the suffix of MrBayes for compatibility with RWTY
+  trace_param_file=$odir/mcmc_"$suffix"_${i}.p
+  trace_tree_file=$odir/mcmc_"$suffix"_${i}.t
+  sum_tree_file=$odir/sum-mcmc_"$suffix"_${i}.txt
 
-  code/svtreemcmc --nsample $nsample -c $input -t $times --rtree "$rtree" --trace_param_file $trace_param_file --trace_tree_file $trace_tree_file --config_file $config_file > $odir/std_mcmc_"$suffix"_${i}
+  code/svtreemcmc --nsample $nsample --is_total $is_total -c $input -t $times --rtree "$rtree" --trace_param_file $trace_param_file --trace_tree_file $trace_tree_file --config_file $config_file > $odir/std_mcmc_"$suffix"_${i}
 
   # Summarize the sampled trees into a maximum credibility tree with median heights
   # treeannotator -burnin 10 -heights median $trace_tree_file $sum_tree_file

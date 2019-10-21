@@ -59,13 +59,16 @@ installed.packages()[, c("Package", "LibPath")]
 
 ```
 
+## Building C++
+OpenMP is used to accelerate tree search in svtreeml.
+To turned off OpenMP, please set "omp =" in makefile and comment out "#include <omp.h>" in svtreeml.cpp.
 
-## Building C++ code
 To build the C++ code, change into the code directory and type make:
 ```shell
 > cd code
 > make
 ```
+
 
 ## Running
 You may use the provided bash scripts to run the programs.
@@ -82,7 +85,7 @@ You may use the provided bash scripts to run the programs.
 
 # Simulation with sveta
 There are three Markov models of evolution for the copy number profiles:
-* 0: Mk model
+* 0: Mk model (extension of JC69 model)
 * 1: model of total copy number
 * 2: model of allele-specific copy number
 
@@ -141,7 +144,7 @@ Please see run-svtreeml.sh to learn how to set different parameters
 
 # Tree building with MCMC
 
-## Input 
+## Input
 * (Required) A file containing copy numbers for all the samples, including the normal sample (*-cn.txt.gz or *-allele-cn.txt.gz)
 * (Optional) A file containing the timing information of tip nodes (*-rel-times.txt)
 * (Optional) A configuration file which sets most input parameters (mcmc.cfg)
@@ -161,7 +164,3 @@ There are two output files:
 trace-mcmc-params_* can be imported into [Tracer](https://beast.community/tracer) to check the convergence of the chains.
 
 trace-mcmc-trees_* can be analyzed by [TreeAnnotator](https://beast.community/treeannotator) to get a summary tree (maximum credibility tree).
-
-# Note
-OpenMP is used to accelerate tree search in svtreeml.
-To turned off OpenMP, please set "omp =" in makefile and comment out "#include <omp.h>" in svtreeml.cpp.

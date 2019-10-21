@@ -1412,11 +1412,17 @@ void run_mcmc(evo_tree& rtree, int model, const int n_draws, const int n_burnin,
 
         string header;
 
-        if(model==0){
-            header = "state\tlnl\tmu";
+        if(model == 0){
+            header = "state\tlnl";
+            if(estimate_mu == 1){
+                header += "\tmu";
+            }
         }
         else{
-            header = "state\tlnl\tdup_rate\tdel_rate\tgain_rate\tloss_rate\twgd_rate";
+            header = "state\tlnl";
+            if(estimate_mu == 1){
+                header += "\tdup_rate\tdel_rate\tgain_rate\tloss_rate\twgd_rate";
+            }
         }
 
         if(cons){
@@ -1431,6 +1437,7 @@ void run_mcmc(evo_tree& rtree, int model, const int n_draws, const int n_burnin,
             }
         }
 
+        fout_trace << "# Parameters" << endl;   // Add one line on top for compatibility with MrBayes format
         fout_trace << header << endl;
 
         fout_tree << "#nexus" << endl;
@@ -1481,18 +1488,20 @@ void run_mcmc(evo_tree& rtree, int model, const int n_draws, const int n_burnin,
                 // print out the accepted proposal
                 // string str_tree = order_tree_string(create_tree_string(rtree));
                 // fout << i - n_burnin << "\t" << str_tree << "\t"  << log_likelihood << "\t" << rtree.mu ;
-                fout_trace << (i - n_burnin)/n_gap << "\t"  << log_likelihood;
+                // fout_trace << (i - n_burnin)/n_gap << "\t"  << log_likelihood;
+                fout_trace << i << "\t"  << log_likelihood;
 
-                if(model==0){
-                    fout_trace << "\t" << rtree.mu ;
-                }
-                else{
-                    if(only_seg==0){
-                        fout_trace << "\t" << rtree.dup_rate << "\t" << rtree.del_rate << "\t" << rtree.chr_gain_rate << "\t" << rtree.chr_loss_rate << "\t" << rtree.wgd_rate;
-                    }else{
-                        fout_trace << "\t" << rtree.dup_rate << "\t" << rtree.del_rate;
+                if(estimate_mu){
+                    if(model==0){
+                        fout_trace << "\t" << rtree.mu ;
                     }
-
+                    else{
+                        if(only_seg==0){
+                            fout_trace << "\t" << rtree.dup_rate << "\t" << rtree.del_rate << "\t" << rtree.chr_gain_rate << "\t" << rtree.chr_loss_rate << "\t" << rtree.wgd_rate;
+                        }else{
+                            fout_trace << "\t" << rtree.dup_rate << "\t" << rtree.del_rate;
+                        }
+                    }
                 }
 
                 // print out the branch lengths
@@ -1510,6 +1519,7 @@ void run_mcmc(evo_tree& rtree, int model, const int n_draws, const int n_burnin,
                 fout_trace << endl;
 
                 string newick = rtree.make_newick(precision);
+                // fout_tree << "tree " << (i - n_burnin)/n_gap << " = " << newick << ";" << endl;
                 fout_tree << "tree " << i << " = " << newick << ";" << endl;
             }
         }
@@ -2005,7 +2015,7 @@ int main (int argc, char ** const argv) {
         revise_init_tree(rtree, rates, tobs, cons);
 
         // double Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, cn_max, only_seg, correct_bias, is_total);
-        // cout << "   Getting start tree likelihood" << endl;
+        cout << "   Getting start tree likelihood" << endl;
         double Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, cn_max, only_seg, correct_bias, is_total);
         cout << "   Random start tree likelihood: " << Ls << endl;
 
