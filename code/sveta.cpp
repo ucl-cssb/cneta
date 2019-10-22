@@ -737,8 +737,8 @@ int generate_chr_gain(genome& g, int c, int debug){
     int orig_size = g.chrs.size();
     // cout << "Size of chrs " << orig_size << endl;
     // assert(orig_size % 22 == 0);
-    int new_chr = (orig_size / 22 ) * 22 + c%22; // If c is not in chrs
-    for(int i=0; i<orig_size%22; i++){
+    int new_chr = (orig_size / 22 ) * 22 + c%22; // If c is not in the genome
+    for(int i=0; i<orig_size%22; i++){  // If c is in the genome, but has lost all segments
       if(g.chrs[c%22 + i*22].size() <= 0){
           new_chr = c%22 + i*22;
           break;
@@ -799,19 +799,23 @@ int generate_wgd(genome& g, int cn_max, int debug) {
 
     int orig_num_chr = get_num_chr(g);
     int orig_size = g.chrs.size();
-    g.chrs.insert(g.chrs.end(), g.chrs.begin(), g.chrs.end());
+    // g.chrs.insert(g.chrs.end(), g.chrs.begin(), g.chrs.end());   // cause duplicated insertions on Mac
+    vector<segment> s;
+    g.chrs.insert(g.chrs.end(), orig_size, s);
     // replicate the segments for each chromosome
     for(int i=0; i<orig_size; i++){
+         // cout << "Insert chr " << i << " for chr " << i + orig_size << endl;
          g.chrs[i + orig_size].insert(g.chrs[i + orig_size].begin(), g.chrs[i].begin(), g.chrs[i].end());
     }
     g.calculate_cn();   // compute copy number after each mutation event
+    g.calculate_allele_cn();
 
     if(debug){
         cout << "Whole genome doubling" << endl;
         cout << "There are " << orig_num_chr << " chromosomes before WGD" << endl;
         cout << "There are " << get_num_chr(g) << " chromosomes now" << endl;
         g.print_cn();
-        // g.print();
+        g.print();
     }
     return 1;
 }
@@ -1942,7 +1946,7 @@ void run_simulations(string tree_file, int mode, int method, const vector<int>& 
         map<int, vector<mutation>> muts;   // hold all mutations by edge id
         map<int, int> failed_muts;  // the number of failed mutations on each edge
 
-        cout << "Simulation " << i+1 << endl;
+        cout << "\nSimulation " << i+1 << endl;
         //cout << "\n\n###### New sample collection ######" << endl;
         if(orig_prefix.empty()) {
           prefix = "sim-data-" + to_string(int(i+1));
