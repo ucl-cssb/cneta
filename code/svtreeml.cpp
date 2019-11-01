@@ -402,17 +402,217 @@ vector<evo_tree> find_best_trees(const vector<evo_tree>& trees, const vector<dou
     return btrees;
 }
 
+
+void check_matrix_row_sum(double *mat, int nstate){
+    for(int i = 0; i < nstate; i++){
+        double sum = 0;
+        for(int j = 0; j < nstate; j++){    // jth column
+            sum += mat[i + j * nstate];
+        }
+        cout << "Total probability of changing from " << i << " is " << sum << endl;
+    }
+}
+
+// Check the relationship among number of segments, mutation rates and branch lengths
+void check_chain_by_branch_m2(int num_seg, const vector<double>& rates, double blen, int cn_max, ofstream& fout){
+    double dup_rate = rates[0];
+    double del_rate = rates[1];
+    int nstate = (cn_max + 1) * (cn_max + 2) / 2;
+    double *qmat = new double[(nstate)*(nstate)];
+    memset(qmat, 0, (nstate)*(nstate)*sizeof(double));
+    get_rate_matrix_allele_specific(qmat, dup_rate, del_rate, cn_max);
+    // r8mat_print( nstate, nstate, qmat, "  Q matrix:" );
+    cout << "Checking row sum for Q matrix" << endl;
+    check_matrix_row_sum(qmat, nstate);
+
+    double *pmat = new double[(nstate)*(nstate)];
+    memset(pmat, 0, (nstate)*(nstate)*sizeof(double));
+    get_transition_matrix_bounded(qmat, pmat, blen, nstate);
+    // r8mat_print( nstate, nstate, pmat, "  P matrix:" );
+    cout << "Checking row sum for P matrix" << endl;
+    check_matrix_row_sum(pmat, nstate);
+
+    // Print the probability of changing to each state
+    map<int, double> state_prob;
+    for(int i = 0; i < cn_max; i++){
+        state_prob[i] = 0;
+    }
+    // for(int i = 0; i < nstate; i++){    // ith column
+    //     int cn = state2tcn(i, cn_max);
+    //     double total_prob = 0;
+    //     for(int j = 0; j < nstate; j++){    // jth row
+    //         int idx = j + i * nstate;
+    //         double prob = pmat[idx];
+    //         total_prob += prob;    // assume each state is equally likely
+    //         // cout << "Probability of changing from state " << j << " to state " << i << " is " << prob << endl;
+    //     }
+    //     state_prob[cn] += total_prob;
+    // }
+    //
+
+
+    // Suppose the starting state is normal
+    int s = 4;
+    for(int j = 0; j < nstate; j++){    // jth column
+        int cn = state2tcn(j, cn_max);
+        int idx = s + j * nstate;
+        double prob = pmat[idx];
+        state_prob[cn] += prob;
+    }
+
+    fout << cn_max << "\t"  << blen;
+    for(int i = 0; i < rates.size(); i++){
+        fout << "\t" << rates[i];
+    }
+    for(auto sp : state_prob){
+        int cn = sp.first;
+        double prob = sp.second;
+        fout <<  "\t" << prob;
+        cout << "Probability of changing from normal to state " << cn << " is " << prob << endl;
+    }
+    fout << endl;
+
+    free(qmat);
+    free(pmat);
+}
+
+
+// Check the relationship among number of segments, mutation rates and branch lengths
+void check_chain_by_branch_m3(int is_total, int num_seg, const vector<double>& rates, double blen, int cn_max, int max_wgd, int max_chr_change, int max_site_change, ofstream& fout){
+    double dup_rate = rates[0];
+    double del_rate = rates[1];
+    double chr_gain_rate = rates[2];
+    double chr_loss_rate = rates[3];
+    double wgd_rate = rates[4];
+
+    int nstate = (cn_max + 1) * (cn_max + 2) / 2;
+
+    // For WGD model
+    int dim_wgd = max_wgd + 1;
+    double *qmat_wgd = new double[dim_wgd * dim_wgd];  // WGD
+    memset(qmat_wgd, 0, (dim_wgd)*(dim_wgd)*sizeof(double));
+
+    int dim_chr = 2 * max_chr_change + 1;
+    double *qmat_chr = new double[(dim_chr)*(dim_chr)];   // chromosome gain/loss
+    memset(qmat_chr, 0, (dim_chr)*(dim_chr)*sizeof(double));
+
+    int dim_seg = 2 * max_site_change + 1;
+    double *qmat_seg = new double[(dim_seg)*(dim_seg)];  // segment duplication/deletion
+    memset(qmat_seg, 0, (dim_seg)*(dim_seg)*sizeof(double));
+
+    cout << dim_wgd << "\t" << dim_chr << "\t" << dim_seg << "\n";
+
+    get_rate_matrix_wgd(qmat_wgd, wgd_rate, max_wgd);
+    get_rate_matrix_chr_change(qmat_chr, chr_gain_rate, chr_loss_rate, max_chr_change);
+    get_rate_matrix_site_change(qmat_seg, dup_rate, del_rate, max_site_change);
+
+    cout << "Checking row sum for Q matrix" << endl;
+    check_matrix_row_sum(qmat_wgd, dim_wgd);
+    check_matrix_row_sum(qmat_chr, dim_chr);
+    check_matrix_row_sum(qmat_seg, dim_seg);
+
+    double *pmat_wgd = new double[(dim_wgd)*(dim_wgd)];
+    memset(pmat_wgd, 0, (dim_wgd)*(dim_wgd)*sizeof(double));
+    double *pmat_chr = new double[(dim_chr)*(dim_chr)];
+    memset(pmat_chr, 0, (dim_chr)*(dim_chr)*sizeof(double));
+    double *pmat_seg = new double[(dim_seg)*(dim_seg)];
+    memset(pmat_seg, 0, (dim_seg)*(dim_seg)*sizeof(double));
+
+    get_transition_matrix_bounded(qmat_wgd, pmat_wgd, blen, dim_wgd);
+    get_transition_matrix_bounded(qmat_chr, pmat_chr, blen, dim_chr);
+    get_transition_matrix_bounded(qmat_seg, pmat_seg, blen, dim_seg);
+    // r8mat_print( nstate, nstate, pmat, "  P matrix:" );
+    cout << "Checking row sum for P matrix" << endl;
+    check_matrix_row_sum(pmat_wgd, dim_wgd);
+    check_matrix_row_sum(pmat_chr, dim_chr);
+    check_matrix_row_sum(pmat_seg, dim_seg);
+
+    // Print the probability of changing to each state
+    map<int, double> state_prob;
+    for(int i = 0; i < cn_max; i++){
+        state_prob[i] = 0;
+    }
+
+    decomp_table = build_decomp_table(comps, cn_max, max_wgd, max_chr_change, max_site_change, is_total);
+    int s_wgd = 0;
+    int s_chr = 0;
+    int s_seg = 0;
+    int s_chr2 = 0;
+    int s_seg2 = 0;
+
+    cout << "Start state: " << s_wgd << "\t" << s_chr << "\t" << s_seg << "\n";
+
+    // The indices for chromosome and segment matrix have to be ajusted
+    int delta_chr = (dim_chr - 1)/2;
+    int delta_seg = (dim_seg - 1)/2;
+
+    for(int cn = 0; cn <= cn_max; cn++){    // jth column
+        set<vector<int>> comp = decomp_table[cn];
+        cout << "Copy number " << cn << endl;
+        for(auto e : comp){
+            double prob = 0;
+
+            int e_wgd = e[0];
+            int e_chr = e[1];
+            int e_seg = e[2];
+            int e_chr2 = 0;
+            int e_seg2 = 0;
+
+            if(is_total == 1){
+                double prob_wgd = pmat_wgd[s_wgd + e_wgd * dim_wgd];
+                double prob_chr = pmat_chr[(s_chr + delta_chr) + (e_chr + delta_chr) * dim_chr];
+                double prob_seg = pmat_seg[(s_seg + delta_seg) + (e_seg + delta_seg) * dim_seg];
+                prob = prob_wgd * prob_chr * prob_seg;
+                cout << "   End state: " << e_wgd << "\t" << e_chr << "\t" << e_seg << "\t" << prob << endl;
+            }else{
+                e_seg = e[3];
+                e_chr2 = e[2];
+                e_seg2 = e[4];
+                double prob_wgd = pmat_wgd[s_wgd + e_wgd * dim_wgd];
+                double prob_chr = pmat_chr[(s_chr + delta_chr) + (e_chr + delta_chr) * dim_chr];
+                double prob_seg = pmat_seg[(s_seg + delta_seg) + (e_seg + delta_seg) * dim_seg];
+                double prob_chr2 = pmat_chr[(s_chr2 + delta_chr) + (e_chr2 + delta_chr) * dim_chr];
+                double prob_seg2 = pmat_seg[(s_seg2 + delta_seg) + (e_seg2 + delta_seg) * dim_seg];
+                prob = prob_wgd * prob_chr * prob_seg * prob_chr2 * prob_seg2;
+                cout << "   End state: " << e_wgd << "\t" << e_chr << "\t" << e_seg << "\t" << e_chr2 << "\t" << e_seg2 << "\t" << prob << endl;
+            }
+            state_prob[cn] += prob;
+        }
+    }
+
+    fout << cn_max << "\t"  << blen;
+    for(int i = 0; i < rates.size(); i++){
+        fout << "\t" << rates[i];
+    }
+    for(auto sp : state_prob){
+        int cn = sp.first;
+        double prob = sp.second;
+        fout <<  "\t" << prob;
+        cout << "Probability of changing from normal to state " << cn << " is " << prob << endl;
+    }
+    fout << endl;
+
+    free(qmat_wgd);
+    free(qmat_chr);
+    free(qmat_seg);
+    free(pmat_wgd);
+    free(pmat_chr);
+    free(pmat_seg);
+}
+
+
+
 // Only feasible for trees with fewer than 12 samples
 // Do maximization multiple times (determined by Ngen), since numerical optimizations are local hill-climbing algorithms and may converge to a local peak
 evo_tree do_exhaustive_search(string real_tstring, int Ngen, const int init_tree, const string& dir_itrees, const int& max_static, const vector<double>& rates, const double ssize, const double tolerance, const int miter, const int optim, const int model, const int cons, const int maxj, const int cn_max, const int only_seg, int correct_bias, int is_total, int Ne = 1, double beta = 0, double gtime=1){
     // initialize candidate tree set
     if(Ns > LARGE_TREE){
-        cout << "For data with larger than " << LARGE_TREE << " samples, it is very slow!" << endl;
+        cout << "\nFor data with larger than " << LARGE_TREE << " samples, it is very slow!" << endl;
         // return evo_tree();
     }
     // int max_tree_num = fact(Ns) * fact(Ns - 1) / exp2(Ns-1); // For trees
     int max_tree_num = num_trees[Ns - 1];
-    cout << "Maximum number of possible trees to explore " << max_tree_num << endl;
+    cout << "\nMaximum number of possible trees to explore " << max_tree_num << endl;
     vector<evo_tree> init_trees = get_initial_trees(init_tree, dir_itrees, max_tree_num, rates, max_tree_num, cons, Ne, beta, gtime);
     vector<evo_tree> best_trees(init_trees);
     assert(max_tree_num == init_trees.size());
@@ -455,7 +655,7 @@ evo_tree do_exhaustive_search(string real_tstring, int Ngen, const int init_tree
                 count_static++;
             }
             if(count_static >= max_static){
-                // cout << "\tstatic likelihood " << lnLs[i] << " for tree " << i << endl;
+                if(debug) cout << "\tstatic likelihood " << lnLs[i] << " for tree " << i << endl;
                 break;
             }
             // Change branch lengths randomly
@@ -995,7 +1195,7 @@ void run_test(const string& tree_file, int Ns, int num_total_bins, int Nchar, in
 
 
 // Compute the likelihood of a tree given the observed copy number profile
-double compute_tree_likelihood(const string& tree_file, int Ns, int Nchar, int num_invar_bins, map<int, vector<vector<int>>>& vobs, vector<double>& tobs, vector<double>& rates, const int model, const int cons, int cn_max, const int only_seg, const int correct_bias, int is_total=1){
+double compute_tree_likelihood(const string& tree_file, map<int, set<vector<int>>>& decomp_table, int Ns, int Nchar, int num_invar_bins, map<int, vector<vector<int>>>& vobs, vector<double>& tobs, vector<double>& rates, int model, int cons, int cn_max, int max_wgd, int max_chr_change, int max_site_change, int only_seg, int correct_bias, int is_total=1){
     evo_tree tree;
     // string format = tree_file.substr(tree_file.find_last_of(".") + 1);
     // cout << "Format of the input tree file is " << format << endl;
@@ -1026,12 +1226,19 @@ double compute_tree_likelihood(const string& tree_file, int Ns, int Nchar, int n
     }
 
     vector<double> blens = tree.get_edges_from_interval(tree.top_tinvls, tree.top_tnodes);
-    cout << "New branch lengths: ";
+    cout << "Branch lengths computed from intervals: ";
     for(int i = 0; i<blens.size(); i++){
         cout << i + 1 << "\t" << "\t" << blens[i] << endl;
     }
 
-    double Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, tree, model, cons, cn_max, only_seg, correct_bias, is_total);
+    double Ls = 0;
+    if(only_seg){
+        Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, tree, model, cons, cn_max, only_seg, correct_bias, is_total);
+    }else{
+        cout << "\nComputing the likelihood based on independent Markov chain model " << endl;
+        Ls = get_likelihood_decomp(Ns, Nchar, num_invar_bins, vobs, tree, decomp_table, cons, cn_max, max_wgd, max_chr_change, max_site_change, correct_bias, is_total);
+    }
+
 
     return Ls;
 }
@@ -1130,7 +1337,12 @@ void find_ML_tree(string real_tstring, int total_chr, int num_total_bins, string
 
     // Recompute the likelihood to check it is not affected by tree adjustment
     double nlnL = 0;
-    nlnL = -get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, min_lnL_tree, model, cons, cn_max, only_seg, correct_bias, is_total);
+    if(model == 3){
+        nlnL = -get_likelihood_decomp(Ns, Nchar, num_invar_bins, vobs, min_lnL_tree, decomp_table, cons, cn_max, max_wgd, max_chr_change, max_site_change, correct_bias, is_total);
+    }else{
+        nlnL = -get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, min_lnL_tree, model, cons, cn_max, only_seg, correct_bias, is_total);
+    }
+    cout.precision(dbl::max_digits10);
     cout << "Recomputed likelihood " << nlnL << endl;
 
     // Check the validity of the tree
@@ -1182,6 +1394,7 @@ int main (int argc, char ** const argv) {
     double tolerance, ssize, mu, dup_rate, del_rate, chr_gain_rate, chr_loss_rate, wgd_rate, max_rate, beta, gtime;
     string datafile, timefile, ofile, tree_file, dir_itrees;
     int is_bin, incl_all, is_total, Ne;
+    // int max_wgd, max_chr_change, max_site_change;
 
     namespace po = boost::program_options;
     po::options_description generic("Generic options");
@@ -1199,11 +1412,17 @@ int main (int argc, char ** const argv) {
     ("nsample,s", po::value<int>(&Ns)->default_value(5), "number of samples or regions")
     ("ofile,o", po::value<string>(&ofile)->default_value("maxL-tree.txt"), "output tree file with maximum likelihood")
     // ("ofile_nex,o", po::value<string>(&ofile_nex)->default_value("maxL-tree.nex"), "output tree file with maximum likelihood in NEXUS format")
+
     ("tree_file", po::value<string>(&tree_file)->default_value(""), "input tree file ")
+
     ("cn_max", po::value<int>(&cn_max)->default_value(4), "maximum copy number of a segment")
     ("is_total", po::value<int>(&is_total)->default_value(1), "whether or not the input is total copy number")
     ("is_bin", po::value<int>(&is_bin)->default_value(1), "whether or not the input copy number is for each bin. If not, the input copy number is read as it is")
     ("incl_all", po::value<int>(&incl_all)->default_value(1), "whether or not to include all the input copy numbers without further propressing")
+
+    ("max_wgd", po::value<int>(&max_wgd)->default_value(2), "maximum number of WGD")
+    ("max_chr_change", po::value<int>(&max_chr_change)->default_value(2), "maximum number of chromosome changes")
+    ("max_site_change", po::value<int>(&max_site_change)->default_value(4), "maximum number of segment changes")
 
     ("epop", po::value<int>(&Ne)->default_value(2), "effective population size of cell populations")
     ("gtime", po::value<double>(&gtime)->default_value(1), "generation time in year")
@@ -1225,7 +1444,7 @@ int main (int argc, char ** const argv) {
     ("wgd_rate", po::value<double>(&wgd_rate)->default_value(0), "WGD (whole genome doubling) rate")
     // ("max_rate", po::value<double>(&max_rate)->default_value(0.05), "The maximum rate of a mutation event (upper bound of BFGS optimization)")
 
-    ("model,d", po::value<int>(&model)->default_value(2), "model of evolution (0: Mk, 1: one-step bounded (total), 2: one-step bounded (allele-specific)")
+    ("model,d", po::value<int>(&model)->default_value(2), "model of evolution (0: Mk, 1: one-step bounded (total), 2: one-step bounded (allele-specific, 3: independent Markov chains)")
     ("constrained", po::value<int>(&cons)->default_value(1), "constraints on branch length (0: none, 1: fixed total time)")
     ("fixm", po::value<int>(&maxj)->default_value(0), "estimation of mutation rate (0: mutation rate fixed to be the given value, 1: estimating mutation rate)")
     ("optim", po::value<int>(&optim)->default_value(1), "method of optimization (0: Simplex, 1: L-BFGS-B)")
@@ -1271,37 +1490,36 @@ int main (int argc, char ** const argv) {
     }
 
     if (maxj==0){
-      cout << "Assuming mutation rate is fixed " << endl;
+      cout << "\nAssuming mutation rate is fixed " << endl;
     }
     else{
-      cout << "Estimating mutation rate" << endl;
+      cout << "\nEstimating mutation rate" << endl;
+      if (only_seg==0){
+        cout << "\tEstimating mutation rates for segment duplication/deletion, chromosome gain/loss, and whole genome doubling " << endl;
+      }
+      else{
+        cout << "\tEstimating mutation rates for segment duplication/deletion " << endl;
+      }
     }
 
     if (correct_bias==0){
-      cout << "Not correcting acquisition bias in likelihood computation " << endl;
+      cout << "\nNot correcting acquisition bias in likelihood computation " << endl;
     }
     else{
-      cout << "Correcting acquisition bias in likelihood computation " << endl;
-    }
-
-    if (only_seg==0){
-      cout << "Estimating mutation rates for segment duplication/deletion, chromosome gain/loss, and whole genome doubling " << endl;
-    }
-    else{
-      cout << "Estimating mutation rates for segment duplication/deletion " << endl;
+      cout << "\nCorrecting acquisition bias in likelihood computation " << endl;
     }
 
     if (optim==0){
-      cout << "Using Simplex method for optimization" << endl;
+      cout << "\nUsing Simplex method for optimization" << endl;
     }
     else{
-      cout << "Using L-BFGS-B method for optimization" << endl;
+      cout << "\nUsing L-BFGS-B method for optimization" << endl;
     }
 
     // tobs already defined globally
     tobs = read_time_info(timefile, Ns, age);
     if(cons){
-        cout << "The age of patient at the first sampling time: " << age << endl;
+        cout << "\nThe age of patient at the first sampling time: " << age << endl;
     }
     else{
         age = MAX_AGE;
@@ -1311,9 +1529,20 @@ int main (int argc, char ** const argv) {
     vector<double> rates;
     if(model==0){
         rates.push_back(mu);
-        cout << "Assuming Mk model " << endl;
+        cout << "\nAssuming Mk model " << endl;
     }
     else{
+        if(model == 1) cout << "\nAssuming One-step Bounded model " << endl;
+        if(model == 2) cout << "\nAssuming One-step allele-specific model " << endl;
+        if(model == 3){
+            cout << "\nAssuming independent Markov chains" << endl;
+            only_seg = 0;
+            decomp_table = build_decomp_table(comps, cn_max, max_wgd, max_chr_change, max_site_change, is_total);
+            if(debug){
+                cout << "\tNumber of states is " << comps.size() << endl;
+                print_decomp_table(decomp_table);
+            }
+        }
         rates.push_back(dup_rate);
         rates.push_back(del_rate);
         if(!only_seg){
@@ -1321,23 +1550,23 @@ int main (int argc, char ** const argv) {
             rates.push_back(chr_loss_rate);
             rates.push_back(wgd_rate);
         }
-        if(model==1) cout << "Assuming One-step Bounded model " << endl;
-        if(model==2) cout << "Assuming One-step allele-specific model " << endl;
     }
 
     int num_total_bins = 0;
     Nchar = 0;
     num_invar_bins = 0;
     map<int, vector<vector<int>>> data;
+    cout << "\nReading input copy numbers" << endl;
     if(is_bin==1){
-        cout << "Merging consecutive bins in the input" << endl;
+
         data = read_data_var_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins, Nchar, is_total);
+        cout << "   Merging consecutive bins in the input" << endl;
     }else{
         if(incl_all==1){
-            cout << "Using all input segments " << endl;
+            cout << "   Using all input segments " << endl;
             correct_bias = 0;
         }else{
-            cout << "Using variant input segments " << endl;
+            cout << "   Using variable input segments " << endl;
         }
         data = read_data_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins, Nchar, incl_all, is_total);
     }
@@ -1349,58 +1578,95 @@ int main (int argc, char ** const argv) {
     if(tree_file != ""){
       evo_tree real_tree = init_tree_from_file(tree_file, Ns, Nchar, model, only_seg, tobs, rates);
       real_tstring = order_tree_string_uniq(create_tree_string_uniq(real_tree));
-      double Ls = -get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, real_tree, model, cons, cn_max, only_seg, correct_bias, is_total);
+      double Ls = 0;
+      if(model == 3){
+          Ls = -get_likelihood_decomp(Ns, Nchar, num_invar_bins, vobs, real_tree, decomp_table, cons, cn_max, max_wgd, max_chr_change, max_site_change, correct_bias, is_total);
+      }else{
+          Ls = -get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, real_tree, model, cons, cn_max, only_seg, correct_bias, is_total);
+      }
       cout.precision(dbl::max_digits10);
       cout << "Score for tree real is: " << Ls << endl;
     }
 
     if (mode == 0){
-      cout << "Building maximum likelihood tree from copy number profile " << endl;
+      cout << "\nBuilding maximum likelihood tree from copy number profile " << endl;
       if (init_tree==0){
-        cout << "Using random coalescence trees as initial trees " << endl;
+        cout << "   Using random coalescence trees as initial trees " << endl;
       }
       else{
-        cout << "Using maximum parsimony trees as initial trees " << endl;
+        cout << "   Using maximum parsimony trees as initial trees " << endl;
       }
 
       if(bootstrap){
-          cout << "Doing bootstapping " << endl;
+          cout << "\nDoing bootstapping " << endl;
           get_bootstrap_vector_by_chr(data, vobs);
           // cout << endl;
           if(debug){
-              cout << "Copy number matrix after bootstapping" << endl;
+              cout << " Copy number matrix after bootstapping" << endl;
               for(auto it : vobs){
                   cout << it.first << "\t" << it.second.size() << endl;
               }
           }
       }
-      cout << "Number of invariant bins after reading input " << num_invar_bins << endl;
+      cout << "\nNumber of invariant bins after reading input is: " << num_invar_bins << endl;
       int total_chr = data.rbegin()->first;
       find_ML_tree(real_tstring, total_chr, num_total_bins, ofile, tree_search, Npop, Ngen, init_tree, dir_itrees, max_static, ssize, tolerance, miter, optim, rates, model, cons, maxj, cn_max, only_seg, correct_bias, is_total, Ne, beta, gtime);
   }
   else if(mode == 1){
       cout << "Running test on tree " << tree_file << endl;
-      int num_invar_bins0 = 0;
-      int num_total_bins0 = 0;
-      int Nchar0 = 0;
-      cout << "Running data without grouping by chromosome" << endl;
-      vector<vector<int>> data0 = read_data_var_regions(datafile, Ns, cn_max, num_invar_bins0, num_total_bins0, Nchar0, is_total);
-      // Construct the CN matrix
-      // cout << "The number of sites used in vobs0: " << data0.size() << endl;
-      vector<vector<int>> vobs0;
-      for(int nc=0; nc<data0.size(); ++nc){
-        vector<int> obs;
-        for(int i=0; i<Ns; ++i){
-          obs.push_back( data0[nc][i+3] );
-        }
-        vobs0.push_back( obs );
+      // int num_invar_bins0 = 0;
+      // int num_total_bins0 = 0;
+      // int Nchar0 = 0;
+      // cout << "Running data without grouping by chromosome" << endl;
+      // vector<vector<int>> data0 = read_data_var_regions(datafile, Ns, cn_max, num_invar_bins0, num_total_bins0, Nchar0, is_total);
+      // // Construct the CN matrix
+      // // cout << "The number of sites used in vobs0: " << data0.size() << endl;
+      // vector<vector<int>> vobs0;
+      // for(int nc=0; nc<data0.size(); ++nc){
+      //   vector<int> obs;
+      //   for(int i=0; i<Ns; ++i){
+      //     obs.push_back( data0[nc][i+3] );
+      //   }
+      //   vobs0.push_back( obs );
+      // }
+      //
+      // run_test(tree_file, Ns, num_total_bins, Nchar, model, cn_max, only_seg, correct_bias, is_total, tobs, vobs0, Nchar0, rates, ssize, tolerance, miter);
+
+      // Check how different mutation rates affect the rates of reaching different states
+      set<vector<double>> rate_range{
+          {0.0001, 0.0001, 0.0001, 0.0001, 0.0001},
+          // {0.0001, 0.0001, 0.001, 0.001, 0.01},
+          {0.001, 0.001, 0.001, 0.001, 0.001},
+          {0.01, 0.01, 0.01, 0.01, 0.01},
+          {0.1, 0.1, 0.1, 0.1, 0.1},
+          {1, 1, 1, 1, 1},
+          {10, 10, 10, 10, 10}};
+      vector<double> blen_range{1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
+      vector<int> cn_range{4, 6, 8, 10, 12};
+      int num_seg = 100;
+      int max_wgd = 2;
+      int max_chr_change = 2;
+      int max_site_change = 4;
+      for (int c = 0; c < cn_range.size(); c++){
+          int cn_max = cn_range[c];
+          string fname = "chain_state_cn" + to_string(cn_max) + ".txt";
+          ofstream fout(fname);
+          for(auto rates : rate_range){
+              // cout << "Mutation rates: " << rate_range[i] << endl;
+              for(int j = 0; j < blen_range.size(); j++){
+                  double blen = blen_range[j];
+                  cout << "\tBranch lengths: " << blen << endl;
+                  check_chain_by_branch_m2(num_seg, rates, blen, cn_max, fout);
+                  // int is_total = 1;
+                  // check_chain_by_branch_m3(is_total, num_seg, rates, blen, cn_max, max_wgd, max_chr_change, max_site_change, fout);
+              }
+          }
       }
 
-      run_test(tree_file, Ns, num_total_bins, Nchar, model, cn_max, only_seg, correct_bias, is_total, tobs, vobs0, Nchar0, rates, ssize, tolerance, miter);
   }
   else if(mode == 2){
       cout << "Computing the likelihood of a given tree from copy number profile " << endl;
-      double Lf = compute_tree_likelihood(tree_file, Ns, Nchar, num_invar_bins, vobs, tobs, rates, model, cons, cn_max, only_seg, correct_bias, is_total);
+      double Lf = compute_tree_likelihood(tree_file, decomp_table, Ns, Nchar, num_invar_bins, vobs, tobs, rates, model, cons, cn_max, max_wgd, max_chr_change, max_site_change, only_seg, correct_bias, is_total);
       cout << "The negative log likelihood of the input tree is " << -Lf << endl;
   }
   else{     //  (mode == 3)

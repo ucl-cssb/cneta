@@ -184,7 +184,7 @@ vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int &num_tot
       prev_sample = sample;
     }
 
-    // cout << "\tSuccessfully read input file" << endl;
+    if(debug) cout << "\tSuccessfully read input file" << endl;
 
     return s_info;
 }

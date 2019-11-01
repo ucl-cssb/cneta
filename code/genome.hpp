@@ -22,17 +22,21 @@ public:
   double btime;
   double gtime;
   int edge_id;
+  int chr;  // chromosome on which the mutation occurs
+  int seg; // segment on which the mutation occurs
 
-  mutation(const int& _eid, const int& _type, const double& _btime, const double& _gtime){
+  mutation(const int& _eid, const int& _type, const double& _btime, const double& _gtime, int _chr, int _seg){
     type = _type;
     btime = _btime;
     gtime = _gtime;
     edge_id = _eid;
+    chr = _chr;
+    seg = _seg;
   }
 
   void print() const{
     //cout << "\t" << type << "\t" << chr << "\t" << loc << "\t" << size << fixed << setprecision(3) << "\t" << time << endl;
-    cout << "\t" << type << fixed << setprecision(3) << "\t" << btime << "\t" << gtime << endl;
+    cout << "\t" << type << fixed << setprecision(3) << "\t" << btime << "\t" << gtime << "\t" << chr << "\t" << seg << endl;
   }
 
 };
@@ -263,7 +267,7 @@ public:
     stream << endl;
     stream << "\teid\ttype\ttime" << endl;
     for(int i=0; i< mutations.size(); ++i){
-      stream << "\t" << mutations[i].edge_id+1 << "\t" << stype[mutations[i].type] << "\t" << mutations[i].btime << "\t" << mutations[i].gtime << endl;
+      stream << "\t" << mutations[i].edge_id+1 << "\t" << stype[mutations[i].type] << "\t" << mutations[i].btime << "\t" << mutations[i].gtime  << "\t" << mutations[i].chr << "\t" << mutations[i].seg << endl;
     }
       stream << endl;
   }
@@ -277,7 +281,7 @@ public:
     cout << "\tCOPY NUMBER (" << node_id+1 << "):" << endl;
     for(it1 = cn_profile.begin(); it1 != cn_profile.end(); ++it1){
       for(it2 = it1->second.begin(); it2 != it1->second.end(); ++it2){
-        cout << "\t" << it1->first << "_" << it2->first;
+        cout << "\t" << it1->first+1 << "_" << it2->first;
       }
       cout << endl;
       for(it2 = it1->second.begin(); it2 != it1->second.end(); ++it2){

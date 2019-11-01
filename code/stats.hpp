@@ -8,6 +8,7 @@
 #include <vector>
 #include <map>
 #include <cmath>
+#include <set>
 
 #include "lbfgsb_new.h"
 // #include "expm.hpp"
@@ -20,13 +21,22 @@ extern "C" {
   // vector<vector<int>> vobs;
   map<int, vector<vector<int>>> vobs;
   vector<double> tobs;
-  // boost::numeric::ublas::matrix<double> qmat;
+
+  map<int, set<vector<int>>> decomp_table;  // possible state combinations for observed copy numbers
+  set<vector<int>> comps;
+
   int cn_max;
   int only_seg;
   int is_total;
-  // double qmat;
+
+  // Set max_* as global variables to avoid adding more parameters in maximization
+  int max_wgd;
+  int max_chr_change;
+  int max_site_change;
+
   int Ns;   // number of samples
   int Nchar;  // number of sites
+
   int num_invar_bins;
   int model;
   int correct_bias;
@@ -47,6 +57,7 @@ const double SMALL_BLEN = 0.01;
 const int HEIGHT_SCALE = 3;
 // The difference from minmial height
 const int HEIGHT_OFFSET = 10;
+
 
 void setup_rng(int set_seed){
   gsl_rng_env_setup();
@@ -120,6 +131,55 @@ int rchoose(gsl_rng* r, const vector<double>& rates){
 
   //cout << "u=\t" << u << "\t" << ret << endl;
   return ret;
+}
+
+
+// Convert the allele-specific state (ordered by 0/0	0/1	1/0	0/2	 1/1	2/0	0/3	 1/2 2/1	3/0	 0/4 1/3 2/2 3/1	4/0) to total copy number
+int state2tcn(int state, int cn_max){
+    int cn = 0;
+    vector<int> sums;
+    // cout << "Sums of state: ";
+    for(int i=1; i<=(cn_max+1); i++){
+        int s = i * (i+1) / 2;
+        sums.push_back(s);
+        // cout << "\t" << s;
+    }
+    // cout << endl;
+    if(state < sums[0]) return 0;
+    int i = 1;
+    do{
+        if (state >= sums[i-1] && state < sums[i]) return i;
+        i++;
+    }while (i<=cn_max);
+    // cout << state << "\t" <<
+    return 0;
+}
+
+
+// Convert the allele-specific state (ordered by 0/0	0/1	1/0	0/2	 1/1	2/0	0/3	 1/2 2/1	3/0	 0/4 1/3 2/2 3/1	4/0) to total copy number
+int state_to_allele_cn(int state, int cn_max, int& cnA, int& cnB){
+    int cn = 0;
+    vector<int> sums;
+    // cout << "Sums of state: ";
+    for(int i=1; i<=(cn_max+1); i++){
+        int s = i * (i+1) / 2;
+        sums.push_back(s);
+        // cout << "\t" << s;
+    }
+    // cout << endl;
+    if(state < sums[0]) return 0;
+    int i = 1;
+    do{
+        if (state >= sums[i-1] && state < sums[i]){
+             // total copy number is i;
+             int diff = state - sums[i-1];
+             cnA = diff;
+             cnB = i - cnA;
+        }
+        i++;
+    }while (i<=cn_max);
+    // cout << state << "\t" <<
+    return 0;
 }
 
 
@@ -587,7 +647,7 @@ bool is_tip_valid(evo_tree& rtree, vector<double>& tobs, int sample1){
 }
 
 // Adjust the terminal branch lengths of a tree with fixed topolgy when the constraints are violated
-// The initial or perturbed tree may not have tip nodes in accord with the sampling time informaton
+// The initial or perturbed tree may not have tip nodes in accord with the sampling time information
 // Ensure edge length keep positive
 void adjust_tree_tips(evo_tree& rtree){
     assert(is_blen_valid(rtree));
@@ -758,10 +818,12 @@ void get_rate_matrix_bounded(double* m, double dup_rate, double del_rate, const 
 
 // A matrix with dimension (cn_max + 1) * (cn_max + 2) / 2
 // Suppose copy number configuration is in specific order such as:  0/0	0/1	1/0	0/2	 1/1	2/0	0/3	 1/2	 2/1	3/0	0/4	 1/3	  2/2	 3/1	4/0
-void get_rate_matrix_allele_specific(double* m, double dup_rate, double del_rate, const int cn_max) {
+void get_rate_matrix_allele_specific(double* m, double dup_rate, double del_rate, int cn_max) {
     int debug = 0;
     int ncol = (cn_max + 1) * (cn_max + 2) / 2;
-    if(debug) cout << "Total number of states is " << ncol << endl;
+    if(debug){
+     cout << "Total number of states for copy number " << cn_max << " is " << ncol << endl;
+    }
 
     for (unsigned i = 0; i < ncol; ++ i){
         for (unsigned j = 0; j < ncol; ++ j){
@@ -769,27 +831,30 @@ void get_rate_matrix_allele_specific(double* m, double dup_rate, double del_rate
         }
     }
 
-    int s = cn_max * (cn_max - 1) / 2;
-    int r, c;
-    // 1st row for the last group
+    int s = cn_max * (cn_max - 1) / 2; // start index for the last group
+    int r, c;   // row index and column index
+    // 1st row for the last group (only deletion is allowed)
     r = ncol - (cn_max + 1);
+    if(debug) cout << "Filling row " << r << endl;
     c = s;
     m[r + c*ncol] = del_rate;
     m[r + r*ncol] = 0 - del_rate;
     // last row for the last group
     r = ncol - 1 ;
+    if(debug) cout << "Filling row " << r << endl;
     c = r - (cn_max + 1);
     m[r + c*ncol] = del_rate;
     m[r + r*ncol] = 0 - del_rate;
     // middle rows with two possiblities
     for(int j = cn_max; j > 1; j--){
         r = ncol - j;
+        if(debug) cout << "Filling row " << r << endl;
         c = s;
         m[r + c*ncol] = del_rate;
-        c = s + 1;
-        m[r + c*ncol] = del_rate;
-        s++;
+        m[r + (c + 1)*ncol] = del_rate;
         m[r + r*ncol] = 0 - 2 * del_rate;
+
+        s++;
     }
 
 
@@ -797,15 +862,20 @@ void get_rate_matrix_allele_specific(double* m, double dup_rate, double del_rate
     // For entries with at least one zero, filling bottom up
     for(int i = 1; i < cn_max; i++){
         tcn = cn_max - i;
+        int start_r = tcn * (tcn+1)/2;
+
         // for zero at the front
-        r = tcn * (tcn+1)/2;
+        r = start_r;
+        if(debug) cout << "Filling row " << r << endl;
         c = r - tcn;
         m[r + c*ncol] = del_rate;
         c = r + (tcn + 1);
         m[r + c*ncol] = dup_rate;
         m[r + r*ncol] = 0 - (del_rate + dup_rate);
+
         // for zero at the end
-        r = r + tcn;
+        r = start_r + tcn;
+        if(debug) cout << "Filling row " << r << endl;
         c = r - (tcn + 1);
         m[r + c*ncol] = del_rate;
         c = r + (tcn + 2);
@@ -813,20 +883,23 @@ void get_rate_matrix_allele_specific(double* m, double dup_rate, double del_rate
         m[r + r*ncol] = 0 - (del_rate + dup_rate);
     }
 
-    // For entries with none zero, filling bottom up
+    // For entries with none zero (from copy number 2 to cn_max-1, filling bottom up (excluding last group)
     for(int i = 1; i < cn_max - 1; i++){
         tcn = cn_max - i;
-        r = tcn * (tcn+1)/2 + 1;
-        for(int j = 1; j < tcn; j++){
-            r = r + j - 1;
+        int start_r = tcn * (tcn+1)/2 + 1;
+        for(int j = 1; j < tcn; j++){   // tcn - 2 rows to fill
+            r = start_r + j - 1;
+            if(debug) cout << "Filling row " << r << endl;
+
             c = r - (tcn + 1);
             m[r + c*ncol] = del_rate;
             c = c + 1;
             m[r + c*ncol] = del_rate;
+
             c = r + (tcn + 1);
             m[r + c*ncol] = dup_rate;
-            c = c + 1;
-            m[r + c*ncol] = dup_rate;
+            m[r + (c+1)*ncol] = dup_rate;
+
             m[r + r*ncol] = 0 - 2 * (del_rate + dup_rate);
         }
     }
@@ -906,9 +979,9 @@ void get_rate_matrix_wgd(double* m, double wgd_rate, int wgd_max=2){
             m[i + j*ncol] = 0;
         }
     }
-    for( unsigned i = 0; i < wgd_max; i++){
+    for(unsigned i = 0; i < wgd_max; i++){
         m[i+(i+1)*ncol] = wgd_rate;
-        m[i+i*ncol] = 0 - m[i+(i-1)*ncol] - m[i+(i+1)*ncol];
+        m[i+i*ncol] = - wgd_rate;
     }
 
     if(debug){
@@ -934,10 +1007,8 @@ void get_rate_matrix_wgd(double* m, double wgd_rate, int wgd_max=2){
 void get_transition_matrix_bounded(double* q, double* p, double t, int n){
     int debug = 0;
     // int n = cn_max + 1;
-    double tmp[n*n];
-    // ={0};
+    double *tmp = new double[n*n];
     memset( tmp, 0, n*n*sizeof(double) );
-
 
     for(int i = 0; i < n*n; i++){
         tmp[i] = q[i] * t;
@@ -958,6 +1029,8 @@ void get_transition_matrix_bounded(double* q, double* p, double t, int n){
         r8mat_print ( n, n, tmp, "  TMP matrix:" );
         r8mat_print ( n, n, p, "  P matrix:" );
     }
+
+    free(tmp);
 }
 
 double get_transition_prob_bounded(double* p, const int& sk, const int& sj, int n){
@@ -1005,7 +1078,7 @@ vector<vector<double>> initialize_lnl_table(vector<int>& obs, evo_tree& rtree, i
     // construct a table for each state of each node
     vector<vector<double>> L_sk_k(rtree.ntotn, vector<double>(nstate,0));
 
-    if(model == 2){
+    if(model > 1){
         for(int i=0; i<Ns; ++i){
             // For total copy number, all the possible combinations have to be considered.
             // Set related allele specific cases to be 1, with index from obs[i] * (obs[i] + 1)/2 to obs[i] * (obs[i] + 1)/2 + obs[i]. The index is computed based on pre-specified order.
@@ -1046,24 +1119,133 @@ vector<vector<double>> initialize_lnl_table(vector<int>& obs, evo_tree& rtree, i
           cout << endl;
       }
     }
+    return L_sk_k;
+}
 
+
+void print_decomp_table(map<int, set<vector<int>>>& decomp_table){
+    int count = 0;
+    for(auto item : decomp_table){
+        set<vector<int>> comp = item.second;
+        cout << "\nState " << item.first << endl;
+        for (auto c : comp){
+            count += 1;
+            for(int i = 0; i < c.size(); i++){
+                cout << "\t" << c[i];
+            }
+            cout << endl;
+        }
+    }
+    cout << "Number of possible states for copy number decomposition " << count << endl;
+}
+
+// L_sk_k has one row for each tree node and one column for each possible state
+vector<vector<double>> initialize_lnl_table_decomp(vector<int>& obs, evo_tree& rtree, set<vector<int>>& comps, int Ns, int model, int cn_max, int& nstate, int is_total){
+    int debug = 0;
+    // construct a table for each state of each node
+    vector<vector<double>> L_sk_k(rtree.ntotn, vector<double>(nstate,0));
+
+    for(int i=0; i<Ns; ++i){
+        // For total copy number, all the possible combinations have to be considered.
+        // Set related allele specific cases to be 1, with index from obs[i] * (obs[i] + 1)/2 to obs[i] * (obs[i] + 1)/2 + obs[i]. The index is computed based on pre-specified order.
+        int cn = obs[i];
+        if(is_total==0){
+            cn = state2tcn(obs[i], cn_max);
+        }
+        // Fill all the possible state combinations
+        int k = 0;
+        for (auto c : comps){
+            int i1 = c[1];
+            int sum = pow(2, i1 + 1) + accumulate(c.begin()+1, c.end(), 0);
+            if(sum == cn){
+                L_sk_k[i][k] = 1.0;
+            }
+            k++;
+        }
+        // cout << "Filling table for copy number " << cn << endl;
+    }
+    // set likelihood for normal sample
+    // Fill all the possible state combinations
+    for (int j = 0; j < comps.size(); j++){
+        int k = 0;
+        for (auto v : comps){
+            bool zeros = all_of(v.begin(), v.end(), [](int i) { return i==0; });
+            if(zeros){
+                L_sk_k[Ns][k] = 1.0;
+                break;
+            }
+            k++;
+        }
+    }
+
+    if(debug){
+      cout << "\nCNs at tips:\n";
+      for(int i=0; i<Ns; ++i){
+          cout<< "\t" << obs[i];
+      }
+      cout << endl;
+      cout << "\nLikelihood for tips:\n";
+      for(int i=0; i<rtree.nleaf; ++i){
+          for(int j=0; j < nstate; ++j){
+            cout << "\t" << L_sk_k[i][j];
+          }
+          cout << endl;
+      }
+    }
     return L_sk_k;
 }
 
 
 // Get the likelihood of the tree from likelihood table
-double extract_tree_lnl(const vector<vector<double>>& L_sk_k, int nc, int Ns, int model){
+double extract_tree_lnl(const vector<vector<double>>& L_sk_k, int Ns, int model){
     int debug = 0;
+
+    if(debug){
+        for(int j=0; j<L_sk_k[Ns+1].size(); ++j){
+          cout << "\t" << L_sk_k[Ns+1][j];
+        }
+        cout << endl;
+    }
+
     if(model == 2){
         // The index is changed from 2 to 4 (1/1)
-        if(debug) cout << "Likelihood char : " << nc << "\t" << L_sk_k[Ns+1][4] << endl;
+        if(debug) cout << "Likelihood for root is " << L_sk_k[Ns+1][4] << endl;
         if(L_sk_k[Ns+1][4] > 0) return log(L_sk_k[Ns+1][4]);
         else return LARGE_LNL;
     }else{
-        if(debug) cout << "Likelihood char : " << nc << "\t" << L_sk_k[Ns+1][2] << endl;
+        if(debug) cout << "Likelihood for root is " << L_sk_k[Ns+1][2] << endl;
         if(L_sk_k[Ns+1][2] > 0) return log(L_sk_k[Ns+1][2]);
         else return LARGE_LNL;
     }
+
+}
+
+
+// Get the likelihood of the tree from likelihood table of state combinations
+double extract_tree_lnl_decomp(const vector<vector<double>>& L_sk_k, set<vector<int>>& comps, int Ns){
+    int debug = 0;
+    if(debug) cout << "Extracting likelihood for the root" << endl;
+    double likelihood = 0;
+    int k = 0;
+    for (auto v : comps){
+        bool zeros = all_of(v.begin(), v.end(), [](int i) { return i==0; });
+        if(zeros){
+            // cout << k << "\t" << v[0] << "\t" << v[1] << "\t" << v[2] << endl;
+            likelihood = L_sk_k[Ns+1][k];
+            break;
+        }
+        k++;
+    }
+
+    if(debug){
+        for(int j=0; j<comps.size(); ++j){
+          cout << "\t" << L_sk_k[Ns+1][j];
+        }
+        cout << endl;
+    }
+
+    if(likelihood > 0) return log(likelihood);
+    else return LARGE_LNL;
 }
 
 
@@ -1085,39 +1267,256 @@ double get_prob_children(vector<vector<double>>& L_sk_k, evo_tree& rtree, double
     double Li = 0;
     // loop over possible si
     for(int si=0; si<nstate; ++si){
-      if (model == 0){
-        Li += get_transition_prob(rtree.mu, bli, nsk, si) * L_sk_k[ni][si];
-      }
-      else{
-        if(debug){
-            cout << "1st branch length " << bli << endl;
-            cout << get_transition_prob_bounded(pbli, nsk, si, nstate) << endl;
-            r8mat_print( nstate, nstate, pbli, " Pmatrix for 1st branch length " );
-        }
-        Li += get_transition_prob_bounded(pbli, nsk, si, nstate) * L_sk_k[ni][si];
-      }
-      // cout << "\tscoring: Li\t" << Li << "\t" << L_sk_k[ni][si] << endl;
+      if(L_sk_k[ni][si] > 0){
+          if (model == 0){
+            Li += get_transition_prob(rtree.mu, bli, nsk, si) * L_sk_k[ni][si];
+          }
+          else{
+            // if(debug){
+            //     cout << "1st branch length " << bli << endl;
+            //     cout << get_transition_prob_bounded(pbli, nsk, si, nstate) << endl;
+            //     r8mat_print( nstate, nstate, pbli, " Pmatrix for 1st branch length " );
+            // }
+            Li += get_transition_prob_bounded(pbli, nsk, si, nstate) * L_sk_k[ni][si];
+          }
+       }
     }
+    if(debug) cout << "\tscoring: Li\t" << Li << endl;
 
     double Lj = 0;
     // loop over possible sj
     for(int sj=0; sj<nstate; ++sj){
-      if (model == 0){
-           Lj += get_transition_prob(rtree.mu, blj, nsk, sj) * L_sk_k[nj][sj];
-      }
-      else{
-          if(debug){
-              cout << "2nd branch length " << blj << endl;
-              r8mat_print( nstate, nstate, pblj, " Pmatrix for 2nd branch length ");
-          }
-           Lj += get_transition_prob_bounded(pblj, nsk, sj, nstate) * L_sk_k[nj][sj];
-      }
+        if(L_sk_k[nj][sj] > 0){
+            if (model == 0){
+                 Lj += get_transition_prob(rtree.mu, blj, nsk, sj) * L_sk_k[nj][sj];
+            }
+            else{
+                // if(debug){
+                //     cout << "2nd branch length " << blj << endl;
+                //     r8mat_print( nstate, nstate, pblj, " Pmatrix for 2nd branch length ");
+                // }
+                 Lj += get_transition_prob_bounded(pblj, nsk, sj, nstate) * L_sk_k[nj][sj];
+            }
+        }
     }
-    // cout << "scoring: sk" << nsk << "\t" <<  Li << "\t" << Lj << endl;
+    if(debug) cout << "\tscoring: Lj\t" << Lj << endl;
 
     return Li * Lj;
 }
 
+
+void insert_tuple(map<int, set<vector<int>>>& decomp_table, set<vector<int>>& comps, int cn_max, int i, int j, int k){
+    int sum = pow(2, i + 1) + j + k;
+    // cout << i << "\t" << j << "\t" << k << "\t" << sum << endl;
+    if(sum >= 0 && sum <= cn_max){
+        vector<int> c{i,j,k};
+        decomp_table[sum].insert(c);
+        comps.insert(c);
+    }
+}
+
+
+void insert_tuple_allele_specific(map<int, set<vector<int>>>& decomp_table, set<vector<int>>& comps, int cn_max, int i, int j1, int j2, int k1, int k2){
+    int sum = pow(2, i + 1) + j1  + j2 + k1 + k2;
+    // cout << i << "\t" << j1 << "\t" << j2 << "\t" << k1 << "\t" << k2 << "\t" << sum << endl;
+    if(sum >= 0 && sum <= cn_max){
+        vector<int> c{i,j1, j2, k1, k2};
+        decomp_table[sum].insert(c);
+        comps.insert(c);
+    }
+}
+
+
+map<int, set<vector<int>>> build_decomp_table(set<vector<int>>& comps, int cn_max, int max_wgd, int max_chr_change, int max_site_change, int is_total)
+{
+    map<int, set<vector<int>>> decomp_table;
+    for(int i=0; i<=cn_max; i++){
+        set<vector<int>> comp;
+        decomp_table[i] = comp;
+    }
+    if(is_total == 1){
+        for(int i=0; i<=max_wgd; i++){
+            for(int j=0; j<=max_chr_change; j++){
+                for(int k=0; k<=max_site_change; k++){
+                    insert_tuple(decomp_table, comps, cn_max, i, j, k);
+                    insert_tuple(decomp_table, comps, cn_max, i, -j, k);
+                    insert_tuple(decomp_table, comps, cn_max, i, j, -k);
+                    insert_tuple(decomp_table, comps, cn_max, i, -j, -k);
+                }
+            }
+        }
+    }else{
+        for(int i=0; i<=max_wgd; i++){
+            for(int j1=0; j1<=max_chr_change; j1++){
+                for(int j2=0; j2<=max_chr_change; j2++){
+                    for(int k1=0; k1<=max_site_change; k1++){
+                        for(int k2=0; k2<=max_site_change; k2++){
+                            insert_tuple_allele_specific(decomp_table, comps, cn_max, i, j1, j2, k1, k2);
+
+                            insert_tuple_allele_specific(decomp_table, comps, cn_max, i, -j1, j2, k1, k2);
+                            insert_tuple_allele_specific(decomp_table, comps, cn_max, i, j1, -j2, k1, k2);
+                            insert_tuple_allele_specific(decomp_table, comps, cn_max, i, j1, j2, -k1, k2);
+                            insert_tuple_allele_specific(decomp_table, comps, cn_max, i, j1, j2, k1, -k2);
+
+                            insert_tuple_allele_specific(decomp_table, comps, cn_max, i, -j1, -j2, k1, k2);
+                            insert_tuple_allele_specific(decomp_table, comps, cn_max, i, -j1, j2, -k1, k2);
+                            insert_tuple_allele_specific(decomp_table, comps, cn_max, i, -j1, j2, k1, -k2);
+                            insert_tuple_allele_specific(decomp_table, comps, cn_max, i, j1, -j2, -k1, k2);
+                            insert_tuple_allele_specific(decomp_table, comps, cn_max, i, j1, -j2, k1, -k2);
+                            insert_tuple_allele_specific(decomp_table, comps, cn_max, i, j1, j2, -k1, -k2);
+
+                            insert_tuple_allele_specific(decomp_table, comps, cn_max, i, -j1, -j2, -k1, k2);
+                            insert_tuple_allele_specific(decomp_table, comps, cn_max, i, -j1, -j2, k1, -k2);
+                            insert_tuple_allele_specific(decomp_table, comps, cn_max, i, -j1, j2, -k1, -k2);
+                            insert_tuple_allele_specific(decomp_table, comps, cn_max, i, j1, -j2, -k1, -k2);
+
+                            insert_tuple_allele_specific(decomp_table, comps, cn_max, i, -j1, -j2, -k1, -k2);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return decomp_table;
+}
+
+
+// Assume the likelihood table is for each allele-specific copy number
+double get_prob_children_decomp(vector<vector<double>>& L_sk_k, evo_tree& rtree, map<int, set<vector<int>>>& decomp_table, int sk, int cn_max, int nstate, double* pbli_wgd, double* pblj_wgd, double* pbli_chr, double* pblj_chr, double* pbli_seg, double* pblj_seg, int dim_wgd, int dim_chr, int dim_seg, int ni, int nj, int bli, int blj, int is_total){
+    int debug = 0;
+    int s_wgd, s_chr, s_seg;
+    int e_wgd, e_chr, e_seg;
+    // Each copy number is decomposed into a set of 3-tuples
+    set<vector<int>> comp_start = decomp_table[sk];
+    // get_decomposition(sk, s_wgd, s_chr, s_seg, decomp_table);
+
+    double Li = 0;
+    for(auto s : comp_start){
+        s_wgd = s[0];
+        s_chr = s[1];
+        s_seg = s[2];
+        // loop over possible si
+        for(int si=0; si<nstate; ++si){
+            // get the start and end state for each type
+            int cn = state2tcn(si, cn_max);
+            set<vector<int>> comp_end = decomp_table[cn];
+            // get_decomposition(si, e_wgd, e_chr, e_seg, decomp_table);
+            for(auto e : comp_end){
+                e_wgd = e[0];
+                e_chr = e[1];
+                e_seg = e[2];
+                double prob_wgd = get_transition_prob_bounded(pbli_wgd, s_wgd, e_wgd, dim_wgd);
+                double prob_chr = get_transition_prob_bounded(pbli_chr, s_chr, e_chr, dim_chr);
+                double prob_seg = get_transition_prob_bounded(pbli_seg, s_seg, e_seg, dim_seg);
+                double prob = prob_wgd * prob_chr * prob_seg * L_sk_k[ni][si];
+                Li += prob;
+                if(debug) cout << prob_wgd << "\t" << prob_chr << "\t" << prob_seg << "\t" << prob << "\n";
+            }
+          if(debug) cout << "\tscoring: Li\t" << Li << endl;
+        }
+    }
+
+    double Lj = 0;
+    for(auto s : comp_start){
+        s_wgd = s[0];
+        s_chr = s[1];
+        s_seg = s[2];
+        // loop over possible sj
+        for(int sj=0; sj<nstate; ++sj){
+            int cn = state2tcn(sj, cn_max);
+            set<vector<int>> comp_end = decomp_table[cn];
+            // get the start and end state for each type
+            // set<vector<int>> comp_end = decomp_table[sj];
+            // get_decomposition(si, e_wgd, e_chr, e_seg, decomp_table);
+            for(auto e : comp_end){
+                e_wgd = e[0];
+                e_chr = e[1];
+                e_seg = e[2];
+                double prob_wgd = get_transition_prob_bounded(pblj_wgd, s_wgd, e_wgd, dim_wgd);
+                double prob_chr = get_transition_prob_bounded(pblj_chr, s_chr, e_chr, dim_chr);
+                double prob_seg = get_transition_prob_bounded(pblj_seg, s_seg, e_seg, dim_seg);
+                double prob = prob_wgd * prob_chr * prob_seg * L_sk_k[nj][sj];
+                Lj += prob;
+                if(debug) cout << prob_wgd << "\t" << prob_chr << "\t" << prob_seg << "\t" << prob << "\n";
+            }
+        }
+        if(debug) cout << "\tscoring: Lj\t" << Lj << endl;
+    }
+
+    return Li * Lj;
+}
+
+// Assume the likelihood table is for each combination of states
+double get_prob_children_decomp2(vector<vector<double>>& L_sk_k, evo_tree& rtree, set<vector<int>>& comps, int sk, int cn_max, int nstate, double* pbli_wgd, double* pblj_wgd, double* pbli_chr, double* pblj_chr, double* pbli_seg, double* pblj_seg, int dim_wgd, int dim_chr, int dim_seg, int ni, int nj, int bli, int blj, int is_total){
+    int debug = 0;
+    int s_wgd, s_chr, s_seg;
+    int e_wgd, e_chr, e_seg;
+    // Each copy number is decomposed into a set of 3-tuples
+    set<vector<int>>::iterator iter = comps.begin();
+    // It will move forward the passed iterator by passed value
+    advance(iter, sk);
+    vector<int> s = *iter;
+    // get_decomposition(sk, s_wgd, s_chr, s_seg, decomp_table);
+    s_wgd = s[0];
+    s_chr = s[1];
+    s_seg = s[2];
+    // The indices for chromosome and segment matrix have to be ajusted
+    int delta_chr = (dim_chr - 1)/2;
+    int delta_seg = (dim_seg - 1)/2;
+
+    if(debug){
+        cout << "Starting state " << sk << "\t" << s_wgd << "\t" << s_chr << "\t" << s_seg << "\n";
+        cout << "   Offset for chr and segment matrices " << delta_chr << "\t" << delta_seg << "\n";
+    }
+
+
+    double Li = 0;
+    int si = 0;
+    for(auto e : comps){
+        double prob = 0;
+        if(L_sk_k[ni][si] > 0){
+            e_wgd = e[0];
+            e_chr = e[1];
+            e_seg = e[2];
+            double prob_wgd = pbli_wgd[s_wgd + e_wgd * dim_wgd];
+            double prob_chr = pbli_chr[(s_chr + delta_chr) + (e_chr + delta_chr) * dim_chr];
+            double prob_seg = pbli_seg[(s_seg + delta_seg) + (e_seg + delta_seg) * dim_seg];
+            // double prob = prob_wgd * prob_chr * prob_seg * L_sk_k[ni][si];
+            prob = prob_wgd * prob_chr * prob_seg * L_sk_k[ni][si];
+            if(debug){
+                cout << "End state " << si << "\t" << e_wgd << "\t" << e_chr << "\t" << e_seg << "\n";
+                cout << prob_wgd << "\t" << prob_chr << "\t" << prob_seg << "\t" << prob << "\n";
+            }
+        }
+        Li += prob;
+        si++;
+    }
+    if(debug) cout << "\tscoring: Li\t" << Li << endl;
+
+    double Lj = 0;
+    int sj = 0;
+    for(auto e : comps){
+        double prob = 0;
+        if(L_sk_k[nj][sj] > 0){
+            e_wgd = e[0];
+            e_chr = e[1];
+            e_seg = e[2];
+            double prob_wgd = pblj_wgd[s_wgd + e_wgd * dim_wgd];
+            double prob_chr = pblj_chr[(s_chr + delta_chr) + (e_chr + delta_chr) * dim_chr];
+            double prob_seg = pblj_seg[(s_seg + delta_seg) + (e_seg + delta_seg) * dim_seg];
+            prob = prob_wgd * prob_chr * prob_seg * L_sk_k[nj][sj];
+            if(debug){
+                cout << "End state " << sj << "\t" << e_wgd << "\t" << e_chr << "\t" << e_seg << "\n";
+                cout << prob_wgd << "\t" << prob_chr << "\t" << prob_seg << "\t" << prob << "\n";
+            }
+        }
+        Lj += prob;
+        sj++;
+    }
+    if(debug) cout << "\tscoring: Lj\t" << Lj << endl;
+
+    return Li * Lj;
+}
 
 // Get the likelihood on one site of a chromosome (assuming higher level events on nodes)
 // z: possible changes in copy number caused by chromosome gain/loss
@@ -1141,6 +1540,7 @@ void get_likelihood_site(vector<vector<double>>& L_sk_k, evo_tree& rtree, const 
 
         //loop over possible values of sk
         if(k == Ns + 1){    // root node is always normal
+            if(debug) cout << "Getting likelihood for root node " << k << endl;
             int nsk = 2;
             if(model==2) nsk = 4;
             L_sk_k[k][nsk] = get_prob_children(L_sk_k, rtree, pbli, pblj, nsk, nstate, ni, nj, bli, blj, model);
@@ -1150,7 +1550,7 @@ void get_likelihood_site(vector<vector<double>>& L_sk_k, evo_tree& rtree, const 
                 int nsk = sk;  // state after changes by other large scale events
                 if(has_wgd == 1) nsk = 2 * sk;
                 nsk += z;
-                // cout << "likelihood for state " << nsk << endl;
+                if(debug) cout << "likelihood for state " << nsk << endl;
                 if(nsk < 0 || nsk >= nstate) continue;
                 // cout << " getting likelihood of children nodes " << endl;
                 L_sk_k[k][nsk] = get_prob_children(L_sk_k, rtree, pbli, pblj, nsk, nstate, ni, nj, bli, blj, model);
@@ -1167,11 +1567,11 @@ void get_likelihood_site(vector<vector<double>>& L_sk_k, evo_tree& rtree, const 
 // Assuming each observed copy number is composed of three type of events.
 // Sum over all possible states for initial and final nodes
 // Allow at most one WGD event along a branch
-void get_likelihood_site_decomp(vector<vector<double>>& L_sk_k, evo_tree& rtree, const vector<int>& knodes, map<double, double*>& pmats, const int has_wgd, const int z, const int model, int nstate){
+void get_likelihood_site_decomp(vector<vector<double>>& L_sk_k, evo_tree& rtree, map<int, set<vector<int>>>& decomp_table, const vector<int>& knodes, map<double, double*>& pmats_wgd, map<double, double*>& pmats_chr, map<double, double*>& pmats_seg, int dim_wgd, int dim_chr, int dim_seg, int cn_max, int nstate, int is_total){
   int debug = 0;
   if(debug){
       cout << "Computing likelihood for one site" << endl;
-      cout << nstate << endl;
+      cout << dim_wgd << "\t" << dim_chr << "\t"  << dim_seg << "\t"  << nstate << endl;
   }
 
   for(int kn=0; kn<knodes.size(); ++kn){
@@ -1180,22 +1580,40 @@ void get_likelihood_site_decomp(vector<vector<double>>& L_sk_k, evo_tree& rtree,
         double bli = rtree.edges[rtree.nodes[k].e_ot[0]].length;
         int nj = rtree.edges[rtree.nodes[k].e_ot[1]].end;
         double blj = rtree.edges[rtree.nodes[k].e_ot[1]].length;
-        double* pbli = pmats[bli];
-        double* pblj = pmats[blj];
+
+        double* pbli_wgd = pmats_wgd[bli];
+        double* pblj_wgd = pmats_wgd[blj];
+
+        double* pbli_chr = pmats_chr[bli];
+        double* pblj_chr = pmats_chr[blj];
+
+        double* pbli_seg = pmats_seg[bli];
+        double* pblj_seg = pmats_seg[blj];
 
         if(debug) cout << "node:" << rtree.nodes[k].id + 1 << " -> " << ni+1 << " , " << bli << "\t" <<  nj+1 << " , " << blj << endl;
 
-        // // loop over possible observed states of start nodes
-        // for(int i=0; i<nstate; i++){
-        //     // loop over possible implicit states
-        //     p_wgd = 0;
-        //     p_chr = 0;
-        //     p_seg = get_prob_children(L_sk_k, rtree, pbli, pblj, nsk, nstate, ni, nj, bli, blj, model);
-        //     // loop over possible observed states of end nodes
-        //     for(int j=0; j<nstate; j++){
-        //
-        //     }
-        // }
+        // loop over possible observed states of start nodes
+        if(k == Ns + 1){    // root node is always normal
+            // int sk = 4;
+            // L_sk_k[k][sk] = get_prob_children_decomp(L_sk_k, rtree, decomp_table, sk, cn_max, nstate, pbli_wgd, pblj_wgd, pbli_chr, pblj_chr, pbli_seg, pblj_seg, dim_wgd, dim_chr, dim_seg, ni, nj, bli, blj, is_total);
+            if(debug) cout << "Getting likelihood for root node " << k << endl;
+            int sk = 0;
+            for(auto v : comps){
+                bool zeros = all_of(v.begin(), v.end(), [](int i) { return i==0; });
+                if(zeros){
+                    L_sk_k[k][sk] = get_prob_children_decomp2(L_sk_k, rtree, comps, sk, cn_max, nstate, pbli_wgd, pblj_wgd, pbli_chr, pblj_chr, pbli_seg, pblj_seg, dim_wgd, dim_chr, dim_seg, ni, nj, bli, blj, is_total);
+                    break;
+                }
+                sk++;
+            }
+        }
+        else{
+            for(int sk=0; sk<nstate; ++sk){
+                // cout << " getting likelihood of children nodes " << endl;
+                // L_sk_k[k][sk] = get_prob_children_decomp(L_sk_k, rtree, decomp_table, sk, cn_max, nstate, pbli_wgd, pblj_wgd, pbli_chr, pblj_chr, pbli_seg, pblj_seg, dim_wgd, dim_chr, dim_seg, ni, nj, bli, blj, is_total);
+                L_sk_k[k][sk] = get_prob_children_decomp2(L_sk_k, rtree, comps, sk, cn_max, nstate, pbli_wgd, pblj_wgd, pbli_chr, pblj_chr, pbli_seg, pblj_seg, dim_wgd, dim_chr, dim_seg, ni, nj, bli, blj, is_total);
+            }
+        }
   }
   if(debug){
     print_tree_lnl(rtree, L_sk_k, nstate);
@@ -1215,7 +1633,7 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, evo_tree& rtree, 
     // // Use a map to store computed log likelihood
     // map<vector<int>, vector<vector<double>>> sites_lnl_map;
     for(int nchr=1; nchr<=vobs.size(); nchr++){     // for each chromosome
-      // cout << "Chr " << nchr << endl;
+      if(debug) cout << "Computing likelihood on Chr " << nchr << endl;
       double chr_logL = 0;  // for one chromosome
       double chr_logL_normal = 0, chr_logL_gain = 0, chr_logL_loss = 0;
       double site_logL = 0;   // log likelihood for all sites on a chromosome
@@ -1238,9 +1656,11 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, evo_tree& rtree, 
               L_sk_k = initialize_lnl_table(obs, rtree, Ns, model, nstate, is_total);
               get_likelihood_site(L_sk_k, rtree, knodes, pmats, has_wgd, z, model, nstate);
           // }
-          site_logL += extract_tree_lnl(L_sk_k, nc, Ns, model);
+          double lnl = extract_tree_lnl(L_sk_k, Ns, model);
+          site_logL += lnl;
 
           if(debug){
+              cout << "\nLikelihood for site " << nc << " is " << lnl << endl;
               print_tree_lnl(rtree, L_sk_k, nstate);
           }
       }
@@ -1283,7 +1703,7 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, evo_tree& rtree, 
                   vector<vector<double>> L_sk_k = initialize_lnl_table(obs, rtree, Ns, model, nstate, is_total);
 
                   get_likelihood_site(L_sk_k, rtree, knodes, pmats, has_wgd, z, model, nstate);
-                  site_logL += extract_tree_lnl(L_sk_k, nc, Ns, model);
+                  site_logL += extract_tree_lnl(L_sk_k, Ns, model);
 
                   if(debug){
                       print_tree_lnl(rtree, L_sk_k, nstate);
@@ -1308,7 +1728,7 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, evo_tree& rtree, 
                   vector<int> obs = vobs[nchr][nc];
                   vector<vector<double>> L_sk_k = initialize_lnl_table(obs, rtree, Ns, model, nstate, is_total);
                   get_likelihood_site(L_sk_k, rtree, knodes, pmats, has_wgd, z, model, nstate);
-                  site_logL += extract_tree_lnl(L_sk_k, nc, Ns, model);
+                  site_logL += extract_tree_lnl(L_sk_k, Ns, model);
 
                   if(debug){
                       print_tree_lnl(rtree, L_sk_k, nstate);
@@ -1341,6 +1761,51 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, evo_tree& rtree, 
     return logL;
 }
 
+// Used when WGD is considered
+double get_likelihood_chr_decomp(map<int, vector<vector<int>>>& vobs, evo_tree& rtree, map<int, set<vector<int>>>& decomp_table, const vector<int>& knodes, map<double, double*>& pmats_wgd, map<double, double*>& pmats_chr, map<double, double*>& pmats_seg, int dim_wgd, int dim_chr, int dim_seg, int cn_max, int nstate, int is_total=1){
+    int debug = 0;
+    double logL = 0;    // for all chromosmes
+    // int use_repeat = 1;
+    // // Use a map to store computed log likelihood
+    // map<vector<int>, vector<vector<double>>> sites_lnl_map;
+    for(int nchr=1; nchr<=vobs.size(); nchr++){     // for each chromosome
+      if(debug) cout << "Computing likelihood on Chr " << nchr << endl;
+      double site_logL = 0;   // log likelihood for all sites on a chromosome
+      // cout << " chromosome number change is " << 0 << endl;
+      for(int nc=0; nc<vobs[nchr].size(); nc++){    // for each segment on the chromosome
+          // cout << "Number of sites for this chr " << vobs[nchr].size() << endl;
+          // for each site of the chromosome (may be repeated)
+          vector<int> obs = vobs[nchr][nc];
+          vector<vector<double>> L_sk_k;
+          // if(use_repeat){
+          //     if(sites_lnl_map.find(obs) == sites_lnl_map.end()){
+          //         L_sk_k = initialize_lnl_table(obs, rtree, Ns, model, nstate);
+          //         get_likelihood_site(L_sk_k, rtree, knodes, pmats, has_wgd, z, model, nstate);
+          //     }else{
+          //         cout << "sites repeated" << end1;
+          //         L_sk_k = sites_lnl_map[obs];
+          //     }
+          // }else{
+              // L_sk_k = initialize_lnl_table(obs, rtree, Ns, model, nstate, is_total);
+              L_sk_k = initialize_lnl_table_decomp(obs, rtree, comps, Ns, model, cn_max, nstate, is_total);
+              get_likelihood_site_decomp(L_sk_k, rtree, decomp_table, knodes, pmats_wgd, pmats_chr, pmats_seg, dim_wgd, dim_chr, dim_seg, cn_max, nstate, is_total);
+          // }
+          // site_logL += extract_tree_lnl(L_sk_k, Ns, model);
+          double lnl = extract_tree_lnl_decomp(L_sk_k, comps, Ns);
+          site_logL += lnl;
+
+          if(debug){
+              cout << "\nLikelihood for site " << nc << " is " << lnl << endl;
+              print_tree_lnl(rtree, L_sk_k, nstate);
+          }
+      }
+      logL += site_logL;
+      if(debug){
+          cout << "\nLikelihood after considering chr gain/loss for chromosome " << nchr << " is " << site_logL << endl;
+      }
+    } // for each chromosome
+    return logL;
+}
 
 // Compute the likelihood of dummy sites consisting entirely of 2s for the tree
 double get_likelihood_invariant(evo_tree& rtree, const vector<int>& knodes, map<double, double*>& pmats, const int model, const int cn_max, int is_total=1){
@@ -1393,7 +1858,8 @@ double get_likelihood_invariant(evo_tree& rtree, const vector<int>& knodes, map<
           L_sk_k[k][sk] = Li*Lj;
        }
     }
-    logL = extract_tree_lnl(L_sk_k, 2, Ns, model);
+
+    logL = extract_tree_lnl(L_sk_k, Ns, model);
     // // assert(exp(logL) < 1);
     // long lkl = exp(logL);
     // double bias = 0;
@@ -1408,9 +1874,29 @@ double get_likelihood_invariant(evo_tree& rtree, const vector<int>& knodes, map<
 }
 
 
+// Compute the likelihood of dummy sites consisting entirely of 2s for the tree
+double get_likelihood_invariant_decomp(evo_tree& rtree, map<int, set<vector<int>>>& decomp_table, const vector<int>& knodes, map<double, double*>& pmats_wgd, map<double, double*>& pmats_chr, map<double, double*>& pmats_seg, int dim_wgd, int dim_chr, int dim_seg, int cn_max, int nstate, int is_total=1){
+    int debug = 0;
+    double logL = 0;
+    if(debug) cout << "Correcting for the skip of invariant sites" << endl;
+
+    // Suppose the value is 2 for all samples
+    int normal_cn  = 2;
+    vector<int> obs(Ns, normal_cn);
+    vector<vector<double>> L_sk_k = initialize_lnl_table_decomp(obs, rtree, comps, Ns, model, cn_max, nstate, is_total);
+    get_likelihood_site_decomp(L_sk_k, rtree, decomp_table, knodes, pmats_wgd, pmats_chr, pmats_seg, dim_wgd, dim_chr, dim_seg, cn_max, nstate, is_total);
+    logL = extract_tree_lnl_decomp(L_sk_k, comps, Ns);
+
+    if(debug){
+        cout << "The likelihood of invariant sites is " << logL << endl;
+    }
+    return logL;
+}
+
+
 // Incorporate chromosome gain/loss and WGD
 // Model 2: Treat total copy number as the observed data and the allele-specific information is missing
-double get_likelihood_revised(int Ns, int Nchar, int num_invar_bins, map<int, vector<vector<int>>>& vobs, evo_tree& rtree, const int model, const int cons, const int cn_max, const int only_seg, int correct_bias = 0, int is_total = 1){
+double get_likelihood_revised(int Ns, int Nchar, int num_invar_bins, map<int, vector<vector<int>>>& vobs, evo_tree& rtree, int model, int cons, int cn_max, int only_seg, int correct_bias = 0, int is_total = 1){
   int debug = 0;
   if(debug) cout << "\tget_likelihood by matrix exponential" << endl;
 
@@ -1418,38 +1904,17 @@ double get_likelihood_revised(int Ns, int Nchar, int num_invar_bins, map<int, ve
       return SMALL_LNL;
   }
 
+  // For copy number instantaneous changes
   int nstate = cn_max + 1;
   if(model==2) nstate = (cn_max + 1) * (cn_max + 2) / 2;
-  double qmat[(nstate)*(nstate)];
+  double *qmat = new double[(nstate)*(nstate)];
   memset(qmat, 0, (nstate)*(nstate)*sizeof(double));
-
-  int max_wgd = 2;
-  int max_chr_change = 2;
-  int max_site_change = 4;
-
-  int nwgd = max_wgd + 1;
-  double alpha_mat[nwgd * nwgd];  // WGD
-  memset(alpha_mat, 0, (nwgd)*(nwgd)*sizeof(double));
-
-  int nchr = 2 * max_chr_change + 1;
-  double beta_mat[(nchr)*(nchr)];   // chromosome gain/loss
-  memset(beta_mat, 0, (nchr)*(nchr)*sizeof(double));
-
-  int nseg = 2 * max_site_change + 1;
-  double gamma_mat[(nseg)*(nseg)];  // segment duplication/deletion
-  memset(gamma_mat, 0, (nseg)*(nseg)*sizeof(double));
-
   if(model > 0){
       if(debug){
           cout << "Getting rate matrix" << endl;
       }
       if(model==2){
           get_rate_matrix_allele_specific(qmat, rtree.dup_rate, rtree.del_rate, cn_max);
-      }else if(model==3){
-          get_rate_matrix_wgd(alpha_mat, rtree.wgd_rate, 2);
-          get_rate_matrix_chr_change(beta_mat, rtree.chr_gain_rate, rtree.chr_loss_rate, 2);
-          get_rate_matrix_site_change(gamma_mat, rtree.dup_rate, rtree.del_rate, cn_max);
-
       }else{
           get_rate_matrix_bounded(qmat, rtree.dup_rate, rtree.del_rate, cn_max);
       }
@@ -1466,25 +1931,27 @@ double get_likelihood_revised(int Ns, int Nchar, int num_invar_bins, map<int, ve
     int k = knodes[kn];
     double bli = rtree.edges[rtree.nodes[k].e_ot[0]].length;
     double blj = rtree.edges[rtree.nodes[k].e_ot[1]].length;
-    if(model > 0){
-        double pmati[(nstate)*(nstate)];
-        double pmatj[(nstate)*(nstate)];
+    if(model == 1 || model == 2){
+        double *pmati = new double[(nstate)*(nstate)];
+        double *pmatj = new double[(nstate)*(nstate)];
         memset(pmati, 0, (nstate)*(nstate)*sizeof(double));
         memset(pmatj, 0, (nstate)*(nstate)*sizeof(double));
 
         if(pmats.count(bli) == 0){
             get_transition_matrix_bounded(qmat, pmati, bli, nstate);
-            pmats[bli] = new double[(nstate)*(nstate)];
-            for(int i=0; i<nstate*nstate; i++){
-                pmats[bli][i] = pmati[i];
-            }
+            pmats[bli] = pmati;
+            // pmats[bli] = new double[(nstate)*(nstate)];
+            // for(int i=0; i<nstate*nstate; i++){
+            //     pmats[bli][i] = pmati[i];
+            // }
         }
         if(pmats.count(blj) == 0){
             get_transition_matrix_bounded(qmat, pmatj, blj, nstate);
-            pmats[blj] = new double[(nstate)*(nstate)];
-            for(int i=0; i<nstate*nstate; i++){
-                pmats[blj][i] = pmatj[i];
-            }
+            pmats[blj] = pmatj;
+            // pmats[blj] = new double[(nstate)*(nstate)];
+            // for(int i=0; i<nstate*nstate; i++){
+            //     pmats[blj][i] = pmatj[i];
+            // }
         }
 
         // if(debug){
@@ -1496,36 +1963,6 @@ double get_likelihood_revised(int Ns, int Nchar, int num_invar_bins, map<int, ve
         //      r8mat_print( nstate, nstate, pmatj, "  P matrix after change:" );
         // }
      }
-     if(model == 3){   // Get transition matrix for each chain
-         double pmati[(nstate)*(nstate)];
-         double pmatj[(nstate)*(nstate)];
-         memset(pmati, 0, (nstate)*(nstate)*sizeof(double));
-         memset(pmatj, 0, (nstate)*(nstate)*sizeof(double));
-
-         if(pmats.count(bli) == 0){
-             get_transition_matrix_bounded(qmat, pmati, bli, nstate);
-             pmats[bli] = new double[(nstate)*(nstate)];
-             for(int i=0; i<nstate*nstate; i++){
-                 pmats[bli][i] = pmati[i];
-             }
-         }
-         if(pmats.count(blj) == 0){
-             get_transition_matrix_bounded(qmat, pmatj, blj, nstate);
-             pmats[blj] = new double[(nstate)*(nstate)];
-             for(int i=0; i<nstate*nstate; i++){
-                 pmats[blj][i] = pmatj[i];
-             }
-         }
-
-         // if(debug){
-         //      cout << "Get Pmatrix for 1st branch length " << bli << endl;
-         //      r8mat_print( nstate, nstate, pmats[bli], "  P matrix after change in map:" );
-         //      r8mat_print( nstate, nstate, pmati, "  P matrix after change:" );
-         //      cout << "Get Pmatrix for 2nd branch length " << blj << endl;
-         //      r8mat_print( nstate, nstate, pmats[blj], "  P matrix after change in map:" );
-         //      r8mat_print( nstate, nstate, pmatj, "  P matrix after change:" );
-         // }
-      }
   }
 
   if(debug){
@@ -1567,11 +2004,190 @@ double get_likelihood_revised(int Ns, int Nchar, int num_invar_bins, map<int, ve
   if(std::isnan(logL) || logL < SMALL_LNL) logL = SMALL_LNL;
   if(debug) cout << "Final likelihood: " << logL << endl;
 
+  free(qmat);
+  for(auto m : pmats){
+      free(m.second);
+  }
+
+
+  return logL;
+}
+
+// Computing likelihood when WGD and chr gain/loss are incorporated
+// Assume likelihood is for allele-specific information
+double get_likelihood_decomp(int Ns, int Nchar, int num_invar_bins, map<int, vector<vector<int>>>& vobs, evo_tree& rtree, map<int, set<vector<int>>>& decomp_table, int cons, int cn_max, int max_wgd, int max_chr_change, int max_site_change, int correct_bias = 0, int is_total = 1){
+  int debug = 0;
+  if(debug) cout << "\tget_likelihood from multiple chains" << endl;
+
+  if(!is_tree_valid(rtree, cons)){
+      return SMALL_LNL;
+  }
+
+  int nstate = (cn_max + 1) * (cn_max + 2) / 2;
+
+  // For WGD model
+  int dim_wgd = max_wgd + 1;
+  double *qmat_wgd = new double[dim_wgd * dim_wgd];  // WGD
+  memset(qmat_wgd, 0, (dim_wgd)*(dim_wgd)*sizeof(double));
+
+  int dim_chr = 2 * max_chr_change + 1;
+  double *qmat_chr = new double[(dim_chr)*(dim_chr)];   // chromosome gain/loss
+  memset(qmat_chr, 0, (dim_chr)*(dim_chr)*sizeof(double));
+
+  int dim_seg = 2 * max_site_change + 1;
+  double *qmat_seg = new double[(dim_seg)*(dim_seg)];  // segment duplication/deletion
+  memset(qmat_seg, 0, (dim_seg)*(dim_seg)*sizeof(double));
+
+  if(debug){
+        cout << dim_wgd << "\t" << dim_chr << "\t" << dim_seg << "\n";
+  }
+
+  get_rate_matrix_wgd(qmat_wgd, rtree.wgd_rate, max_wgd);
+  get_rate_matrix_chr_change(qmat_chr, rtree.chr_gain_rate, rtree.chr_loss_rate, max_chr_change);
+  get_rate_matrix_site_change(qmat_seg, rtree.dup_rate, rtree.del_rate, max_site_change);
+
+  //create a list of nodes to loop over (only internal nodes), making sure the root is last
+  vector<int> knodes;
+  for(int k=Ns+2; k<rtree.ntotn; ++k) knodes.push_back( k );
+  knodes.push_back(Ns+1);
+
+  // Find the transition probability matrix for each branch
+  map<double, double*> pmats_wgd;
+  map<double, double*> pmats_chr;
+  map<double, double*> pmats_seg;
+
+  for(int kn=0; kn<knodes.size(); ++kn){
+         int k = knodes[kn];
+         double bli = rtree.edges[rtree.nodes[k].e_ot[0]].length;
+         double blj = rtree.edges[rtree.nodes[k].e_ot[1]].length;
+
+         // For WGD
+         double *pmati_wgd = new double[(dim_wgd)*(dim_wgd)];
+         double *pmatj_wgd = new double[(dim_wgd)*(dim_wgd)];
+         memset(pmati_wgd, 0, (dim_wgd)*(dim_wgd)*sizeof(double));
+         memset(pmatj_wgd, 0, (dim_wgd)*(dim_wgd)*sizeof(double));
+         if(pmats_wgd.count(bli) == 0){
+             get_transition_matrix_bounded(qmat_wgd, pmati_wgd, bli, dim_wgd);
+             pmats_wgd[bli] = pmati_wgd;
+             // pmats_wgd[bli] = new double[(dim_wgd)*(dim_wgd)];
+             // for(int i=0; i<dim_wgd*dim_wgd; i++){
+             //     pmats_wgd[bli][i] = pmati_wgd[i];
+             // }
+         }
+         if(pmats_wgd.count(blj) == 0){
+             get_transition_matrix_bounded(qmat_wgd, pmatj_wgd, blj, dim_wgd);
+             pmats_wgd[blj] = pmatj_wgd;
+             // pmats_wgd[blj] = new double[(dim_wgd)*(dim_wgd)];
+             // for(int i=0; i<dim_wgd*dim_wgd; i++){
+             //     pmats_wgd[blj][i] = pmatj_wgd[i];
+             // }
+         }
+
+         // For chr gain/loss
+         double *pmati_chr = new double[(dim_chr)*(dim_chr)];
+         double *pmatj_chr = new double[(dim_chr)*(dim_chr)];
+         memset(pmati_chr, 0, (dim_chr)*(dim_chr)*sizeof(double));
+         memset(pmatj_chr, 0, (dim_chr)*(dim_chr)*sizeof(double));
+         if(pmats_chr.count(bli) == 0){
+             get_transition_matrix_bounded(qmat_chr, pmati_chr, bli, dim_chr);
+             pmats_chr[bli] = pmati_chr;
+             // pmats_chr[bli] = new double[(dim_chr)*(dim_chr)];
+             // for(int i=0; i<dim_chr*dim_chr; i++){
+             //     pmats_chr[bli][i] = pmati_chr[i];
+             // }
+         }
+         if(pmats_chr.count(blj) == 0){
+             get_transition_matrix_bounded(qmat_chr, pmatj_chr, blj, dim_chr);
+             pmats_chr[blj] = pmatj_chr;
+             // pmats_chr[blj] = new double[(dim_chr)*(dim_chr)];
+             // for(int i=0; i<dim_chr*dim_chr; i++){
+             //     pmats_chr[blj][i] = pmatj_chr[i];
+             // }
+         }
+
+         // For segment duplication/deletion
+         double *pmati_seg = new double[(dim_seg)*(dim_seg)];
+         double *pmatj_seg = new double[(dim_seg)*(dim_seg)];
+         memset(pmati_seg, 0, (dim_seg)*(dim_seg)*sizeof(double));
+         memset(pmatj_seg, 0, (dim_seg)*(dim_seg)*sizeof(double));
+         if(pmats_seg.count(bli) == 0){
+             get_transition_matrix_bounded(qmat_seg, pmati_seg, bli, dim_seg);
+             pmats_seg[bli] = pmati_seg;
+             // pmats_seg[bli] = new double[(dim_seg)*(dim_seg)];
+             // for(int i=0; i<dim_seg*dim_seg; i++){
+             //     pmats_seg[bli][i] = pmati_seg[i];
+             // }
+         }
+         if(pmats_seg.count(blj) == 0){
+             get_transition_matrix_bounded(qmat_seg, pmatj_seg, blj, dim_seg);
+             pmats_seg[blj] = pmatj_seg;
+             // pmats_seg[blj] = new double[(dim_seg)*(dim_seg)];
+             // for(int i=0; i<dim_seg*dim_seg; i++){
+             //     pmats_seg[blj][i] = pmatj_seg[i];
+             // }
+        }
+  }
+  if(debug){
+      for( auto it = pmats_wgd.begin(); it != pmats_wgd.end(); ++it )
+      {
+          double key = it->first;
+          cout << "Get Pmatrix for branch length " << key << endl;
+          r8mat_print( dim_wgd, dim_wgd, it->second, "  P-WGD matrix:" );
+      }
+      for( auto it = pmats_chr.begin(); it != pmats_chr.end(); ++it )
+      {
+          double key = it->first;
+          cout << "Get Pmatrix for branch length " << key << endl;
+          r8mat_print( dim_chr, dim_chr, it->second, "  P-CHR matrix:" );
+      }
+      for( auto it = pmats_seg.begin(); it != pmats_seg.end(); ++it )
+      {
+          double key = it->first;
+          cout << "Get Pmatrix for branch length " << key << endl;
+          r8mat_print( dim_seg, dim_seg, it->second, "  P-SEG matrix:" );
+      }
+  }
+
+  double logL = 0;
+
+  nstate = comps.size();
+  // cout << "Number of states is " << nstate << endl;
+  logL = get_likelihood_chr_decomp(vobs, rtree, decomp_table, knodes, pmats_wgd, pmats_chr, pmats_seg, dim_wgd, dim_chr, dim_seg, cn_max, nstate, is_total);
+
+  if(debug) cout << "Final likelihood before correcting acquisition bias: " << logL << endl;
+  if(correct_bias == 1){
+      double lnl_invar = get_likelihood_invariant_decomp(rtree, decomp_table, knodes, pmats_wgd, pmats_chr, pmats_seg, dim_wgd, dim_chr, dim_seg, cn_max, nstate, is_total);
+      double bias = num_invar_bins * lnl_invar;
+      logL = logL + bias;
+      if(debug){
+          cout << "Likelihood of an invariant bin " << lnl_invar << endl;
+          cout << "Number of invariant bins " << num_invar_bins << endl;
+          cout << "Bias to correct " << bias << endl;
+          cout << "Final likelihood after correcting acquisition bias: " << logL << endl;
+      }
+  }
+
+  if(std::isnan(logL) || logL < SMALL_LNL) logL = SMALL_LNL;
+  if(debug) cout << "Final likelihood: " << logL << endl;
+
+  free(qmat_wgd);
+  free(qmat_chr);
+  free(qmat_seg);
+  for(auto m : pmats_wgd){
+      free(m.second);
+  }
+  for(auto m : pmats_chr){
+      free(m.second);
+  }
+  for(auto m : pmats_seg){
+      free(m.second);
+  }
+
   return logL;
 }
 
 
-// Compute the likelihood without grouping sites by chromosome
+// Compute the likelihood without grouping sites by chromosome, only considering segment duplication/deletion
 double get_likelihood(int Ns, int Nchar, const vector<vector<int>>& vobs, evo_tree& rtree, int model, int cons, const int cn_max, int is_total=1){
   int debug = 0;
   if(debug) cout << "\tget_likelihood" << endl;
@@ -1583,8 +2199,7 @@ double get_likelihood(int Ns, int Nchar, const vector<vector<int>>& vobs, evo_tr
       return SMALL_LNL;
   }
 
-  double qmat[(nstate)*(nstate)];
-  // ={0};
+  double *qmat = new double[(nstate)*(nstate)];
   memset(qmat, 0, (nstate)*(nstate)*sizeof(double));
 
   if(model > 0){
@@ -1598,10 +2213,8 @@ double get_likelihood(int Ns, int Nchar, const vector<vector<int>>& vobs, evo_tr
       }
   }
 
-  double pmati[(nstate)*(nstate)];
-  //={0};
-  double pmatj[(nstate)*(nstate)];
-  //={0};
+  double *pmati = new double[(nstate)*(nstate)];
+  double *pmatj = new double[(nstate)*(nstate)];
   memset(pmati, 0, (nstate)*(nstate)*sizeof(double));
   memset(pmatj, 0, (nstate)*(nstate)*sizeof(double));
 
@@ -1675,10 +2288,15 @@ double get_likelihood(int Ns, int Nchar, const vector<vector<int>>& vobs, evo_tr
       }
     }
 
-    logL += extract_tree_lnl(L_sk_k, nc, Ns, model);
+    logL += extract_tree_lnl(L_sk_k, Ns, model);
   }
 
   if(debug) cout << "Final likelihood: " << logL << endl;
+
+  free(qmat);
+  free(pmati);
+  free(pmatj);
+
   return logL;
 }
 
@@ -1815,7 +2433,7 @@ double my_f_cons_mu (const gsl_vector *v, void *params){
   return -1.0*get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, new_tree, model, 1, cn_max, only_seg, correct_bias, is_total);
 }
 
-// Output error informaton without aborting
+// Output error information without aborting
 void my_err_handler(const char * reason, const char * file, int line, int gsl_errno){
     fprintf (stderr, "failed, %s, reason: %s, file %s line %d \n", gsl_strerror(gsl_errno), reason, file, line);
     return;
@@ -2096,11 +2714,17 @@ void get_variables_ntime(evo_tree& rtree, int model, int cons, int maxj, int onl
     @param x the input vector x
     @return the function value at x
 */
-double targetFunk(evo_tree& rtree, const int model, const int cons, const int maxj, const int cn_max, const int only_seg, const int correct_bias, const int is_total, double x[]) {
+double targetFunk(evo_tree& rtree, int model, int cons, int maxj, int cn_max, int only_seg, int correct_bias, int is_total, double x[]) {
     // negative log likelihood
     // get_variables(rtree, model, cons, maxj, x);
     get_variables_ntime(rtree, model, cons, maxj, only_seg, x);
-    return -1.0*get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, cn_max, only_seg, correct_bias, is_total);
+    if(model == 3){
+        // cout << "Getting target function for optimization" << endl;
+        // cout << max_wgd << "\t" << max_chr_change << "\t" << max_site_change << "\t" << decomp_table.size() << endl;
+        return -1.0*get_likelihood_decomp(Ns, Nchar, num_invar_bins, vobs, rtree, decomp_table, cons, cn_max, max_wgd, max_chr_change, max_site_change, correct_bias, is_total);
+    }else{
+        return -1.0*get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, rtree, model, cons, cn_max, only_seg, correct_bias, is_total);
+    }
 }
 
 /**
@@ -2109,7 +2733,7 @@ double targetFunk(evo_tree& rtree, const int model, const int cons, const int ma
 	@param dfx the derivative at x
 	@return the function value at x
 */
-double derivativeFunk(evo_tree& rtree, const int model, const int cons, const int maxj, const int cn_max, const int only_seg, const int correct_bias, const int is_total, int ndim, double x[], double dfx[]) {
+double derivativeFunk(evo_tree& rtree, int model, int cons, int maxj, int cn_max, int only_seg, int correct_bias, int is_total, int ndim, double x[], double dfx[]) {
     int debug = 0;
 	double *h = new double[ndim+1];
     double temp;
@@ -2134,11 +2758,11 @@ double derivativeFunk(evo_tree& rtree, const int model, const int cons, const in
 	return fx;
 }
 
-double optimFunc(evo_tree& rtree, const int model, const int cons, const int maxj, const int cn_max, const int only_seg, const int correct_bias, const int is_total, int nvar, double *vars) {
+double optimFunc(evo_tree& rtree, int model, int cons, int maxj, int cn_max, int only_seg, int correct_bias, int is_total, int nvar, double *vars) {
     return targetFunk(rtree, model, cons, maxj, cn_max, only_seg, correct_bias, is_total, vars-1);
 }
 
-double optimGradient(evo_tree& rtree, const int model, const int cons, const int maxj, const int cn_max, const int only_seg, const int correct_bias, const int is_total, int nvar, double *x, double *dfx) {
+double optimGradient(evo_tree& rtree, int model, int cons, int maxj, int cn_max, int only_seg, int correct_bias, int is_total, int nvar, double *x, double *dfx) {
     return derivativeFunk(rtree, model, cons, maxj, cn_max, only_seg, correct_bias, is_total, nvar, x-1, dfx-1);
 //    const double ERRORX = 1e-5;
 //	double fx = optimFunc(nvar, x);
@@ -2156,7 +2780,7 @@ double optimGradient(evo_tree& rtree, const int model, const int cons, const int
 }
 
 
-void lbfgsb(evo_tree& rtree, const int model, const int cons, const int maxj, const int cn_max, const int only_seg, const int correct_bias, const int is_total, int n, int m, double *x, double *l, double *u, int *nbd,
+void lbfgsb(evo_tree& rtree, int model, int cons, int maxj, int cn_max, int only_seg, int correct_bias, int is_total, int n, int m, double *x, double *l, double *u, int *nbd,
 		double *Fmin, int *fail,
 		double factr, double pgtol,
 		int *fncount, int *grcount, int maxit, char *msg,
@@ -2257,7 +2881,7 @@ void lbfgsb(evo_tree& rtree, const int model, const int cons, const int maxj, co
  @return minimized function value
  After the function is invoked, the values of x will be updated
 */
-double L_BFGS_B(evo_tree& rtree, const int model, const int cons, const int maxj, const int cn_max, const int only_seg, const int correct_bias, const int is_total, int n, double* x, double* l, double* u, double pgtol, int maxit) {
+double L_BFGS_B(evo_tree& rtree, int model, int cons, int maxj, int cn_max, int only_seg, int correct_bias, int is_total, int n, double* x, double* l, double* u, double pgtol, int maxit) {
     int debug = 0;
     int i;
 	double Fmin;
@@ -2435,7 +3059,7 @@ void initialise_variables_BFGS(double *variables, double *upper_bound, double *l
 
 // Using BFGS method to get the maximum likelihood with lower and upper bounds
 // Note: the topology of rtree is fixed
-evo_tree max_likelihood_BFGS(evo_tree& rtree, int model, double& minL, const double tolerance, const int miter,  int cons=0, int maxj=0, int cn_max=4, int only_seg=0, int correct_bias=1, int is_total=1){
+evo_tree max_likelihood_BFGS(evo_tree& rtree, int model, double& minL, const double tolerance, int miter,  int cons=0, int maxj=0, int cn_max=4, int only_seg=0, int correct_bias=1, int is_total=1){
     int debug = 0;
     int npar_ne = 0;    // number of parameters to estimate
     int ndim = 0;
@@ -2477,7 +3101,7 @@ evo_tree max_likelihood_BFGS(evo_tree& rtree, int model, double& minL, const dou
 }
 
 // given a tree, maximise the branch lengths (and optionally mu) assuming branch lengths are independent or constrained in time
-evo_tree max_likelihood(evo_tree& rtree, int model, double& minL, const double ssize, const double tolerance, const int miter, int cons=0, int maxj=0, int cn_max=4, int only_seg=0, int correct_bias=1, int is_total=1){
+evo_tree max_likelihood(evo_tree& rtree, int model, double& minL, const double ssize, const double tolerance, int miter, int cons=0, int maxj=0, int cn_max=4, int only_seg=0, int correct_bias=1, int is_total=1){
   int debug = 0;
   const gsl_multimin_fminimizer_type *T = gsl_multimin_fminimizer_nmsimplex2;
   gsl_multimin_fminimizer *s = NULL;
