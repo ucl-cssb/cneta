@@ -1898,7 +1898,7 @@ int main (int argc, char ** const argv) {
     map<int, vector<vector<int>>> data;
     if(is_bin==1){
         cout << "Merging consecutive bins in the input" << endl;
-        data = read_data_var_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins, Nchar, is_total);
+        data = read_data_var_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins, Nchar, obs_num_wgd, is_total);
     }else{
         if(incl_all==1){
             cout << "Using all input segments. There will be no bias correction " << endl;
@@ -1906,7 +1906,7 @@ int main (int argc, char ** const argv) {
         }else{
             cout << "Using variant input segments\n" << endl;
         }
-        data = read_data_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins, Nchar, incl_all, is_total);
+        data = read_data_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins, Nchar, obs_num_wgd, incl_all, is_total);
     }
     vobs = get_obs_vector_by_chr(data);
 

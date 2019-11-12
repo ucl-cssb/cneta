@@ -189,7 +189,36 @@ vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int &num_tot
     return s_info;
 }
 
+// Find the potential number of WGDs for each sample
+void get_num_wgd(const vector<vector<vector<int>>>& s_info, int cn_max, vector<int>& obs_num_wgd){
+    cout << "Getting the potential number of WGDs for each sample" << endl;
+    for(int i = 0; i < s_info.size(); i++){
+        vector<vector<int>> s_cn = s_info[i];
+        // count the presence of each copy number
+        map<int, int> cn_count;
+        for(int k = 0; k < cn_max; k++){
+            cn_count[k] = 0;
+        }
+        for (int j = 0; j < s_cn.size(); j++){
+            vector<int> cp = s_cn[j];
+            cn_count[cp[2]] += 1;
+        }
+        // Find the most frequenct copy number
+        int most_freq_cn = 0;
+        int max_count = 0;
+        for(auto cnc : cn_count){
+            if(debug) cout << cnc.first << "\t" << cnc.second << endl;
+            if(cnc.second > max_count){
+                max_count = cnc.second;
+                most_freq_cn = cnc.first;
+            }
+        }
 
+        int nwgd = ceil(log2(most_freq_cn)) - 1;
+        obs_num_wgd.push_back(nwgd);
+        if(debug) cout << "Sample " << i+1 << " has " << nwgd << " WGD events" << endl;
+    }
+}
 
 // Distinguish invariable and variable sites; Combine adjacent invariable sites
 vector<vector<int>> get_invar_segs(const vector<vector<vector<int>>>& s_info, int Ns, int num_total_bins, int& num_invar_bins, int is_total=1){
@@ -200,7 +229,7 @@ vector<vector<int>> get_invar_segs(const vector<vector<vector<int>>>& s_info, in
     for(int k=0; k<num_total_bins; ++k){
         int sum = 0;
         for(int i=0; i<Ns; ++i){
-          sum += abs(s_info[i][k][2]);
+            sum += abs(s_info[i][k][2]);
         }
         if((is_total==1 && sum != 2*Ns) || (is_total==0 && sum != 4*Ns)){    // each site has number 2 when it is total CN or 4 when it is allele-specific CN
             var_bins[k] = 1;
@@ -465,9 +494,10 @@ vector<vector<int>> group_segs(const vector<vector<int>>& segs, const vector<vec
 }
 
 // Read the input copy numbers
-vector<vector<int>> read_data_var_regions(const string& filename, const int& Ns, const int& max_cn, int &num_invar_bins, int &num_total_bins, int &seg_size, int is_total=1){
+vector<vector<int>> read_data_var_regions(const string& filename, const int& Ns, const int& max_cn, int& num_invar_bins, int& num_total_bins, int& seg_size, vector<int>&  obs_num_wgd, int is_total=1){
     cout << "reading data and calculating CNA regions" << endl;
     vector<vector<vector<int>>> s_info = read_cn(filename, Ns, num_total_bins, is_total);
+    get_num_wgd(s_info, cn_max, obs_num_wgd);
     // We now need to convert runs of variable bins into segments of constant cn values, grouped by chromosome
     vector<vector<int>> segs = get_invar_segs(s_info, Ns, num_total_bins, num_invar_bins);
     seg_size = segs.size();
@@ -483,9 +513,10 @@ vector<vector<int>> read_data_var_regions(const string& filename, const int& Ns,
 
 
 // Read the input copy numbers while converting runs of variable bins into segments of constant cn values and group them by chromosome
-map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filename, const int& Ns, const int& max_cn, int &num_invar_bins, int &num_total_bins, int &seg_size, int is_total=1){
+map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filename, const int& Ns, const int& max_cn, int& num_invar_bins, int& num_total_bins, int &seg_size, vector<int>&  obs_num_wgd, int is_total=1){
     cout << "reading data and calculating CNA regions by chromosome" << endl;
     vector<vector<vector<int>>> s_info = read_cn(filename, Ns, num_total_bins, is_total);
+    get_num_wgd(s_info, cn_max, obs_num_wgd);
     vector<vector<int>> segs = get_invar_segs(s_info, Ns, num_total_bins, num_invar_bins, is_total);
     seg_size = segs.size();
     int max_cn_val = max_cn;
@@ -499,9 +530,10 @@ map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filenam
 
 
 // Read the input copy numbers as they are and group them by chromosome
-map<int, vector<vector<int>>> read_data_regions_by_chr(const string& filename, const int& Ns, const int& max_cn, int &num_invar_bins, int &num_total_bins, int &seg_size, int incl_all=1, int is_total=1){
+map<int, vector<vector<int>>> read_data_regions_by_chr(const string& filename, const int& Ns, const int& max_cn, int& num_invar_bins, int& num_total_bins, int& seg_size, vector<int>&  obs_num_wgd, int incl_all=1, int is_total=1){
     cout << "reading data and calculating CNA regions by chromosome" << endl;
     vector<vector<vector<int>>> s_info = read_cn(filename, Ns, num_total_bins, is_total);
+    get_num_wgd(s_info, cn_max, obs_num_wgd);
     // We now need to convert runs of variable bins into segments of constant cn values, grouped by chromosome
     vector<vector<int>> segs = get_all_segs(s_info, Ns, num_total_bins, num_invar_bins, incl_all, is_total);
     seg_size = segs.size();

@@ -1874,8 +1874,9 @@ void print_simulations(int mode, int num_seg, vector<genome>& results, map<int, 
         ofstream out_mut(sstm.str());
         for(int j=0; j<test_tree.nleaf; ++j){
             for(int i=0; i<results[j].mutations.size(); ++i){
+                int chr = results[j].mutations[i].chr;
                 out_mut << j+1 << "\t" << results[j].mutations[i].edge_id+1
-        << "\t" << results[j].mutations[i].type << "\t" << results[j].mutations[i].btime << "\t" << results[j].mutations[i].gtime << "\t" << results[j].mutations[i].chr+1 << "\t" << results[j].mutations[i].seg << endl;
+        << "\t" << results[j].mutations[i].type << "\t" << results[j].mutations[i].btime << "\t" << results[j].mutations[i].gtime << "\t" << chr+1 << "\t" << (chr+1)%22 << "\t" << results[j].mutations[i].seg << endl;
             }
         }
         out_mut.close();

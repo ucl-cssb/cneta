@@ -478,7 +478,7 @@ void check_chain_by_branch_m2(int num_seg, const vector<double>& rates, double b
 
 
 // Check the relationship among number of segments, mutation rates and branch lengths
-void check_chain_by_branch_m3(int is_total, int num_seg, const vector<double>& rates, double blen, int cn_max, int max_wgd, int max_chr_change, int max_site_change, ofstream& fout){
+void check_chain_by_branch_m3(int is_total, int num_seg, const vector<double>& rates, double blen, int cn_max, int m_max, int max_wgd, int max_chr_change, int max_site_change, ofstream& fout){
     double dup_rate = rates[0];
     double del_rate = rates[1];
     double chr_gain_rate = rates[2];
@@ -486,46 +486,52 @@ void check_chain_by_branch_m3(int is_total, int num_seg, const vector<double>& r
     double wgd_rate = rates[4];
 
     int nstate = (cn_max + 1) * (cn_max + 2) / 2;
-
-    // For WGD model
     int dim_wgd = max_wgd + 1;
-    double *qmat_wgd = new double[dim_wgd * dim_wgd];  // WGD
-    memset(qmat_wgd, 0, (dim_wgd)*(dim_wgd)*sizeof(double));
-
     int dim_chr = 2 * max_chr_change + 1;
-    double *qmat_chr = new double[(dim_chr)*(dim_chr)];   // chromosome gain/loss
-    memset(qmat_chr, 0, (dim_chr)*(dim_chr)*sizeof(double));
-
     int dim_seg = 2 * max_site_change + 1;
-    double *qmat_seg = new double[(dim_seg)*(dim_seg)];  // segment duplication/deletion
-    memset(qmat_seg, 0, (dim_seg)*(dim_seg)*sizeof(double));
+    double *qmat_wgd, *qmat_chr, *qmat_seg;
+    double *pmat_wgd, *pmat_chr, *pmat_seg;
+    int delta_chr, delta_seg;  // The indices for chromosome and segment matrix have to be ajusted
 
     cout << dim_wgd << "\t" << dim_chr << "\t" << dim_seg << "\n";
-
-    get_rate_matrix_wgd(qmat_wgd, wgd_rate, max_wgd);
-    get_rate_matrix_chr_change(qmat_chr, chr_gain_rate, chr_loss_rate, max_chr_change);
-    get_rate_matrix_site_change(qmat_seg, dup_rate, del_rate, max_site_change);
-
     cout << "Checking row sum for Q matrix" << endl;
-    check_matrix_row_sum(qmat_wgd, dim_wgd);
-    check_matrix_row_sum(qmat_chr, dim_chr);
-    check_matrix_row_sum(qmat_seg, dim_seg);
 
-    double *pmat_wgd = new double[(dim_wgd)*(dim_wgd)];
-    memset(pmat_wgd, 0, (dim_wgd)*(dim_wgd)*sizeof(double));
-    double *pmat_chr = new double[(dim_chr)*(dim_chr)];
-    memset(pmat_chr, 0, (dim_chr)*(dim_chr)*sizeof(double));
-    double *pmat_seg = new double[(dim_seg)*(dim_seg)];
-    memset(pmat_seg, 0, (dim_seg)*(dim_seg)*sizeof(double));
+    // For WGD model
+    if(max_wgd > 0){
+        qmat_wgd = new double[dim_wgd * dim_wgd];  // WGD
+        memset(qmat_wgd, 0, (dim_wgd)*(dim_wgd)*sizeof(double));
+        get_rate_matrix_wgd(qmat_wgd, wgd_rate, max_wgd);
+        check_matrix_row_sum(qmat_wgd, dim_wgd);
 
-    get_transition_matrix_bounded(qmat_wgd, pmat_wgd, blen, dim_wgd);
-    get_transition_matrix_bounded(qmat_chr, pmat_chr, blen, dim_chr);
-    get_transition_matrix_bounded(qmat_seg, pmat_seg, blen, dim_seg);
-    // r8mat_print( nstate, nstate, pmat, "  P matrix:" );
-    cout << "Checking row sum for P matrix" << endl;
-    check_matrix_row_sum(pmat_wgd, dim_wgd);
-    check_matrix_row_sum(pmat_chr, dim_chr);
-    check_matrix_row_sum(pmat_seg, dim_seg);
+        pmat_wgd = new double[(dim_wgd)*(dim_wgd)];
+        memset(pmat_wgd, 0, (dim_wgd)*(dim_wgd)*sizeof(double));
+        get_transition_matrix_bounded(qmat_wgd, pmat_wgd, blen, dim_wgd);
+        check_matrix_row_sum(pmat_wgd, dim_wgd);
+    }
+
+    if(max_chr_change>0){
+        qmat_chr = new double[(dim_chr)*(dim_chr)];   // chromosome gain/loss
+        memset(qmat_chr, 0, (dim_chr)*(dim_chr)*sizeof(double));
+        get_rate_matrix_chr_change(qmat_chr, chr_gain_rate, chr_loss_rate, max_chr_change);
+        check_matrix_row_sum(qmat_chr, dim_chr);
+        pmat_chr = new double[(dim_chr)*(dim_chr)];
+        memset(pmat_chr, 0, (dim_chr)*(dim_chr)*sizeof(double));
+        get_transition_matrix_bounded(qmat_chr, pmat_chr, blen, dim_chr);
+        check_matrix_row_sum(pmat_chr, dim_chr);
+        delta_chr = (dim_chr - 1)/2;
+    }
+
+    if(max_site_change>0){
+        qmat_seg = new double[(dim_seg)*(dim_seg)];  // segment duplication/deletion
+        memset(qmat_seg, 0, (dim_seg)*(dim_seg)*sizeof(double));
+        get_rate_matrix_site_change(qmat_seg, dup_rate, del_rate, max_site_change);
+        check_matrix_row_sum(qmat_seg, dim_seg);
+        pmat_seg = new double[(dim_seg)*(dim_seg)];
+        memset(pmat_seg, 0, (dim_seg)*(dim_seg)*sizeof(double));
+        get_transition_matrix_bounded(qmat_seg, pmat_seg, blen, dim_seg);
+        check_matrix_row_sum(pmat_seg, dim_seg);
+        delta_seg = (dim_seg - 1)/2;
+    }
 
     // Print the probability of changing to each state
     map<int, double> state_prob;
@@ -533,7 +539,7 @@ void check_chain_by_branch_m3(int is_total, int num_seg, const vector<double>& r
         state_prob[i] = 0;
     }
 
-    decomp_table = build_decomp_table(comps, cn_max, max_wgd, max_chr_change, max_site_change, is_total);
+    decomp_table = build_decomp_table(comps, cn_max, m_max, max_wgd, max_chr_change, max_site_change, is_total);
     int s_wgd = 0;
     int s_chr = 0;
     int s_seg = 0;
@@ -542,15 +548,14 @@ void check_chain_by_branch_m3(int is_total, int num_seg, const vector<double>& r
 
     cout << "Start state: " << s_wgd << "\t" << s_chr << "\t" << s_seg << "\n";
 
-    // The indices for chromosome and segment matrix have to be ajusted
-    int delta_chr = (dim_chr - 1)/2;
-    int delta_seg = (dim_seg - 1)/2;
-
     for(int cn = 0; cn <= cn_max; cn++){    // jth column
         set<vector<int>> comp = decomp_table[cn];
         cout << "Copy number " << cn << endl;
         for(auto e : comp){
-            double prob = 0;
+            double prob = 1;
+            double prob_wgd = 0;
+            double prob_chr = 0, prob_chr2 = 0;
+            double prob_seg = 0, prob_seg2 = 0;
 
             int e_wgd = e[0];
             int e_chr = e[1];
@@ -558,26 +563,44 @@ void check_chain_by_branch_m3(int is_total, int num_seg, const vector<double>& r
             int e_chr2 = 0;
             int e_seg2 = 0;
 
+            if(max_wgd > 0){
+                prob_wgd = pmat_wgd[s_wgd + e_wgd * dim_wgd];
+                prob = prob_wgd;
+            }
+            if(max_chr_change > 0){
+                prob_chr = pmat_chr[(s_chr + delta_chr) + (e_chr + delta_chr) * dim_chr];
+            }
+            if(max_site_change > 0){
+                prob_seg = pmat_seg[(s_seg + delta_seg) + (e_seg + delta_seg) * dim_seg];
+            }
+
             if(is_total == 1){
-                double prob_wgd = pmat_wgd[s_wgd + e_wgd * dim_wgd];
-                double prob_chr = pmat_chr[(s_chr + delta_chr) + (e_chr + delta_chr) * dim_chr];
-                double prob_seg = pmat_seg[(s_seg + delta_seg) + (e_seg + delta_seg) * dim_seg];
-                prob = prob_wgd * prob_chr * prob_seg;
+                if(max_chr_change > 0){
+                    prob = prob * prob_chr;
+                }
+                if(max_site_change > 0){
+                    prob = prob * prob_seg;
+                }
                 cout << "   End state: " << e_wgd << "\t" << e_chr << "\t" << e_seg << "\t" << prob << endl;
             }else{
                 e_seg = e[3];
                 e_chr2 = e[2];
                 e_seg2 = e[4];
-                double prob_wgd = pmat_wgd[s_wgd + e_wgd * dim_wgd];
-                double prob_chr = pmat_chr[(s_chr + delta_chr) + (e_chr + delta_chr) * dim_chr];
-                double prob_seg = pmat_seg[(s_seg + delta_seg) + (e_seg + delta_seg) * dim_seg];
-                double prob_chr2 = pmat_chr[(s_chr2 + delta_chr) + (e_chr2 + delta_chr) * dim_chr];
-                double prob_seg2 = pmat_seg[(s_seg2 + delta_seg) + (e_seg2 + delta_seg) * dim_seg];
-                prob = prob_wgd * prob_chr * prob_seg * prob_chr2 * prob_seg2;
+
+                if(max_chr_change > 0){
+                    prob_chr2 = pmat_chr[(s_chr2 + delta_chr) + (e_chr2 + delta_chr) * dim_chr];
+                    prob = prob * prob_chr * prob_chr2;
+                }
+                if(max_site_change > 0){
+                    prob_seg = pmat_seg[(s_seg + delta_seg) + (e_seg + delta_seg) * dim_seg];
+                    prob_seg2 = pmat_seg[(s_seg2 + delta_seg) + (e_seg2 + delta_seg) * dim_seg];
+                    prob = prob * prob_seg * prob_seg2;
+                }
                 cout << "   End state: " << e_wgd << "\t" << e_chr << "\t" << e_seg << "\t" << e_chr2 << "\t" << e_seg2 << "\t" << prob << endl;
             }
             state_prob[cn] += prob;
         }
+        if(comp.size()==0) state_prob[cn] = 0;
     }
 
     fout << cn_max << "\t"  << blen;
@@ -592,12 +615,18 @@ void check_chain_by_branch_m3(int is_total, int num_seg, const vector<double>& r
     }
     fout << endl;
 
-    free(qmat_wgd);
-    free(qmat_chr);
-    free(qmat_seg);
-    free(pmat_wgd);
-    free(pmat_chr);
-    free(pmat_seg);
+    if(max_wgd>0){
+        free(qmat_wgd);
+        free(pmat_wgd);
+    }
+    if(max_chr_change>0){
+        free(qmat_chr);
+        free(pmat_chr);
+    }
+    if(max_site_change>0){
+        free(qmat_seg);
+        free(pmat_seg);
+    }
 }
 
 
@@ -619,7 +648,7 @@ evo_tree do_exhaustive_search(string real_tstring, int Ngen, const int init_tree
     vector<double> lnLs(max_tree_num,0);
     vector<int> index(max_tree_num);
     cout << "Initial number of trees " << max_tree_num << endl;
-    cout << "String for real tree is " << real_tstring << endl;
+    if(debug) cout << "String for real tree is " << real_tstring << endl;
 
     #pragma omp parallel for
     for(int i=0; i < max_tree_num; ++i){
@@ -1236,7 +1265,7 @@ double compute_tree_likelihood(const string& tree_file, map<int, set<vector<int>
         Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, tree, model, cons, cn_max, only_seg, correct_bias, is_total);
     }else{
         cout << "\nComputing the likelihood based on independent Markov chain model " << endl;
-        Ls = get_likelihood_decomp(Ns, Nchar, num_invar_bins, vobs, tree, decomp_table, cons, cn_max, max_wgd, max_chr_change, max_site_change, correct_bias, is_total);
+        Ls = get_likelihood_decomp(Ns, Nchar, num_invar_bins, vobs, tree, decomp_table, cons, cn_max, m_max, max_wgd, max_chr_change, max_site_change, correct_bias, is_total);
     }
 
 
@@ -1338,12 +1367,12 @@ void find_ML_tree(string real_tstring, int total_chr, int num_total_bins, string
     // Recompute the likelihood to check it is not affected by tree adjustment
     double nlnL = 0;
     if(model == 3){
-        nlnL = -get_likelihood_decomp(Ns, Nchar, num_invar_bins, vobs, min_lnL_tree, decomp_table, cons, cn_max, max_wgd, max_chr_change, max_site_change, correct_bias, is_total);
+        nlnL = -get_likelihood_decomp(Ns, Nchar, num_invar_bins, vobs, min_lnL_tree, decomp_table, cons, cn_max, m_max, max_wgd, max_chr_change, max_site_change, correct_bias, is_total);
     }else{
         nlnL = -get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, min_lnL_tree, model, cons, cn_max, only_seg, correct_bias, is_total);
     }
     cout.precision(dbl::max_digits10);
-    cout << "Recomputed likelihood " << nlnL << endl;
+    cout << "Recomputed negative log likelihood " << nlnL << endl;
 
     // Check the validity of the tree
     if(cons==1){
@@ -1419,10 +1448,12 @@ int main (int argc, char ** const argv) {
     ("is_total", po::value<int>(&is_total)->default_value(1), "whether or not the input is total copy number")
     ("is_bin", po::value<int>(&is_bin)->default_value(1), "whether or not the input copy number is for each bin. If not, the input copy number is read as it is")
     ("incl_all", po::value<int>(&incl_all)->default_value(1), "whether or not to include all the input copy numbers without further propressing")
+    ("infer_wgd", po::value<int>(&infer_wgd)->default_value(0), "whether or not to infer WGD status of a sample from its copy numbers")
 
-    ("max_wgd", po::value<int>(&max_wgd)->default_value(2), "maximum number of WGD")
-    ("max_chr_change", po::value<int>(&max_chr_change)->default_value(2), "maximum number of chromosome changes")
-    ("max_site_change", po::value<int>(&max_site_change)->default_value(4), "maximum number of segment changes")
+    ("m_max", po::value<int>(&m_max)->default_value(1), "maximum number of copies of a segment in a chromosome")
+    ("max_wgd", po::value<int>(&max_wgd)->default_value(1), "maximum number of WGD")
+    ("max_chr_change", po::value<int>(&max_chr_change)->default_value(1), "maximum number of chromosome changes")
+    ("max_site_change", po::value<int>(&max_site_change)->default_value(2), "maximum number of segment changes")
 
     ("epop", po::value<int>(&Ne)->default_value(2), "effective population size of cell populations")
     ("gtime", po::value<double>(&gtime)->default_value(1), "generation time in year")
@@ -1537,11 +1568,11 @@ int main (int argc, char ** const argv) {
         if(model == 3){
             cout << "\nAssuming independent Markov chains" << endl;
             only_seg = 0;
-            decomp_table = build_decomp_table(comps, cn_max, max_wgd, max_chr_change, max_site_change, is_total);
-            if(debug){
+            decomp_table = build_decomp_table(comps, cn_max, m_max, max_wgd, max_chr_change, max_site_change, is_total);
+            // if(debug){
                 cout << "\tNumber of states is " << comps.size() << endl;
                 print_decomp_table(decomp_table);
-            }
+            // }
         }
         rates.push_back(dup_rate);
         rates.push_back(del_rate);
@@ -1558,8 +1589,7 @@ int main (int argc, char ** const argv) {
     map<int, vector<vector<int>>> data;
     cout << "\nReading input copy numbers" << endl;
     if(is_bin==1){
-
-        data = read_data_var_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins, Nchar, is_total);
+        data = read_data_var_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins, Nchar, obs_num_wgd, is_total);
         cout << "   Merging consecutive bins in the input" << endl;
     }else{
         if(incl_all==1){
@@ -1568,7 +1598,7 @@ int main (int argc, char ** const argv) {
         }else{
             cout << "   Using variable input segments " << endl;
         }
-        data = read_data_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins, Nchar, incl_all, is_total);
+        data = read_data_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins, Nchar, obs_num_wgd, incl_all, is_total);
     }
     // cout << "Number of invariant bins " << num_invar_bins << endl;
 
@@ -1580,7 +1610,7 @@ int main (int argc, char ** const argv) {
       real_tstring = order_tree_string_uniq(create_tree_string_uniq(real_tree));
       double Ls = 0;
       if(model == 3){
-          Ls = -get_likelihood_decomp(Ns, Nchar, num_invar_bins, vobs, real_tree, decomp_table, cons, cn_max, max_wgd, max_chr_change, max_site_change, correct_bias, is_total);
+          Ls = -get_likelihood_decomp(Ns, Nchar, num_invar_bins, vobs, real_tree, decomp_table, cons, cn_max, m_max, max_wgd, max_chr_change, max_site_change, correct_bias, is_total);
       }else{
           Ls = -get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, real_tree, model, cons, cn_max, only_seg, correct_bias, is_total);
       }
@@ -1633,17 +1663,38 @@ int main (int argc, char ** const argv) {
       // run_test(tree_file, Ns, num_total_bins, Nchar, model, cn_max, only_seg, correct_bias, is_total, tobs, vobs0, Nchar0, rates, ssize, tolerance, miter);
 
       // Check how different mutation rates affect the rates of reaching different states
-      set<vector<double>> rate_range{
-          {0.0001, 0.0001, 0.0001, 0.0001, 0.0001},
-          // {0.0001, 0.0001, 0.001, 0.001, 0.01},
-          {0.001, 0.001, 0.001, 0.001, 0.001},
-          {0.01, 0.01, 0.01, 0.01, 0.01},
-          {0.1, 0.1, 0.1, 0.1, 0.1},
-          {1, 1, 1, 1, 1},
-          {10, 10, 10, 10, 10}};
-      vector<double> blen_range{1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
-      vector<int> cn_range{4, 6, 8, 10, 12};
+      // For model 2, only first two rates matter
+      // vector<vector<double>> rate_range{
+      //     {0.0001, 0.0001, 0.0001, 0.0001, 0.0001},
+      //     // {0.0001, 0.0001, 0.001, 0.001, 0.01},
+      //     {0.001, 0.001, 0.001, 0.001, 0.001},
+      //     {0.01, 0.01, 0.01, 0.01, 0.01},
+      //     {0.1, 0.1, 0.1, 0.1, 0.1},
+      //     {1, 1, 1, 1, 1}};
+
+     // For model 3
+      vector<vector<double>> rate_range{
+          {0.001, 0.001, 0, 0, 0.001},
+          {0.001, 0.001, 0, 0, 0.01},
+          {0.001, 0.001, 0, 0, 0.1},
+          {0.01, 0.01, 0, 0, 0.001},
+          {0.01, 0.01, 0, 0, 0.01},
+          {0.01, 0.01, 0, 0, 0.1}};
+
+      vector<vector<int>> change_range{
+          {1, 0, 2},
+          {1, 0, 4},
+          {1, 0, 8},
+          {1, 0, 2},
+          {1, 0, 4},
+          {1, 0, 8}};
+      // failed when adding branch length 50 for model 3
+      vector<double> blen_range{1, 10, 20, 30, 40};
+      // vector<double> blen_range{1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
+      // vector<int> cn_range{4, 6, 8, 10, 12};
+      vector<int> cn_range{4, 6, 8};
       int num_seg = 100;
+      int m_max = 1;
       int max_wgd = 2;
       int max_chr_change = 2;
       int max_site_change = 4;
@@ -1656,9 +1707,13 @@ int main (int argc, char ** const argv) {
               for(int j = 0; j < blen_range.size(); j++){
                   double blen = blen_range[j];
                   cout << "\tBranch lengths: " << blen << endl;
-                  check_chain_by_branch_m2(num_seg, rates, blen, cn_max, fout);
-                  // int is_total = 1;
-                  // check_chain_by_branch_m3(is_total, num_seg, rates, blen, cn_max, max_wgd, max_chr_change, max_site_change, fout);
+                  // check_chain_by_branch_m2(num_seg, rates, blen, cn_max, fout);
+                  int is_total = 1;
+                  vector<int> num_changes = change_range[j];
+                  int max_wgd = num_changes[0];
+                  int max_chr_change = num_changes[1];
+                  int max_site_change = num_changes[2];
+                  check_chain_by_branch_m3(is_total, num_seg, rates, blen, cn_max, m_max, max_wgd, max_chr_change, max_site_change, fout);
               }
           }
       }

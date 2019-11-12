@@ -311,6 +311,7 @@ public:
     map<int,int>::const_iterator it2;
     for(it1 = cn_profile.begin(); it1 != cn_profile.end(); ++it1){
       for(it2 = it1->second.begin(); it2 != it1->second.end(); ++it2){
+        // sample and chr starts with 1; segment starts with 0
         of << node_id+1 << "\t" << it1->first+1 << "\t" << it2->first << "\t" << it2->second << endl;
       }
     }
