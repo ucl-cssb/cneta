@@ -15,7 +15,20 @@
 
 using namespace std;
 
-const double SMALL_LEN = 1.0e-9;
+const double BLEN_MIN = 1e-10;
+const double BLEN_MAX = 100;
+const double RATE_MIN = 1e-10;
+const double RATE_MAX = 1;
+const double RATE_MIN_LOG = -10;
+const double RATE_MAX_LOG = 0;
+
+
+typedef vector<double> DoubleVector;
+
+/**
+ * direction of a Neighbor from the root, for rooted tree only
+ */
+enum RootDirection {UNDEFINED_DIRECTION, TOWARD_ROOT, AWAYFROM_ROOT};
 
 template <typename T>
 vector<size_t> sort_indexes(const vector<T> &v) {
@@ -30,8 +43,160 @@ vector<size_t> sort_indexes(const vector<T> &v) {
   return idx;
 }
 
+class Node;
 
-class node {
+/**
+    Neighbor list of a node in the tree, from node.h (IQTREE)
+ */
+class Neighbor {
+public:
+
+    /**
+        the other end of the branch
+     */
+    Node* node;
+
+    /**
+        branch length
+     */
+    double length;
+
+    /**
+        branch ID
+     */
+    int id;
+
+    /**
+     * direction of the Neighbor in a rooted tree
+     */
+    RootDirection direction;
+
+    /** size of subtree below this neighbor in terms of number of taxa */
+    int size;
+
+    /**
+        construct class with a node and length
+        @param anode the other end of the branch
+        @param alength length of branch
+     */
+    Neighbor(Node *anode, double alength) {
+        node = anode;
+        length = alength;
+        id = -1;
+        // split = NULL;
+        direction = UNDEFINED_DIRECTION;
+        size = 0;
+    }
+
+    /**
+        construct class with a node and length
+        @param anode the other end of the branch
+        @param alength length of branch
+        @param id branch ID
+     */
+    Neighbor(Node *anode, double alength, int aid) {
+        node = anode;
+        length = alength;
+        id = aid;
+        // split = NULL;
+        direction = UNDEFINED_DIRECTION;
+        size = 0;
+    }
+
+    /**
+        construct class with another Neighbor
+        @param nei another Neighbor
+     */
+    Neighbor(Neighbor *nei) {
+        node = nei->node;
+        length = nei->length;
+        id = nei->id;
+    }
+
+    /**
+     * true if this Neighbor is directed towards the root
+     */
+    bool isTowardsRoot() {
+        assert(direction != UNDEFINED_DIRECTION);
+        return (direction == TOWARD_ROOT);
+    }
+
+    int getSize() {
+        return size;
+    }
+
+    void getLength(DoubleVector &vec) {
+        vec.resize(1);
+        vec[0] = length;
+    }
+
+    void getLength(DoubleVector &vec, int start_pos) {
+        assert(start_pos < vec.size());
+        vec[start_pos] = length;
+    }
+
+    void setLength(DoubleVector &vec) {
+        assert(vec.size() == 1);
+        length = vec[0];
+    }
+
+    void setLength(DoubleVector &vec, int start_pos) {
+        assert(start_pos < vec.size());
+        length = vec[start_pos];
+    }
+
+    void setLength(Neighbor *nei) {
+        length = nei->length;
+    }
+};
+
+/**
+    Neighbor vector
+ */
+typedef vector<Neighbor*> NeighborVec;
+
+/*
+    some macros to transverse neighbors of a node
+ */
+#define FOR_NEIGHBOR(mynode, mydad, it) \
+	for (it = (mynode)->neighbors.begin(); it != (mynode)->neighbors.end(); it++) \
+		if ((*it)->node != (mydad))
+
+#define FOR_NEIGHBOR_IT(mynode, mydad, it) \
+	for (NeighborVec::iterator it = (mynode)->neighbors.begin(); it != (mynode)->neighbors.end(); it++) \
+		if ((*it)->node != (mydad))
+
+#define FOR_NEIGHBOR_DECLARE(mynode, mydad, it) \
+	NeighborVec::iterator it; \
+	for (it = (mynode)->neighbors.begin(); it != (mynode)->neighbors.end(); it++) \
+		if ((*it)->node != (mydad))
+
+
+
+struct NNIMove {
+    // Two nodes representing the central branch
+    Node *node1, *node2;
+
+    // Roots of the two subtree that are swapped
+    NeighborVec::iterator node1Nei_it, node2Nei_it;
+
+    // log-likelihood of the tree after applying the NNI
+    double newloglh;
+
+    int swap_id;
+
+    // new branch lengths of 5 branches corresponding to the NNI
+    DoubleVector newLen[5];
+    // pattern likelihoods
+    // double *ptnlh;
+
+    bool operator<(const NNIMove & rhs) const {
+        return newloglh > rhs.newloglh;
+    }
+};
+
+
+class Node {
 public:
   int id;
   int isRoot;
@@ -41,8 +206,19 @@ public:
   int e_in;
   vector<int> e_ot;
   vector<int> daughters;
+  NeighborVec neighbors;
 
-  node(const int& _id, const int& _isRoot, const int& _isLeaf){
+  double height;
+
+  Node(const int& _id){
+    id = _id;
+    isRoot = 0;
+    isLeaf = 0;
+    parent = -1;
+    e_in = -1;
+  }
+
+  Node(const int& _id, const int& _isRoot, const int& _isLeaf){
     id = _id;
     isRoot = _isRoot;
     isLeaf = _isLeaf;
@@ -50,7 +226,7 @@ public:
     e_in = -1;
   }
 
-  node( const node& _n2 ){
+  Node(const Node& _n2){
     id     = _n2.id;
     isRoot = _n2.isRoot;
     isLeaf = _n2.isLeaf;
@@ -61,8 +237,110 @@ public:
     e_ot.insert(e_ot.end(), _n2.e_ot.begin(), _n2.e_ot.end() );
     daughters.clear();
     daughters.insert(daughters.end(), _n2.daughters.begin(), _n2.daughters.end() );
+    neighbors.clear();
+    neighbors.insert(neighbors.end(), _n2.neighbors.begin(), _n2.neighbors.end() );
+  }
+
+  bool is_leaf() {
+      return neighbors.size() <= 1;
+  }
+
+  int degree() {
+      return neighbors.size();
+  }
+
+
+  Neighbor *findNeighbor(Node *node) {
+  	int size = neighbors.size();
+      for (int i = 0; i < size; i++)
+          if (neighbors[i]->node == node) return neighbors[i];
+      /*
+      for (NeighborVec::iterator it = neighbors.begin(); it != neighbors.end(); it ++)
+              if ((*it)->node == node)
+                      return (*it);*/
+      cout << "ERROR : Could not find neighbors of node " << node->id + 1 << endl;
+      assert(0);
+      return NULL;
+  }
+
+  bool isNeighbor(Node* node) {
+      int size = neighbors.size();
+      for (int i = 0; i < size; i++)
+          if (neighbors[i]->node == node) return true;
+      return false;
+  }
+
+  /**
+      @param node the target node
+      @return the iterator to the neighbor that has the node. If not found, return neighbors.end()
+   */
+  NeighborVec::iterator findNeighborIt(Node *node) {
+      for (NeighborVec::iterator it = neighbors.begin(); it != neighbors.end(); it++)
+          if ((*it)->node == node)
+              return it;
+      assert(0);
+      return neighbors.end();
+  }
+
+  void addNeighbor(Node *node, double length, int id) {
+      neighbors.push_back(new Neighbor(node, length, id));
+  }
+
+  void addNeighbor(Node *node, DoubleVector &length, int id) {
+  //	assert(!length.empty());
+      if (length.empty())
+          addNeighbor(node, -1.0, id);
+      else
+          addNeighbor(node, length[0], id);
+  }
+
+  void updateNeighbor(NeighborVec::iterator nei_it, Neighbor *newnei) {
+      assert(nei_it != neighbors.end());
+      *nei_it = newnei;
+  }
+
+  void updateNeighbor(NeighborVec::iterator nei_it, Neighbor *newnei, double newlen) {
+      assert(nei_it != neighbors.end());
+      *nei_it = newnei;
+      newnei->length = newlen;
+  }
+
+  void updateNeighbor(Node *node, Neighbor *newnei) {
+      NeighborVec::iterator nei_it = findNeighborIt(node);
+      assert(nei_it != neighbors.end());
+      *nei_it = newnei;
+  }
+
+  void updateNeighbor(Node *node, Neighbor *newnei, double newlen) {
+      NeighborVec::iterator nei_it = findNeighborIt(node);
+      assert(nei_it != neighbors.end());
+      *nei_it = newnei;
+      newnei->length = newlen;
+  }
+
+  void updateNeighbor(Node* node, Node *newnode, double newlen) {
+      for (NeighborVec::iterator it = neighbors.begin(); it != neighbors.end(); it++)
+          if ((*it)->node == node) {
+              (*it)->node = newnode;
+              (*it)->length = newlen;
+              break;
+          }
+  }
+
+  double updateNeighbor(Node* node, Node *newnode) {
+      for (NeighborVec::iterator it = neighbors.begin(); it != neighbors.end(); it++)
+          if ((*it)->node == node) {
+              (*it)->node = newnode;
+              return (*it)->length;
+          }
+      return -1;
   }
 };
+
+
+typedef vector<Node*> NodeVector;
+typedef pair<Node*, Node*> Branch;
+typedef map<int, Branch> Branches;
 
 
 class edge {
@@ -93,6 +371,7 @@ public:
 };
 
 
+
 class evo_tree {
 public:
   int nleaf;
@@ -103,13 +382,15 @@ public:
   vector<edge>   edges;
   vector<double> lengths;
   // vector<int> muts;
-  vector<node>   nodes;
+  vector<Node>   nodes;
   vector<double> node_times;
   // pointers to internal edges
   vector<edge*> intedges;
   int root_node_id;
-  vector<vector<int>> chars;
+
+  // vector<vector<int>> chars;
   vector<double> tobs;
+
   double score = 0;
   double mu = 0;
   double dup_rate = 0;
@@ -122,6 +403,11 @@ public:
   vector<double> top_tinvls;    // Top Ns+1 intervals for optimization with constaints on tip times
   vector<int> top_tnodes;
 
+  // The chosen branch
+  int branch_start, branch_end;
+  Neighbor* current_it;
+  Neighbor* current_it_back;
+
   evo_tree(){}
   evo_tree(const int& _nleaf, const vector<int>& _edges, const vector<double>& _lengths, int gen_node = 1);
   evo_tree(const int& _nleaf, const vector<edge>& _edges, int gen_node = 1);
@@ -129,7 +415,7 @@ public:
   evo_tree(const int& _nleaf, const vector<edge>& _edges, const double& total_time, const vector<double>& _tobs);
   evo_tree(const evo_tree& _t2);
 
-  void   get_nodes_preorder(node* root, vector<node*>& nodes_preorder);
+  void   get_nodes_preorder(Node* root, vector<Node*>& nodes_preorder);
   string make_newick(int precision);
   string make_newick_nmut(int precision, vector<int> nmuts);
   void   write_nexus(string newick, ofstream& fout);
@@ -149,6 +435,12 @@ public:
   // The time from beginning to the time of first sample
   double get_total_time(){ return *max_element(node_times.begin(), node_times.end()) - *max_element(tobs.begin(), tobs.end()); }
   double get_tree_height(){ return *max_element(node_times.begin(), node_times.end()); }
+
+
+  // Find branch lengths from ratios of node times
+  vector<double> get_edges_from_ratio(const vector<double>& ratios){
+
+  }
 
   vector<int> get_ancestral_nodes(const int& node_id) const {
     vector<int> ret;
@@ -266,6 +558,104 @@ public:
 					    << " (" << edges[aedges[j]].start+1 << " -> " << edges[aedges[j]].end+1 << ") ";
     stream << endl;
   }
+
+  void compute_branch_direction(Node *node = NULL, Node *dad = NULL) {
+    if (!node) {
+       node = &(nodes[root_node_id]);
+    }
+    if (dad)
+       ((Neighbor*)node->findNeighbor(dad))->direction = TOWARD_ROOT;
+    // cout << "Generating branch directions for edge ending at " << node->id + 1 << endl;
+    NeighborVec::iterator it;
+    FOR_NEIGHBOR_IT(node, dad, it) {
+       // do not update if direction was already computed
+       assert(((Neighbor*)*it)->direction != TOWARD_ROOT);
+       if (((Neighbor*)*it)->direction != UNDEFINED_DIRECTION)
+           continue;
+       // otherwise undefined.
+       ((Neighbor*)*it)->direction = AWAYFROM_ROOT;
+       compute_branch_direction((Node*)(*it)->node, node);
+    }
+  }
+
+  void generate_neighbors(){
+      int debug = 0;
+      for(int i = 0; i < nodes.size(); i++){
+          Node *n = &nodes[i];
+          if(debug) cout << "Generating neighbors for node " << n->id + 1 << endl;
+          n->neighbors.clear();
+
+          Node *dad = NULL;
+          if(n->e_in >= 0){  // root has no incoming edge
+              edge e = edges[n->e_in];
+              dad = &nodes[e.start];
+              n->addNeighbor(dad, e.length, e.id);
+              if(debug) cout << "\tadding node " << e.start + 1 << " with edge " << e.id << endl;
+          }
+
+          for(int j = 0; j < n->e_ot.size(); j++){
+              edge e = edges[n->e_ot[j]];
+              n->addNeighbor(&nodes[e.end], e.length, e.id);
+              if(debug) cout << "\tadding node " << e.end + 1 << " with edge " << e.id << endl;
+          }
+      }
+
+      compute_branch_direction();
+
+      if(debug){
+          for(int i = 0; i < nodes.size(); i++){
+              Node *n = &nodes[i];
+              cout << "Neighbor of node " << n->id + 1 << ":";
+              for(int i = 0; i < n->neighbors.size(); i++){
+                  cout << "\t" << (n->neighbors[i])->node->id + 1 << ", " << (n->neighbors[i])-> length << ", " << (n->neighbors[i])-> id << ", " << (n->neighbors[i])-> direction;
+              }
+              cout << endl;
+          }
+      }
+  }
+
+  Node* find_farthest_leaf(Node *node = NULL, Node *dad = NULL) {
+      if (!node)
+          node = &(nodes[root_node_id]);
+
+      if (dad && node->is_leaf()) {
+          node->height = 0.0;
+          return node;
+      }
+      Node *res = NULL;
+      node->height = 0.0;
+      FOR_NEIGHBOR_IT(node, dad, it) {
+          Node *leaf = find_farthest_leaf((*it)->node, node);
+          if (node->height < (*it)->node->height+1) {
+              node->height = (*it)->node->height+1;
+              res = leaf;
+          }
+      }
+      return res;
+  }
+
+  void get_preorder_branches(NodeVector &nodes, NodeVector &nodes2, Node *node, Node *dad = NULL) {
+      if (dad) {
+          nodes.push_back(node);
+          nodes2.push_back(dad);
+      }
+
+      NeighborVec neivec = node->neighbors;
+      NeighborVec::iterator i1, i2;
+      for (i1 = neivec.begin(); i1 != neivec.end(); i1++)
+          for (i2 = i1+1; i2 != neivec.end(); i2++)
+              if ((*i1)->node->height > (*i2)->node->height) {
+                  Neighbor *nei = *i1;
+                  *i1 = *i2;
+                  *i2 = nei;
+              }
+      for (i1 = neivec.begin(); i1 != neivec.end(); i1++)
+          if ((*i1)->node != dad)
+              get_preorder_branches(nodes, nodes2, (*i1)->node, node);
+  //    FOR_NEIGHBOR_IT(node, dad, it)
+  //        get_preorder_branches(nodes, nodes2, (*it)->node, node);
+  }
+
 };
 
 
@@ -299,11 +689,13 @@ evo_tree::evo_tree(const evo_tree& _t2) {
   node_times.clear();
   node_times.insert(node_times.end(), _t2.node_times.begin(), _t2.node_times.end() );
 
-  chars.clear();
-  for(int i=0; i< _t2.chars.size(); ++i) chars.push_back( _t2.chars[i] );
+  // chars.clear();
+  // for(int i=0; i< _t2.chars.size(); ++i) chars.push_back( _t2.chars[i] );
 
   intedges.clear();
   generate_int_edges();
+
+  generate_neighbors();
 }
 
 
@@ -334,6 +726,7 @@ evo_tree::evo_tree(const int& _nleaf, const vector<int>& _edges, const vector<do
     generate_nodes();
     calculate_node_times();
     generate_int_edges();
+    generate_neighbors();
   }
   score = 0;
 }
@@ -363,6 +756,7 @@ evo_tree::evo_tree(const int& _nleaf, const vector<edge>& _edges, int gen_node){
     generate_nodes();
     calculate_node_times();
     generate_int_edges();
+    generate_neighbors();
   }
   score = 0;
 }
@@ -412,6 +806,7 @@ evo_tree::evo_tree(const int& _nleaf, const vector<edge>& _edges, const double& 
 
   calculate_node_times();
   generate_int_edges();
+  generate_neighbors();
 
   lengths.clear();
   for(int i=0; i<nedge; ++i){
@@ -604,6 +999,7 @@ double evo_tree::find_interval_len(int& _start, int _end, map<pair<int, int>, do
     return 0;
 }
 
+
 // Find branch lengths from top k time intervals and tobs
 vector<double> evo_tree::get_edges_from_interval(const vector<double>& intervals, vector<int>& tnodes){
     int debug = 0;
@@ -724,10 +1120,10 @@ void evo_tree::generate_nodes(){
   // create list of nodes
   for(int i=0; i<ntotn; ++i){
     if(i < nleaf){
-      nodes.push_back( node(i,0,1));
+      nodes.push_back( Node(i,0,1));
     }
     else{
-      nodes.push_back( node(i,0,0));
+      nodes.push_back( Node(i,0,0));
     }
   }
 
@@ -779,7 +1175,7 @@ void evo_tree::calculate_node_times(){
 
 
 // Find the preorder of nodes in the tree
-void evo_tree::get_nodes_preorder(node* root, vector<node*>& nodes_preorder){
+void evo_tree::get_nodes_preorder(Node* root, vector<Node*>& nodes_preorder){
     nodes_preorder.push_back(root);
     for(int j=0; j<root->daughters.size();j++){
             get_nodes_preorder(&nodes[root->daughters[j]], nodes_preorder);
@@ -792,9 +1188,9 @@ string evo_tree::make_newick(int precision){
     const boost::format tip_node_format(boost::str(boost::format("%%d:%%.%df") % precision));
     const boost::format internal_node_format(boost::str(boost::format(")%%d:%%.%df") % precision));
     const boost::format root_node_format(boost::str(boost::format(")%%d")));
-    stack<node*> node_stack;
-    vector<node*> nodes_preorder;
-    node* root;
+    stack<Node*> node_stack;
+    vector<Node*> nodes_preorder;
+    Node* root;
 
     for(int i=0; i<nodes.size(); ++i){
       if(nodes[i].isRoot){
@@ -808,7 +1204,7 @@ string evo_tree::make_newick(int precision){
     // Traverse nodes in preorder
     for (int i = 0; i<nodes_preorder.size(); i++)
     {
-        node* nd = nodes_preorder[i];
+        Node* nd = nodes_preorder[i];
         // cout << nd->id + 1 << endl;
         if (nd->daughters.size()>0) // internal nodes
         {
@@ -822,7 +1218,7 @@ string evo_tree::make_newick(int precision){
                 newick += ",";
             else
             {
-                node* popped = (node_stack.empty() ? 0 : node_stack.top());
+                Node* popped = (node_stack.empty() ? 0 : node_stack.top());
                 while (popped && popped->parent>0 && popped->id == nodes[popped->parent].daughters[1]) // right sibling of the previous node
                 {
                     node_stack.pop();
@@ -851,9 +1247,9 @@ string evo_tree::make_newick_nmut(int precision, vector<int> nmuts){
     const boost::format tip_node_format(boost::str(boost::format("%%d:%%.%df") % precision));
     const boost::format internal_node_format(boost::str(boost::format(")%%d:%%.%df") % precision));
     const boost::format root_node_format(boost::str(boost::format(")%%d")));
-    stack<node*> node_stack;
-    vector<node*> nodes_preorder;
-    node* root;
+    stack<Node*> node_stack;
+    vector<Node*> nodes_preorder;
+    Node* root;
 
     for(int i=0; i<nodes.size(); ++i){
       if(nodes[i].isRoot){
@@ -867,7 +1263,7 @@ string evo_tree::make_newick_nmut(int precision, vector<int> nmuts){
     // Traverse nodes in preorder
     for (int i = 0; i<nodes_preorder.size(); i++)
     {
-        node* nd = nodes_preorder[i];
+        Node* nd = nodes_preorder[i];
         // cout << nd->id + 1 << endl;
         if (nd->daughters.size()>0) // internal nodes
         {
@@ -881,7 +1277,7 @@ string evo_tree::make_newick_nmut(int precision, vector<int> nmuts){
                 newick += ",";
             else
             {
-                node* popped = (node_stack.empty() ? 0 : node_stack.top());
+                Node* popped = (node_stack.empty() ? 0 : node_stack.top());
                 while (popped && popped->parent>0 && popped->id == nodes[popped->parent].daughters[1]) // right sibling of the previous node
                 {
                     node_stack.pop();

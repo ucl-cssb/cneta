@@ -894,8 +894,8 @@ void get_state_change_probabilities(double* qmat, const int& node_id, const evo_
                 if(debug) cout << "Probabilities for site " << si << ": " << endl;
                 for(int sk=0; sk<nstate; ++sk){
                     double prob = pmat[si  + sk * nstate];
-                    if(debug) cout << edge_id << "\t" << si << "\t" << sk << "\t" << state2tcn(si, cn_max) << "\t" << state2tcn(sk, cn_max) << "\t" << prob << endl;
-                    fout << edge_id << "\t" << si << "\t" << sk << "\t" << state2tcn(si, cn_max) << "\t" << state2tcn(sk, cn_max) << "\t" << prob << endl;
+                    if(debug) cout << edge_id << "\t" << si << "\t" << sk << "\t" << state_to_total_cn(si, cn_max) << "\t" << state_to_total_cn(sk, cn_max) << "\t" << prob << endl;
+                    fout << edge_id << "\t" << si << "\t" << sk << "\t" << state_to_total_cn(si, cn_max) << "\t" << state_to_total_cn(sk, cn_max) << "\t" << prob << endl;
                 }
             }
             free(pmat);
@@ -998,7 +998,7 @@ void write_cn(map<int, copy_number> cn_matrix, int node_id, ogzstream& out, int 
         map<int, int> segs = c.second;
         for(auto s : segs){
             int cn = s.second;
-            if(model == 2) cn = state2tcn(s.second, cn_max);
+            if(model == 2) cn = state_to_total_cn(s.second, cn_max);
             // node_id, chr, seg_id, copy number
             // cout << node_id + 1 << "\t" << c.first << "\t" << s.first << "\t" << s.second << "\t" << cn << endl;
             out << node_id + 1 << "\t" << c.first << "\t" << s.first << "\t" << cn << endl;

@@ -1,6 +1,98 @@
+#ifndef UTILITIES_HPP    // To make sure you don't declare the function more than once by including the header multiple times.
+#define UTILITIES_HPP
+
 // collection of functions for reading/writing
 extern int debug;
 // const int num_total_bins = 4401;
+
+// Variables related to likelihood computation
+extern "C" {
+  gsl_rng * r;
+  // vector<vector<int>> vobs;
+  map<int, vector<vector<int>>> vobs;   // CNP for each site
+  vector<double> tobs;
+  vector<int> obs_num_wgd;  // possible number of WGD events
+  vector<vector<int>> obs_change_chr;
+  vector<int> sample_max_cn;
+
+  map<int, set<vector<int>>> decomp_table;  // possible state combinations for observed copy numbers
+  set<vector<int>> comps;
+
+  // vector<vector<vector<double>>> L_sk_k_mrca;  // Likelihood table for the MRCA of all sites
+
+  int model;
+  int correct_bias;
+  int cn_max;
+  int only_seg; // Whether or not to only consider segment-level mutations
+  int is_total; // whether or not the input is total copy number
+  int infer_wgd; // whether or not to infer WGD status of a sample
+  int infer_chr; // whether or not to infer chromosome gain/loss status of a sample
+  int use_repeat;   // whether or not to use repeated site patterns
+
+  // Set max_* as global variables to avoid adding more parameters in maximization
+  int m_max;
+  int max_wgd;
+  int max_chr_change;
+  int max_site_change;
+
+  int Ns;   // number of samples
+  int Nchar;  // number of sites
+  int num_invar_bins;   // number of invariant sites
+  int age;
+
+  int cons;
+  int maxj;
+}
+
+
+// Convert the allele-specific state (ordered by 0/0	0/1	1/0	0/2	 1/1	2/0	0/3	 1/2 2/1	3/0	 0/4 1/3 2/2 3/1	4/0) to total copy number
+int state_to_total_cn(int state, int cn_max){
+    int cn = 0;
+    vector<int> sums;
+    // cout << "Sums of state: ";
+    for(int i=1; i<=(cn_max+1); i++){
+        int s = i * (i+1) / 2;
+        sums.push_back(s);
+        // cout << "\t" << s;
+    }
+    // cout << endl;
+    if(state < sums[0]) return 0;
+    int i = 1;
+    do{
+        if (state >= sums[i-1] && state < sums[i]) return i;
+        i++;
+    }while (i<=cn_max);
+    // cout << state << "\t" <<
+    return 0;
+}
+
+
+// Convert the allele-specific state (ordered by 0/0	0/1	1/0	0/2	 1/1	2/0	0/3	 1/2 2/1	3/0	 0/4 1/3 2/2 3/1	4/0) to total copy number
+int state_to_allele_cn(int state, int cn_max, int& cnA, int& cnB){
+    int cn = 0;
+    vector<int> sums;
+    // cout << "Sums of state: ";
+    for(int i=1; i<=(cn_max+1); i++){
+        int s = i * (i+1) / 2;
+        sums.push_back(s);
+        // cout << "\t" << s;
+    }
+    // cout << endl;
+    if(state < sums[0]) return 0;
+    int i = 1;
+    do{
+        if (state >= sums[i-1] && state < sums[i]){
+             // total copy number is i;
+             int diff = state - sums[i-1];
+             cnA = diff;
+             cnB = i - cnA;
+        }
+        i++;
+    }while (i<=cn_max);
+    // cout << state << "\t" <<
+    return 0;
+}
+
 
 // Read the samping time and patient age of each sample
 vector<double> read_time_info(const string& filename, const int& Ns, int& age){
@@ -190,7 +282,7 @@ vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int &num_tot
 }
 
 // Find the potential number of WGDs for each sample
-void get_num_wgd(const vector<vector<vector<int>>>& s_info, int cn_max, vector<int>& obs_num_wgd){
+void get_num_wgd(const vector<vector<vector<int>>>& s_info, int cn_max, vector<int>& obs_num_wgd, int is_total){
     cout << "Getting the potential number of WGDs for each sample" << endl;
     for(int i = 0; i < s_info.size(); i++){
         vector<vector<int>> s_cn = s_info[i];
@@ -201,7 +293,9 @@ void get_num_wgd(const vector<vector<vector<int>>>& s_info, int cn_max, vector<i
         }
         for (int j = 0; j < s_cn.size(); j++){
             vector<int> cp = s_cn[j];
-            cn_count[cp[2]] += 1;
+            int cn = cp[2];
+            if(is_total == 0) cn=state_to_total_cn(cn, cn_max);
+            cn_count[cn] += 1;
         }
         // Find the most frequenct copy number
         int most_freq_cn = 0;
@@ -219,6 +313,73 @@ void get_num_wgd(const vector<vector<vector<int>>>& s_info, int cn_max, vector<i
         if(debug) cout << "Sample " << i+1 << " has " << nwgd << " WGD events" << endl;
     }
 }
+
+
+// Find the potential number of chromosome changes for each sample
+void get_change_chr(const vector<vector<vector<int>>>& s_info, vector<vector<int>>& obs_change_chr, int cn_max, int is_total){
+    cout << "Getting the potential number of chromosome changes for each sample" << endl;
+    for(int i = 0; i < s_info.size(); i++){
+        // chr, seg, CN
+        vector<vector<int>> s_cn = s_info[i];
+        int num_seg = 0;
+        double avg_cn = 0;
+        map<int, vector<int>> chr_cn;
+        vector<int> chr_change;
+
+        // iterate through all records for a sample
+        for(int j = 0; j < s_cn.size(); j++){
+            vector<int> cp = s_cn[j];
+            int cn = cp[2];
+            if(is_total == 0) cn=state_to_total_cn(cn, cn_max);
+            chr_cn[cp[0]].push_back(cn);
+            avg_cn += cn;
+            num_seg++;
+        }
+
+        avg_cn = avg_cn / num_seg;
+
+        for(auto c : chr_cn){
+            vector<int> cp = c.second;
+            int chr_sum_cn = accumulate(cp.begin(), cp.end(), 0);
+            double avg_chr_cn = (double) chr_sum_cn / cp.size();
+            double num_change = avg_chr_cn - avg_cn;
+            int round_num_change = (int) (num_change + 0.5 - (num_change<0));
+            // cout << "Number of segments in chromosome " << c.first << " is " << cp.size() << "; avg cn: " << avg_chr_cn << "; exact num changes: " << num_change  << "; num changes: " << round_num_change << endl;
+            chr_change.push_back(round_num_change);
+        }
+
+        if(debug){
+            cout << "Sample " << i+1 << endl;
+            // cout << "Number of segments " << num_seg << endl;
+            int num_gain = count_if(chr_change.begin(), chr_change.end(), [](int c){return c >= 1;});
+            int num_loss = count_if(chr_change.begin(), chr_change.end(), [](int c){return c <= -1;});
+            cout << "There are probably " << num_gain << " chromosome gain events and " << num_loss << " chromosome loss events" << endl;
+            cout << "Average copy number in the genome " << avg_cn << endl << endl;
+        }
+        obs_change_chr.push_back(chr_change);
+    }
+}
+
+
+
+// Find the largest copy number in a sample
+void get_sample_mcn(const vector<vector<vector<int>>>& s_info, vector<int>& sample_max_cn, int cn_max, int is_total){
+    cout << "Getting the largest copy number for each sample" << endl;
+    for(int i = 0; i < s_info.size(); i++){
+        vector<vector<int>> s_cn = s_info[i];
+        vector<int> cns;
+        // iterate through all records for a sample
+        for(int j = 0; j < s_cn.size(); j++){
+            int cn = s_cn[j][2];
+            if(is_total == 0) cn = state_to_total_cn(cn, cn_max);
+            cns.push_back(cn);
+        }
+        int max_cn = *max_element(cns.begin(), cns.end());
+        sample_max_cn.push_back(max_cn);
+        if(debug) cout << "Largest copy number in sample " << i + 1 << " is " << max_cn << endl;
+    }
+}
+
 
 // Distinguish invariable and variable sites; Combine adjacent invariable sites
 vector<vector<int>> get_invar_segs(const vector<vector<vector<int>>>& s_info, int Ns, int num_total_bins, int& num_invar_bins, int is_total=1){
@@ -494,10 +655,12 @@ vector<vector<int>> group_segs(const vector<vector<int>>& segs, const vector<vec
 }
 
 // Read the input copy numbers
-vector<vector<int>> read_data_var_regions(const string& filename, const int& Ns, const int& max_cn, int& num_invar_bins, int& num_total_bins, int& seg_size, vector<int>&  obs_num_wgd, int is_total=1){
+vector<vector<int>> read_data_var_regions(const string& filename, const int& Ns, const int& max_cn, int& num_invar_bins, int& num_total_bins, int& seg_size, vector<int>&  obs_num_wgd, vector<vector<int>>& obs_change_chr, int is_total=1){
     cout << "reading data and calculating CNA regions" << endl;
     vector<vector<vector<int>>> s_info = read_cn(filename, Ns, num_total_bins, is_total);
-    get_num_wgd(s_info, cn_max, obs_num_wgd);
+    get_num_wgd(s_info, cn_max, obs_num_wgd, is_total);
+    get_change_chr(s_info, obs_change_chr, cn_max, is_total);
+    get_sample_mcn(s_info, sample_max_cn, cn_max, is_total);
     // We now need to convert runs of variable bins into segments of constant cn values, grouped by chromosome
     vector<vector<int>> segs = get_invar_segs(s_info, Ns, num_total_bins, num_invar_bins);
     seg_size = segs.size();
@@ -513,10 +676,12 @@ vector<vector<int>> read_data_var_regions(const string& filename, const int& Ns,
 
 
 // Read the input copy numbers while converting runs of variable bins into segments of constant cn values and group them by chromosome
-map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filename, const int& Ns, const int& max_cn, int& num_invar_bins, int& num_total_bins, int &seg_size, vector<int>&  obs_num_wgd, int is_total=1){
+map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filename, const int& Ns, const int& max_cn, int& num_invar_bins, int& num_total_bins, int &seg_size, vector<int>&  obs_num_wgd, vector<vector<int>>& obs_change_chr, int is_total=1){
     cout << "reading data and calculating CNA regions by chromosome" << endl;
     vector<vector<vector<int>>> s_info = read_cn(filename, Ns, num_total_bins, is_total);
-    get_num_wgd(s_info, cn_max, obs_num_wgd);
+    get_num_wgd(s_info, cn_max, obs_num_wgd, is_total);
+    get_change_chr(s_info, obs_change_chr, cn_max, is_total);
+    get_sample_mcn(s_info, sample_max_cn, cn_max, is_total);
     vector<vector<int>> segs = get_invar_segs(s_info, Ns, num_total_bins, num_invar_bins, is_total);
     seg_size = segs.size();
     int max_cn_val = max_cn;
@@ -530,10 +695,12 @@ map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filenam
 
 
 // Read the input copy numbers as they are and group them by chromosome
-map<int, vector<vector<int>>> read_data_regions_by_chr(const string& filename, const int& Ns, const int& max_cn, int& num_invar_bins, int& num_total_bins, int& seg_size, vector<int>&  obs_num_wgd, int incl_all=1, int is_total=1){
+map<int, vector<vector<int>>> read_data_regions_by_chr(const string& filename, const int& Ns, const int& max_cn, int& num_invar_bins, int& num_total_bins, int& seg_size, vector<int>&  obs_num_wgd, vector<vector<int>>& obs_change_chr, int incl_all=1, int is_total=1){
     cout << "reading data and calculating CNA regions by chromosome" << endl;
     vector<vector<vector<int>>> s_info = read_cn(filename, Ns, num_total_bins, is_total);
-    get_num_wgd(s_info, cn_max, obs_num_wgd);
+    get_num_wgd(s_info, cn_max, obs_num_wgd, is_total);
+    get_change_chr(s_info, obs_change_chr, cn_max, is_total);
+    get_sample_mcn(s_info, sample_max_cn, cn_max, is_total);
     // We now need to convert runs of variable bins into segments of constant cn values, grouped by chromosome
     vector<vector<int>> segs = get_all_segs(s_info, Ns, num_total_bins, num_invar_bins, incl_all, is_total);
     seg_size = segs.size();
@@ -588,3 +755,5 @@ void get_bootstrap_vector_by_chr(map<int, vector<vector<int>>>& data, map<int, v
       vobs[nchr] = obs_chr;
     }
 }
+
+#endif

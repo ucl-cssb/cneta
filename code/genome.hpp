@@ -246,7 +246,7 @@ public:
   }
 
   void print_muts(){
-    cout << "\tMUTATIONS   (" << node_id+1 << ")  dup, deln, crl, crg, wgd:";
+    cout << "\tMUTATIONS   (" << node_id+1 << ")  dup, del, crg, crl, wgd:";
     for(int i=0; i< nmuts.size(); ++i) cout << "\t" << nmuts[i];
     cout << endl;
     //cout << "\t";
@@ -258,16 +258,16 @@ public:
     vector<string> stype;
     stype.push_back("dup");
     stype.push_back("del");
-    stype.push_back("crl");
     stype.push_back("crg");
+    stype.push_back("crl");
     stype.push_back("wgd");
 
-    stream << "MUTATIONS   (" << node_id+1 << ")  dup, deln, crl, crg, wgd:";
+    stream << "MUTATIONS   (" << node_id+1 << ")  dup, del, crg, crl, wgd:";
     for(int i=0; i< nmuts.size(); ++i) stream << "\t" << nmuts[i];
     stream << endl;
     stream << "\teid\ttype\ttime" << endl;
     for(int i=0; i< mutations.size(); ++i){
-      stream << "\t" << mutations[i].edge_id+1 << "\t" << stype[mutations[i].type] << "\t" << mutations[i].btime << "\t" << mutations[i].gtime  << "\t" << mutations[i].chr << "\t" << mutations[i].seg << endl;
+      stream << "\t" << mutations[i].edge_id+1 << "\t" << stype[mutations[i].type] << "\t" << mutations[i].btime << "\t" << mutations[i].gtime  << "\t" << mutations[i].chr + 1 << "\t" << mutations[i].seg << endl;
     }
       stream << endl;
   }
