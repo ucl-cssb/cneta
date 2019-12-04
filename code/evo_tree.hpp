@@ -428,19 +428,16 @@ public:
 
   double get_height2sample(const int& node_id);
   void get_ntime_interval(int k, int& sample1);
+  vector<int> get_ntime_ratio();
   pair<int, double> is_edge(int _start, int _end);
   pair<int, double> is_interval(int i, const map<pair<int, int>, double>& slens);
   double find_interval_len(int& _start, int _end, map<pair<int, int>, double>& slens);
   vector<double> get_edges_from_interval(const vector<double>& intervals, vector<int>& tnodes);
+  vector<double> get_edges_from_ratio(const vector<double>& ratios);
   // The time from beginning to the time of first sample
   double get_total_time(){ return *max_element(node_times.begin(), node_times.end()) - *max_element(tobs.begin(), tobs.end()); }
   double get_tree_height(){ return *max_element(node_times.begin(), node_times.end()); }
 
-
-  // Find branch lengths from ratios of node times
-  vector<double> get_edges_from_ratio(const vector<double>& ratios){
-
-  }
 
   vector<int> get_ancestral_nodes(const int& node_id) const {
     vector<int> ret;
@@ -475,7 +472,7 @@ public:
   }
 
   // Find the tip nodes below one node
-  vector<int> get_tips_below(const int& node_id){
+  vector<int> get_tips_below(int node_id){
       assert(node_id > nleaf-1);
       vector<int> tips;
       for(int i=0; i< nleaf - 1; i++){
@@ -486,6 +483,21 @@ public:
       }
       return tips;
   }
+
+  double get_descendants_min_time(int node_id){
+      if(node_id < nleaf)
+        return node_times[node_id];
+
+      vector<int> descendants = get_tips_below(node_id);
+      assert(descendants.size() >= 1);
+      double min_time = node_times[descendants[0]];
+      for(int j = 1; j < descendants.size(); j++){
+          double tj = node_times[descendants[j]];
+          if(tj < min_time) min_time = tj;
+      }
+      return min_time;
+  }
+
 
   // Find the number of mutations on each branch
   vector<int> get_nmuts(vector<double> mu){
@@ -937,6 +949,25 @@ void evo_tree::get_ntime_interval(int k, int& sample1){
 }
 
 
+// Convert the time constraints among nodes into a set of ratios for bounded estimation
+vector<int> evo_tree::get_ntime_ratio(){
+    vector<int> ratios;
+    ratios.push_back(node_times[root_node_id]);
+
+    for (int i = root_node_id; i < ntotn; i++){
+        // double max_ti = get_descendants_min_time(i);
+        // Find its children
+        Node ni = nodes[i];
+        for(int j = 0; j < ni.daughters.size(); j++){
+            double max_tj = get_descendants_min_time(j);
+            double ratio = (node_times[i] - max_tj) / (node_times[j] - max_tj);
+            ratios.push_back(ratio);
+        }
+    }
+
+    return ratios;
+}
+
 // Check whether if an interval is in the tree. If yes, return the ID.
 pair<int, double> evo_tree::is_edge(int _start, int _end){
   for(int i = 0; i<edges.size(); i++){
@@ -997,6 +1028,39 @@ double evo_tree::find_interval_len(int& _start, int _end, map<pair<int, int>, do
     }
 
     return 0;
+}
+
+
+// Find branch lengths from ratios of node times
+vector<double> evo_tree::get_edges_from_ratio(const vector<double>& ratios){
+    int debug = 1;
+    vector<double> blens;
+    // for root
+    node_times[root_node_id] = ratios[0];
+    for (int i = 1; i < ratios.size(); i++){
+        double ratio = ratios[i];
+        int nid = i + root_node_id;  // corresponding node ID
+        // double max_ti = get_descendants_min_time(nid);
+        // Find its children
+        Node ni = nodes[nid];
+        for(int j = 0; j < ni.daughters.size(); j++){
+            double max_tj = get_descendants_min_time(j);
+            double ntime = ((node_times[nid] - max_tj) / ratio) + max_tj;
+            node_times[j] = ntime;
+        }
+    }
+
+    // Compute branch lengths from time intervals
+
+    if(debug){
+        cout << "branch lengths from ratios:";
+        for(int i = 0; i < blens.size(); i++){
+            cout << "\t" << blens[i];
+        }
+        cout << endl;
+    }
+
+    return  blens;
 }
 
 

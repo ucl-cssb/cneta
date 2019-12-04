@@ -1154,7 +1154,7 @@ void restore_branch_lengths(evo_tree &rtree, DoubleVector &lenvec, int startid =
     if (!node) {
         node = &(rtree.nodes[rtree.root_node_id]);   // root
         cout << "Root is " << node->id + 1 << endl;
-        assert(lenvec.size() == rtree.nodes.size());
+        assert(lenvec.size() == rtree.edges.size());
     }
     FOR_NEIGHBOR_IT(node, dad, it){
     	(*it)->setLength(lenvec, (*it)->id + startid);
@@ -2525,7 +2525,10 @@ int main (int argc, char ** const argv) {
         data = read_data_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins, Nchar, obs_num_wgd, obs_change_chr, incl_all, is_total);
     }
     // cout << "Number of invariant bins " << num_invar_bins << endl;
-
+    if(num_total_bins == num_invar_bins){
+        cout << "There are no variant segments in the input data!" << endl;
+        exit(1);
+    }
     if(use_repeat == 1){
         cout << "   Using site repeats to spped up likelihood computation " << endl;
     }
@@ -2547,6 +2550,7 @@ int main (int argc, char ** const argv) {
         // decomp_table = build_decomp_table_withm();
         cout << "\tNumber of states is " << comps.size() << endl;
         print_decomp_table(decomp_table);
+        print_comps(comps);
     }
 
     string real_tstring = "";
@@ -2646,6 +2650,7 @@ int main (int argc, char ** const argv) {
           string ofile_state = ofile + ".joint.state";
           ofstream fout_state(ofile_state);
           if(model==3){
+
              reconstruct_joint_ancestral_state_decomp(real_tree, fout_state, min_asr);
          }else{
              reconstruct_joint_ancestral_state(real_tree, fout_state, min_asr);

@@ -1471,8 +1471,8 @@ vector<vector<double>> initialize_lnl_table(vector<int>& obs, evo_tree &rtree, i
 }
 
 
-// Create likelihood vectors at the tip node for reconstructing joint ancestral state
-// L_sk_k has one row for each tree node and one column for each possible state
+// Create likelihood vectors and state vectors at the tip node for reconstructing joint ancestral state
+// L_sk_k (S_sk_k) has one row for each tree node and one column for each possible state
 void initialize_asr_table(vector<int>& obs, evo_tree &rtree, map<double, double*>& pmats, vector<vector<double>>& L_sk_k, vector<vector<int>>& S_sk_k, int Ns, int model, int nstate, int is_total){
     int debug = 0;
     if(debug) cout << "Initializing tables for reconstructing joint ancestral state" << endl;
@@ -1500,7 +1500,7 @@ void initialize_asr_table(vector<int>& obs, evo_tree &rtree, map<double, double*
         }
         if(debug) cout << "There are " << tip_states.size() << " states for copy number " << obs[i] << endl;
         for(int j=0; j<nstate; ++j){  // For each possible parent state, find the most likely tip states
-            vector<double> vec_li;
+            vector<double> vec_li(nstate, SMALL_LNL);
             for(int m=0; m<tip_states.size(); ++m){
                 int k = tip_states[m];
                 if(debug) cout << "parent state " << j << ", child state " << k << endl;
@@ -1513,14 +1513,9 @@ void initialize_asr_table(vector<int>& obs, evo_tree &rtree, map<double, double*
                 }
                 if(li > 0) li = log(li);
                 else li = SMALL_LNL;
-                vec_li.push_back(li);
+                vec_li[k] = li;
             }
 
-            // cout << "all likelihoods:";
-            // for(int m = 0; m < vec_li.size(); m++){
-            //     cout << "\t" << vec_li[m];
-            // }
-            // cout << endl;
             int max_i = distance(vec_li.begin(), max_element(vec_li.begin(), vec_li.end()));
             double max_li = *max_element(vec_li.begin(), vec_li.end());
             assert(max_li == vec_li[max_i]);
@@ -1554,10 +1549,11 @@ void initialize_asr_table(vector<int>& obs, evo_tree &rtree, map<double, double*
 
 }
 
-// Create likelihood vectors at the tip node for reconstructing joint ancestral state, for independent chain model
-// L_sk_k has one row for each tree node and one column for each possible state
+
+// Create likelihood vectors and state vectors at the tip node for reconstructing joint ancestral state, for independent chain model
+// L_sk_k (S_sk_k) has one row for each tree node and one column for each possible state
 void initialize_asr_table_decomp(vector<int>& obs, evo_tree &rtree, map<double, double*>& pmats_wgd, map<double, double*>& pmats_chr, map<double, double*>& pmats_seg, vector<vector<double>>& L_sk_k, vector<vector<int>>& S_sk_k, int Ns, int model, int nstate, int is_total){
-    int debug = 0;
+    int debug = 1;
     if(debug) cout << "Initializing tables for reconstructing joint ancestral state" << endl;
     int s_wgd, s_chr, s_seg, s_chr2, s_seg2;
     int e_wgd, e_chr, e_seg, e_chr2, e_seg2;
@@ -1601,8 +1597,8 @@ void initialize_asr_table_decomp(vector<int>& obs, evo_tree &rtree, map<double, 
             k++;
         }
         if(debug) cout << "There are " << tip_states.size() << " states for copy number " << obs[i] << endl;
+
         for(int j=0; j<nstate; ++j){  // For each possible parent state, find the most likely tip states
-            vector<double> vec_li;
             set<vector<int>>::iterator iter = comps.begin();
             // It will move forward the passed iterator by passed value
             advance(iter, j);
@@ -1621,6 +1617,7 @@ void initialize_asr_table_decomp(vector<int>& obs, evo_tree &rtree, map<double, 
                 cout << "   Offset for chr and segment matrices " << delta_chr << "\t" << delta_seg << "\n";
             }
 
+            vector<double> vec_li(nstate, SMALL_LNL);
             for(int m=0; m<tip_states.size(); ++m){
                 int k = tip_states[m];
                 if(debug) cout << "parent state " << j << ", child state " << k << endl;
@@ -1653,8 +1650,7 @@ void initialize_asr_table_decomp(vector<int>& obs, evo_tree &rtree, map<double, 
                     prob_seg2 = pbli_seg[(s_seg2 + delta_seg) + (e_seg2 + delta_seg) * dim_seg];
                     prob_seg_all = prob_seg * prob_seg2;
                 }
-                // double prob = prob_wgd * prob_chr * prob_seg * L_sk_k[ni][si];
-                li = log(prob_wgd) + log(prob_chr_all) + log(prob_seg_all);
+                li = prob_wgd * prob_chr_all * prob_seg_all;
                 if(debug){
                     cout << "End state " << k << "\t" << e_wgd << "\t" << e_chr << "\t" << e_seg << "\t" << e_chr2 << "\t" << e_seg2  << "\n";
                     cout << "Prob for each event " << "\t" << prob_wgd << "\t" << prob_chr << "\t" << prob_seg << "\t" << prob_chr2 << "\t" << prob_seg2 << "\t" << li << "\n";
@@ -1662,14 +1658,9 @@ void initialize_asr_table_decomp(vector<int>& obs, evo_tree &rtree, map<double, 
 
                 if(li > 0) li = log(li);
                 else li = SMALL_LNL;
-                vec_li.push_back(li);
+                vec_li[k] = li;
             }
 
-            cout << "all likelihoods:";
-            for(int m = 0; m < vec_li.size(); m++){
-                cout << "\t" << vec_li[m];
-            }
-            cout << endl;
             int max_i = distance(vec_li.begin(), max_element(vec_li.begin(), vec_li.end()));
             double max_li = *max_element(vec_li.begin(), vec_li.end());
             assert(max_li == vec_li[max_i]);
@@ -1703,12 +1694,25 @@ void initialize_asr_table_decomp(vector<int>& obs, evo_tree &rtree, map<double, 
 
 }
 
+void print_comps(set<vector<int>> comps){
+    cout << "\nAll possible states for copy number decomposition in order:" << endl;
+    int count = 0;
+    for (auto c : comps){
+        count += 1;
+        cout << "\tstate " << count << endl;
+        for(int i = 0; i < c.size(); i++){
+            cout << "\t" << c[i];
+        }
+        cout << endl;
+    }
+}
+
 
 void print_decomp_table(map<int, set<vector<int>>>& decomp_table){
     int count = 0;
     for(auto item : decomp_table){
         set<vector<int>> comp = item.second;
-        cout << "\nState " << item.first << endl;
+        cout << "\nCopy number " << item.first << endl;
         for (auto c : comp){
             count += 1;
             for(int i = 0; i < c.size(); i++){
@@ -1862,7 +1866,21 @@ map<int, vector<int>> extract_tree_ancestral_state(evo_tree &rtree, const vector
     }
 
     int parent_state = 2;
-    if(model == 2)  parent_state = 4;
+    if(model == 2){
+        parent_state = 4;
+    }
+    if(model == 3) {
+        int k = 0;
+        for (auto v : comps){
+            // if(debug) cout << k << "\t" << v[0] << "\t" << v[1] << "\t" << v[2] << "\t" << v[3] << "\t" << v[4] << endl;
+            bool zeros = all_of(v.begin(), v.end(), [](int i) { return i==0; });
+            if(zeros){
+                break;
+            }
+            k++;
+        }
+        parent_state = k;
+    }
     asr_states[Ns+1] = parent_state;
     if(is_total){
         vector<int> cns{2};
@@ -1885,15 +1903,35 @@ map<int, vector<int>> extract_tree_ancestral_state(evo_tree &rtree, const vector
         if(debug){
             cout << "\t\tnode " << nid + 1 << " with state " << state  << " and parent " << parent + 1 << " whose state is " << parent_state << endl;
         }
+
         vector<int> cns;
-        if(is_total == 1){
-            int cn = state_to_total_cn(state, cn_max);
-            cns.push_back(cn);
-        }else{
-            int cnA, cnB;
-            state_to_allele_cn(state, cn_max, cnA, cnB);
-            cns.push_back(cnA);
-            cns.push_back(cnB);
+        if(model==3){
+            // Find the decomposition with state
+            set<vector<int>>::iterator iter = comps.begin();
+            advance(iter, state);
+            vector<int> c = *iter;
+            set<int> sums;
+            for(int m1 = 0; m1 <= m_max; m1++){
+                for(int m2 = 0; m2 <= m_max; m2++){
+                    int cn = pow(2, c[0] + 1) + m1 * c[1] + c[2] + 2 * m2 * c[3] + 2 * c[4];
+                    // only add unique copy number
+                    sums.insert(cn);
+                }
+            }
+            for(auto s : sums){
+                cns.push_back(s);
+            }
+        }
+        else{
+            if(is_total == 1){
+                int cn = state_to_total_cn(state, cn_max);
+                cns.push_back(cn);
+            }else{
+                int cnA, cnB;
+                state_to_allele_cn(state, cn_max, cnA, cnB);
+                cns.push_back(cnA);
+                cns.push_back(cnB);
+            }
         }
         asr_cns[nid] = cns;
     }
@@ -1997,18 +2035,18 @@ double get_prob_children(vector<vector<double>>& L_sk_k, evo_tree &rtree, double
 
 
 // Find the most likely state for a node under each possible state, assuming current node has state nsk and parent node (connected by branch of length blen) has state np
-double get_max_prob_children(vector<vector<double>>& L_sk_k, vector<vector<int>>& S_sk_k, evo_tree &rtree, double* pblen, int k, int nstate, int np, int ni, int nj, int blen, int model){
+double get_max_prob_children(vector<vector<double>>& L_sk_k, vector<vector<int>>& S_sk_k, evo_tree &rtree, double* pblen, int k, int nstate, int sp, int ni, int nj, int blen, int model){
     int debug = 0;
 
     vector<double> vec_li;
     double li = 0;
-    // loop over possible si for a fixed state of parent (np)
+    // loop over possible si for a fixed state of parent (sp)
     for(int si=0; si<nstate; ++si){
         if (model == 0){
-          li = get_transition_prob(rtree.mu, blen, np, si);
+          li = get_transition_prob(rtree.mu, blen, sp, si);
         }
         else{
-          li = pblen[np + si * nstate];
+          li = pblen[sp + si * nstate];
         }
 
         if(debug){
@@ -2030,7 +2068,7 @@ double get_max_prob_children(vector<vector<double>>& L_sk_k, vector<vector<int>>
     int max_i = distance(vec_li.begin(), max_element(vec_li.begin(), vec_li.end()));
     double max_li = *max_element(vec_li.begin(), vec_li.end());
     assert(max_li == vec_li[max_i]);
-    S_sk_k[k][np] = max_i;
+    S_sk_k[k][sp] = max_i;
 
     if(debug){
         cout << "all likelihoods:";
@@ -2038,7 +2076,7 @@ double get_max_prob_children(vector<vector<double>>& L_sk_k, vector<vector<int>>
             cout << "\t" << vec_li[i];
         }
         cout << endl;
-        cout << "for node: k " << k + 1 << ", parent state " << np << ", max state is " << max_i << " with probability " << exp(max_li) << endl;
+        cout << "for node: k " << k + 1 << ", parent state " << sp << ", max state is " << max_i << " with probability " << exp(max_li) << endl;
     }
 
     return max_li;
@@ -2458,7 +2496,6 @@ double get_prob_children_decomp2(vector<vector<double>>& L_sk_k, evo_tree &rtree
                 prob_seg2 = pbli_seg[(s_seg2 + delta_seg) + (e_seg2 + delta_seg) * dim_seg];
                 prob_seg_all = prob_seg * prob_seg2;
             }
-            // double prob = prob_wgd * prob_chr * prob_seg * L_sk_k[ni][si];
             prob = prob_wgd * prob_chr_all * prob_seg_all * L_sk_k[ni][si];
             if(debug){
                 cout << "End state " << si << "\t" << e_wgd << "\t" << e_chr << "\t" << e_seg << "\t" << e_chr2 << "\t" << e_seg2 << "\n";
@@ -2511,6 +2548,98 @@ double get_prob_children_decomp2(vector<vector<double>>& L_sk_k, evo_tree &rtree
 
     return Li * Lj;
 }
+
+
+// Assume the likelihood table is for each combination of states
+double get_max_children_decomp2(vector<vector<double>>& L_sk_k, vector<vector<int>>& S_sk_k, evo_tree &rtree, set<vector<int>>& comps, int k, int nstate, double* pbli_wgd, double* pbli_chr, double* pbli_seg, int dim_wgd, int dim_chr, int dim_seg, int sp, int ni, int nj, int blen){
+    int debug = 0;
+    int s_wgd, s_chr, s_seg, s_chr2, s_seg2;
+    int e_wgd, e_chr, e_seg, e_chr2, e_seg2;
+    double prob_wgd, prob_chr, prob_seg, prob_chr2, prob_seg2, prob_chr_all, prob_seg_all;
+    // Each copy number is decomposed into a set of 3-tuples
+    set<vector<int>>::iterator iter = comps.begin();
+    advance(iter, sp);
+    vector<int> s = *iter;
+    s_wgd = s[0];
+    s_chr = s[1];
+    s_seg = s[2];
+    s_chr2 = s[3];
+    s_seg2 = s[4];
+    // The indices for chromosome and segment matrix have to be ajusted
+    int delta_chr = (dim_chr - 1)/2;
+    int delta_seg = (dim_seg - 1)/2;
+
+    if(debug){
+        cout << "Starting state " << sp << "\t" << s_wgd << "\t" << s_chr << "\t" << s_seg << "\t" << s_chr2 << "\t" << s_seg2 << "\n";
+        cout << "   Offset for chr and segment matrices " << delta_chr << "\t" << delta_seg << "\n";
+    }
+
+    vector<double> vec_li;
+    double li = 0;
+    int si = 0;
+    for(auto e : comps){
+        prob_wgd = 1;
+        prob_chr = 1;
+        prob_seg = 1;
+        prob_chr2 = 1;
+        prob_seg2 = 1;
+        prob_chr_all = 1;
+        prob_seg_all = 1;
+
+        e_wgd = e[0];
+        e_chr = e[1];
+        e_seg = e[2];
+        e_chr2 = e[3];
+        e_seg2 = e[4];
+        if(dim_wgd > 1) prob_wgd = pbli_wgd[s_wgd + e_wgd * dim_wgd];
+        if(dim_chr > 1){
+            prob_chr = pbli_chr[(s_chr + delta_chr) + (e_chr + delta_chr) * dim_chr];
+            prob_chr2 = pbli_chr[(s_chr2 + delta_chr) + (e_chr2 + delta_chr) * dim_chr];
+            prob_chr_all = prob_chr * prob_chr2;
+        }
+        if(dim_seg > 1){
+            prob_seg = pbli_seg[(s_seg + delta_seg) + (e_seg + delta_seg) * dim_seg];
+            prob_seg2 = pbli_seg[(s_seg2 + delta_seg) + (e_seg2 + delta_seg) * dim_seg];
+            prob_seg_all = prob_seg * prob_seg2;
+        }
+        li = prob_wgd * prob_chr_all * prob_seg_all;
+
+        if(debug){
+            cout << "End state " << si << "\t" << e_wgd << "\t" << e_chr << "\t" << e_seg << "\t" << e_chr2 << "\t" << e_seg2 << "\n";
+            cout << "Prob for each event " << "\t" << prob_wgd << "\t" << prob_chr << "\t" << prob_seg << "\t" << prob_chr2 << "\t" << prob_seg2 << "\t" << li  << "\n";
+        }
+
+        if(li > 0){
+            li = log(li);
+        }
+        else li = SMALL_LNL;
+        li += (L_sk_k[ni][si]);
+        li += (L_sk_k[nj][si]);
+
+        if(debug) cout << "\t\tscoring: Li\t" << li << endl;
+        if(std::isnan(li) || li < SMALL_LNL) li = SMALL_LNL;
+        if(debug) cout << "\t\trevised scoring: Li\t" << li << endl;
+        vec_li.push_back(li);
+
+        si++;
+     }
+    int max_i = distance(vec_li.begin(), max_element(vec_li.begin(), vec_li.end()));
+    double max_li = *max_element(vec_li.begin(), vec_li.end());
+    assert(max_li == vec_li[max_i]);
+    S_sk_k[k][sp] = max_i;
+
+    if(debug){
+        cout << "all likelihoods:";
+        for(int i = 0; i < vec_li.size(); i++){
+            cout << "\t" << vec_li[i];
+        }
+        cout << endl;
+        cout << "for node: k " << k + 1 << ", parent state " << sp << ", max state is " << max_i << " with probability " << exp(max_li) << endl;
+    }
+
+    return max_li;
+}
+
 
 // Get the likelihood on one site of a chromosome (assuming higher level events on nodes)
 // z: possible changes in copy number caused by chromosome gain/loss
@@ -2577,16 +2706,15 @@ void get_ancestral_states_site(vector<vector<double>>& L_sk_k, vector<vector<int
         //loop over possible values of sk
         if(k == 2 * Ns){    // root node is always normal, for edge (Ns+1, 2Ns)
             if(debug) cout << "Getting states for node MRCA " << k + 1 << endl;
-            int np = 2;
-            if(model==2) np = 4;
-            if(debug) cout << "likelihood for state " << np << endl;
-            L_sk_k[k][np] = get_max_prob_children(L_sk_k, S_sk_k, rtree, pblen, k, nstate, np, ni, nj, blen, model);
+            int sp = 2;
+            if(model==2) sp = 4;
+            if(debug) cout << "likelihood for state " << sp << endl;
+            L_sk_k[k][sp] = get_max_prob_children(L_sk_k, S_sk_k, rtree, pblen, k, nstate, sp, ni, nj, blen, model);
         }
         else{
-            for(int sk=0; sk<nstate; ++sk){  // looping over all possible states of its parent
-                if(debug) cout << "likelihood for state " << sk << endl;
-                if(sk < 0 || sk >= nstate) continue;
-                L_sk_k[k][sk] = get_max_prob_children(L_sk_k, S_sk_k, rtree, pblen, k, nstate, sk, ni, nj, blen, model);
+            for(int sp=0; sp<nstate; ++sp){  // looping over all possible states of its parent
+                if(debug) cout << "likelihood for state " << sp << endl;
+                L_sk_k[k][sp] = get_max_prob_children(L_sk_k, S_sk_k, rtree, pblen, k, nstate, sp, ni, nj, blen, model);
             }
         }
   }
@@ -2660,6 +2788,66 @@ void get_likelihood_site_decomp(vector<vector<double>>& L_sk_k, evo_tree &rtree,
     print_tree_lnl(rtree, L_sk_k, nstate);
   }
 }
+
+// Get the ancestral state on one site of a chromosome
+// Assuming each observed copy number is composed of three type of events.
+// Sum over all possible states for initial and final nodes
+// Allow at most one WGD event along a branch
+void get_ancestral_states_site_decomp(vector<vector<double>>& L_sk_k, vector<vector<int>>& S_sk_k, evo_tree &rtree, const vector<int>& knodes, map<double, double*>& pmats_wgd, map<double, double*>& pmats_chr, map<double, double*>& pmats_seg, int dim_wgd, int dim_chr, int dim_seg, int nstate){
+  int debug = 0;
+  if(debug){
+      cout << "Getting ancestral state for one site under independent Markov chain model" << endl;
+      cout << dim_wgd << "\t" << dim_chr << "\t"  << dim_seg << "\t"  << nstate << endl;
+  }
+
+  for(int kn=0; kn<knodes.size(); ++kn){
+        int k = knodes[kn];
+        int np = rtree.edges[rtree.nodes[k].e_in].start;
+        int ni = rtree.edges[rtree.nodes[k].e_ot[0]].end;
+        int nj = rtree.edges[rtree.nodes[k].e_ot[1]].end;
+        double blen = rtree.edges[rtree.nodes[k].e_in].length;
+
+        double *pbli_wgd;
+        double *pbli_chr;
+        double *pbli_seg;
+
+        if(dim_wgd > 1){
+            pbli_wgd = pmats_wgd[blen];
+        }
+        if(dim_chr > 1){
+            pbli_chr = pmats_chr[blen];
+        }
+        if(dim_seg > 1){
+            pbli_seg = pmats_seg[blen];
+        }
+
+        if(debug) cout << "node:" << np + 1 << " -> " << rtree.nodes[k].id + 1 << " -> " << ni+1 << " , "  <<  nj+1 << " , " << blen << endl;
+
+        // loop over possible observed states of start nodes
+        if(k == Ns + 1){    // root node is always normal
+            if(debug) cout << "Getting states for node MRCA " << k + 1 << endl;
+            int sp = 0;
+            for(auto v : comps){
+                bool zeros = all_of(v.begin(), v.end(), [](int i) { return i==0; });
+                if(zeros){
+                    L_sk_k[k][sp] = get_max_children_decomp2(L_sk_k, S_sk_k, rtree, comps, k, nstate, pbli_wgd, pbli_chr, pbli_seg, dim_wgd, dim_chr, dim_seg, sp, ni, nj, blen);
+                    break;
+                }
+                sp++;
+            }
+        }
+        else{
+            for(int sp=0; sp<nstate; ++sp){
+                L_sk_k[k][sp] = get_max_children_decomp2(L_sk_k, S_sk_k, rtree, comps, k, nstate, pbli_wgd, pbli_chr, pbli_seg,  dim_wgd, dim_chr, dim_seg, sp, ni, nj, blen);
+            }
+        }
+  }
+  if(debug){
+    print_tree_lnl(rtree, L_sk_k, nstate);
+    print_tree_state(rtree, S_sk_k, nstate);
+  }
+}
+
 
 // Infer the copy number of the MRCA given a tree at a site, assuming independent Markov chains
 double reconstruct_marginal_ancestral_state_decomp(evo_tree &rtree, ofstream& fout, double min_asr){
@@ -2832,6 +3020,7 @@ double reconstruct_marginal_ancestral_state_decomp(evo_tree &rtree, ofstream& fo
           // It will move forward the passed iterator by passed value
           advance(iter, state);
           vector<int> c = *iter;
+          // There may be multiple possible copy numbers given different coeffients for chromosome-level changes
           int cn = pow(2, c[0] + 1) +  c[1] + c[2] + 2 * c[3] + 2 * c[4];
 
           cn_mrca.push_back(cn);
@@ -3018,13 +3207,15 @@ double reconstruct_marginal_ancestral_state(evo_tree &rtree, ofstream& fout, dou
 
 
 // Infer the copy number of all internal nodes given a tree at a site, assuming independent Markov chains
-double reconstruct_joint_ancestral_state_decomp(evo_tree &rtree, ofstream& fout, double min_asr){
+void reconstruct_joint_ancestral_state_decomp(evo_tree &rtree, ofstream& fout, double min_asr){
     int debug = 1;
     if(debug) cout << "\treconstruct joint ancestral state with independent chain model" << endl;
 
     if(!is_tree_valid(rtree, cons)){
-        return SMALL_LNL;
+        return;
     }
+
+    int max_id = 2 * Ns;
 
     // For WGD model
     int dim_wgd = max_wgd + 1;
@@ -3161,36 +3352,36 @@ double reconstruct_joint_ancestral_state_decomp(evo_tree &rtree, ofstream& fout,
           vector<int> obs = vobs[nchr][nc];
           vector<vector<double>> L_sk_k(rtree.ntotn, vector<double>(nstate,0));
           vector<vector<int>> S_sk_k(rtree.ntotn, vector<int>(nstate,0));
-          // if(use_repeat){
-          //     if(sites_lnl_map.find(obs) == sites_lnl_map.end()){
-          //         initialize_asr_table(obs, rtree, pmats, L_sk_k, S_sk_k, Ns, model, nstate, is_total);
-          //         get_ancestral_states_site(L_sk_k, S_sk_k, rtree, knodes, pmats, nstate);
-          //     }else{
-          //         if(debug) cout << "\t\tsites repeated" << endl;
-          //         L_sk_k = sites_lnl_map[obs];
-          //     }
-          // }else{
-          //     initialize_asr_table(obs, rtree, pmats, L_sk_k, S_sk_k, Ns, model, nstate, is_total);
-          //     get_ancestral_states_site(L_sk_k, S_sk_k, rtree, knodes, pmats, nstate);
-          // }
-          //
-          // map<int, int> asr_states;
-          // map<int, vector<int>> asr_cns = extract_tree_ancestral_state(rtree, L_sk_k, S_sk_k, Ns, model, asr_states);
-          // for(int nid = max_id; nid > Ns + 1; nid--){
-          //     vector<int> cns = asr_cns[nid];
-          //     int state = asr_states[nid];
-          //     string line = to_string(nid+1) + "\t" + to_string(nchr) + "_" + to_string(nc);
-          //     if(cns.size()>1){
-          //         line += "\t" + to_string(cns[0]) + "," + to_string(cns[1]);
-          //     }else{
-          //       line += "\t" + to_string(cns[0]);
-          //     }
-          //     line += "\t" + to_string(state) + "\t" + to_string(pow(10, L_sk_k[nid][state]));
-          //     for(int i = 0; i < L_sk_k[nid].size(); i++){
-          //         line += "\t" + to_string(pow(10, L_sk_k[nid][i]));
-          //     }
-          //     fout << setprecision(dbl::max_digits10) << line << endl;
-          // }
+          if(use_repeat){
+              if(sites_lnl_map.find(obs) == sites_lnl_map.end()){
+                  initialize_asr_table_decomp(obs, rtree, pmats_wgd, pmats_chr, pmats_seg, L_sk_k, S_sk_k, Ns, model, nstate, is_total);
+                  get_ancestral_states_site_decomp(L_sk_k, S_sk_k, rtree, knodes, pmats_wgd, pmats_chr, pmats_seg, dim_wgd, dim_chr, dim_seg, nstate);
+              }else{
+                  if(debug) cout << "\t\tsites repeated" << endl;
+                  L_sk_k = sites_lnl_map[obs];
+              }
+          }else{
+              initialize_asr_table_decomp(obs, rtree, pmats_wgd, pmats_chr, pmats_seg, L_sk_k, S_sk_k, Ns, model, nstate, is_total);
+              get_ancestral_states_site_decomp(L_sk_k, S_sk_k, rtree, knodes, pmats_wgd, pmats_chr, pmats_seg, dim_wgd, dim_chr, dim_seg, nstate);
+          }
+
+          map<int, int> asr_states;
+          map<int, vector<int>> asr_cns = extract_tree_ancestral_state(rtree, L_sk_k, S_sk_k, Ns, model, asr_states);
+          for(int nid = max_id; nid > Ns + 1; nid--){
+              vector<int> cns = asr_cns[nid];
+              int state = asr_states[nid];
+              string line = to_string(nid+1) + "\t" + to_string(nchr) + "_" + to_string(nc);
+              if(cns.size()>1){
+                  line += "\t" + to_string(cns[0]) + "," + to_string(cns[1]);
+              }else{
+                line += "\t" + to_string(cns[0]);
+              }
+              line += "\t" + to_string(state) + "\t" + to_string(pow(10, L_sk_k[nid][state]));
+              for(int i = 0; i < L_sk_k[nid].size(); i++){
+                  line += "\t" + to_string(pow(10, L_sk_k[nid][i]));
+              }
+              fout << setprecision(dbl::max_digits10) << line << endl;
+          }
       }
     } // for each chromosome
 
@@ -3213,22 +3404,22 @@ double reconstruct_joint_ancestral_state_decomp(evo_tree &rtree, ofstream& fout,
         free(m.second);
     }
 
-    return logL;
 }
 
 
 // Infer the copy number of all internal nodes given a tree at a site, assuming only segment duplication/deletion
 void reconstruct_joint_ancestral_state(evo_tree &rtree, ofstream &fout, double min_asr){
     int debug = 0;
+    if(debug) cout << "\treconstruct joint ancestral state" << endl;
+
     if(!is_tree_valid(rtree, cons)){
         return;
     }
-    if(debug) cout << "\treconstruct joint ancestral state" << endl;
 
     // For copy number instantaneous changes
     int nstate = cn_max + 1;
     if(model==2) nstate = (cn_max + 1) * (cn_max + 2) / 2;
-    int max_id = 2 * (Ns + 1) - 2;
+    int max_id = 2 * Ns;
 
     string header="node\tsite\tcn\tstate\tmax probability";
     for(int i = 0; i < nstate; i++){
@@ -3310,7 +3501,7 @@ void reconstruct_joint_ancestral_state(evo_tree &rtree, ofstream &fout, double m
               get_ancestral_states_site(L_sk_k, S_sk_k, rtree, knodes, pmats, nstate);
           }
 
-          map<int, int> asr_states;
+          map<int, int> asr_states;     // The state ID used in rate matrix
           map<int, vector<int>> asr_cns = extract_tree_ancestral_state(rtree, L_sk_k, S_sk_k, Ns, model, asr_states);
           for(int nid = max_id; nid > Ns + 1; nid--){
               vector<int> cns = asr_cns[nid];
@@ -4372,6 +4563,36 @@ void update_tree(evo_tree &rtree, const vector<edge>& enew, double *x){
     rtree = evo_tree(new_tree);
 }
 
+
+vector<double> get_blens_from_intervals(evo_tree &rtree, double *x){
+    vector<double> intervals;
+    // The estimated value may be nan
+    for(int i=0; i < rtree.nleaf - 1; i++){
+        double len = x[i+1];
+        bool is_nan = std::isnan(len);
+        if ( is_nan || (!is_nan && len < SMALL_BLEN)){
+           len = SMALL_BLEN;
+        }
+        intervals.push_back(len);
+    }
+    // vector<double> intervals(x, x + sizeof x / sizeof x[0]);
+    if(debug){
+        rtree.print();
+        cout << "Current length of intervals: " << endl;
+        for(int i = 0; i<intervals.size(); i++){
+            cout << i + 1 << "\t" << "\t" << intervals[i] << endl;
+        }
+        cout << "Corresponding " << rtree.nleaf << " nodes: ";
+        for(int i = 0; i < rtree.top_tnodes.size(); i++){
+            cout << rtree.top_tnodes[i] + 1 << "\t" << "Prevous node time " << rtree.node_times[rtree.top_tnodes[i]] << endl;
+        }
+    }
+
+    vector<double> blens = rtree.get_edges_from_interval(intervals, rtree.top_tnodes);
+
+    return blens;
+}
+
 // Update the tree after each iteration in the BFGS optimization
 // Estimate time intervals rather than branch length in order to avoid negative terminal branch lengths
 // Sort node times in increasing order and take the first Ns intervals
@@ -4390,44 +4611,34 @@ void get_variables_ntime(evo_tree &rtree, double *x){
           enew[i].length = x[i + 1];
         }
     }else{
-      vector<double> intervals;
-      // The estimated value may be nan
-      for(int i=0; i < rtree.nleaf - 1; i++){
-          double len = x[i+1];
-          bool is_nan = std::isnan(len);
-          if ( is_nan || (!is_nan && len < SMALL_BLEN)){
-             len = SMALL_BLEN;
-          }
-          intervals.push_back(len);
-      }
-      // vector<double> intervals(x, x + sizeof x / sizeof x[0]);
-      if(debug){
-          rtree.print();
-          cout << "Current length of intervals: " << endl;
-          for(int i = 0; i<intervals.size(); i++){
-              cout << i + 1 << "\t" << "\t" << intervals[i] << endl;
-          }
-          cout << "Corresponding " << rtree.nleaf << " nodes: ";
-          for(int i = 0; i < rtree.top_tnodes.size(); i++){
-              cout << rtree.top_tnodes[i] + 1 << "\t" << "Prevous node time " << rtree.node_times[rtree.top_tnodes[i]] << endl;
-          }
-      }
-
-      // int sample1 = 0;
-      vector<double> blens = rtree.get_edges_from_interval(intervals, rtree.top_tnodes);
-      // vector<double> blens = rtree.get_edges_from_ratio(intervals, rtree.top_tnodes);
-      // randomly change the branch lengths to satifisty the constraints
-      if(debug){
-          cout << "Get back branch lengths from estimated intervals: " << endl;
+        // vector<double> blens = get_blens_from_intervals(rtree, x);
+        vector<double> ratios;
+        // The estimated value may be nan
+        for(int i=0; i < rtree.nleaf - 1; i++){
+            double val = x[i+1];
+            ratios.push_back(val);
+        }
+        // vector<double> intervals(x, x + sizeof x / sizeof x[0]);
+        if(debug){
+            rtree.print();
+            cout << "Current values of estimated variables: " << endl;
+            for(int i = 0; i<ratios.size(); i++){
+                cout << i + 1 << "\t" << "\t" << ratios[i] << endl;
+            }
+        }
+        vector<double> blens = rtree.get_edges_from_ratio(ratios);
+        // randomly change the branch lengths to satifisty the constraints
+        if(debug){
+          cout << "Get back branch lengths from estimated variables: " << endl;
           cout << "New branch lengths: ";
           for(int i = 0; i<blens.size(); i++){
               cout << i + 1 << "\t" << "\t" << blens[i] << endl;
           }
-      }
-      assert(blens.size() == rtree.nedge);
-      for(int i=0; i<rtree.nedge; ++i){
+        }
+        assert(blens.size() == rtree.nedge);
+        for(int i=0; i<rtree.nedge; ++i){
           enew[i].length = blens[i];
-      }
+        }
     }
 
     // cout << "rtree before" << endl;
@@ -4980,61 +5191,83 @@ double L_BFGS_B(evo_tree &rtree, int n, double* x, double* l, double* u, double 
 }
 
 
+void init_branch_by_interval(double *variables, double *upper_bound, double *lower_bound, evo_tree &rtree, int npar_ne){
+    int debug = 0;
+    // estimate the top Ns intervals, which will be dynamic in different trees
+    if(debug){
+        cout << "Initializing the time intervals" << endl;
+    }
+    int sample1 = 0;
+    rtree.get_ntime_interval(rtree.nleaf - 1, sample1);
+    // If max_len is very small, this tree seems not feasible with current variables
+    if( rtree.tobs[sample1] > 0 ){
+        cout << "The first tip node in the proposed tree " << sample1 + 1 << " is not a first sample! " << endl;
+    }
+
+    for(int i=0; i< rtree.top_tinvls.size(); ++i){
+      variables[i+1] = rtree.top_tinvls[i];
+      lower_bound[i+1] = SMALL_BLEN;
+      // cout << "Starting node of the interval " << rtree.top_tnodes[i] << "\t" << rtree.node_times[rtree.top_tnodes[i]] << endl;
+      upper_bound[i+1] = age / 2;
+      // When the interval is below the first sample, it should be smaller than the time difference between tip below it and 1st sample
+      if(rtree.node_times[rtree.top_tnodes[i]] > rtree.node_times[sample1]){
+          // Find the nodes below this node and gets its time
+          // cout << "Tips below: " << endl;
+          vector<int> tips = rtree.get_tips_below(rtree.top_tnodes[i]);
+          vector<double> tips_obs;
+          for(int i=0; i<tips.size(); i++){
+              tips_obs.push_back(rtree.tobs[tips[i]]);
+              // cout << "\t" << tips[i] << "\t" << tips_obs[i] << endl;
+          }
+          double max_len = *min_element(tips_obs.begin(), tips_obs.end());
+          // If max_len is very small, this tree seems not feasible
+          if( fabs(max_len - 0) < SMALL_VAL){
+              cout << "The terminal branch length under " << rtree.top_tnodes[i] + 1 << " in the proposed tree will not be valid! " << endl;
+              upper_bound[i+1] = SMALL_BLEN + SMALL_BLEN;
+              // return rtree;
+          }else{
+              upper_bound[i+1] = max_len;
+          }
+      }
+      if(debug){
+          cout << "Top " << Ns << " time intervals: ";
+          for(int i = 0; i < rtree.top_tinvls.size(); i++){
+              cout << "\t" << rtree.top_tinvls[i];
+          }
+          cout<< endl;
+          cout << "Corresponding " << Ns + 1 << " nodes: ";
+          for(int i = 0; i < rtree.top_tnodes.size(); i++){
+              cout << rtree.top_tnodes[i] + 1 << "\t" << "\t" << rtree.node_times[rtree.top_tnodes[i]] << endl;
+          }
+      }
+}
+}
+
 // initialise the best guess branch length and mu if required
 // void initialise_variables_BFGS(double *variables, double *upper_bound, double *lower_bound, evo_tree &rtree, int ndim, int cons, int maxj, int npar_ne, int age, int only_seg){
-void initialise_variables_BFGS(double *variables, double *upper_bound, double *lower_bound, evo_tree &rtree, int ndim, int npar_ne){
+void initialise_variables_BFGS(double *variables, double *upper_bound, double *lower_bound, evo_tree &rtree, int npar_ne){
     int debug = 0;
 
     if(cons == 1){
-        // estimate the top Ns intervals, which will be dynamic in different trees
         if(debug){
-            cout << "Initializing the time intervals" << endl;
+            cout << "Initializing variables related to branch length" << endl;
         }
-        int sample1 = 0;
-        rtree.get_ntime_interval(rtree.nleaf - 1, sample1);
-        // If max_len is very small, this tree seems not feasible with current variables
-        if( rtree.tobs[sample1] > 0 ){
-            cout << "The first tip node in the proposed tree " << sample1 + 1 << " is not a first sample! " << endl;
+        init_branch_by_interval(variables, upper_bound, lower_bound, rtree, npar_ne);
+        vector<int> ratios = rtree.get_ntime_ratio();
+        assert(ratios.size() == npar_ne);
+        for(int i=0; i<npar_ne; ++i){
+          variables[i+1] = ratios[i];
+          lower_bound[i+1] = 0;
+          upper_bound[i+1] = 1;
+        }
+        if(debug){
+            cout << "time ratios obtained from node times: ";
+            for(int i = 0; i < ratios.size(); i++){
+                cout << "\t" << ratios[i];
+            }
+            cout << endl;
         }
 
-        for(int i=0; i< rtree.top_tinvls.size(); ++i){
-          variables[i+1] = rtree.top_tinvls[i];
-          lower_bound[i+1] = SMALL_BLEN;
-          // cout << "Starting node of the interval " << rtree.top_tnodes[i] << "\t" << rtree.node_times[rtree.top_tnodes[i]] << endl;
-          upper_bound[i+1] = age / 2;
-          // When the interval is below the first sample, it should be smaller than the time difference between tip below it and 1st sample
-          if(rtree.node_times[rtree.top_tnodes[i]] > rtree.node_times[sample1]){
-              // Find the nodes below this node and gets its time
-              // cout << "Tips below: " << endl;
-              vector<int> tips = rtree.get_tips_below(rtree.top_tnodes[i]);
-              vector<double> tips_obs;
-              for(int i=0; i<tips.size(); i++){
-                  tips_obs.push_back(rtree.tobs[tips[i]]);
-                  // cout << "\t" << tips[i] << "\t" << tips_obs[i] << endl;
-              }
-              double max_len = *min_element(tips_obs.begin(), tips_obs.end());
-              // If max_len is very small, this tree seems not feasible
-              if( fabs(max_len - 0) < SMALL_VAL){
-                  cout << "The terminal branch length under " << rtree.top_tnodes[i] + 1 << " in the proposed tree will not be valid! " << endl;
-                  upper_bound[i+1] = SMALL_BLEN + SMALL_BLEN;
-                  // return rtree;
-              }else{
-                  upper_bound[i+1] = max_len;
-              }
-          }
-        }
-
-        if(debug){
-            cout << "Top " << Ns << " time intervals: ";
-            for(int i = 0; i < rtree.top_tinvls.size(); i++){
-                cout << "\t" << rtree.top_tinvls[i];
-            }
-            cout<< endl;
-            cout << "Corresponding " << Ns + 1 << " nodes: ";
-            for(int i = 0; i < rtree.top_tnodes.size(); i++){
-                cout << rtree.top_tnodes[i] + 1 << "\t" << "\t" << rtree.node_times[rtree.top_tnodes[i]] << endl;
-            }
-        }
     }else{
         for(int i=0; i<npar_ne; ++i){
           variables[i+1] = rtree.edges[i].length;
@@ -5101,7 +5334,7 @@ evo_tree max_likelihood_BFGS(evo_tree &rtree, double &minL, const double toleran
     upper_bound = new double[ndim+1];
     lower_bound = new double[ndim+1];
     // initialise_variables_BFGS(variables, upper_bound, lower_bound, rtree, ndim, cons, maxj, npar_ne, age, only_seg);
-    initialise_variables_BFGS(variables, upper_bound, lower_bound, rtree, ndim, npar_ne);
+    initialise_variables_BFGS(variables, upper_bound, lower_bound, rtree, npar_ne);
 
     if(debug){
         cout << "Variables to estimate: " << endl;
