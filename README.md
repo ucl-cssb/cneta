@@ -25,6 +25,7 @@ This package is mostly written in C++. There are a few scripts written in R and 
 * Required R libraries
   * plot-cns.R: `copynumber`, `reshape`, `tools`, `tidyr`, `dplyr`, `purrr`
   * plot-trees-all.R: `ggtree`, `ape`, `tools`, `ggplot2`
+  * tree_comparison.R: `phangorn`
 
 * Required Python libraries
   * newick2elist.py: networkx
@@ -43,7 +44,7 @@ make
 make install
 ```
 
-### How to required R libraries
+### How to install required R libraries
 ```
 if (!requireNamespace("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
@@ -61,7 +62,7 @@ installed.packages()[, c("Package", "LibPath")]
 
 ## Building C++
 OpenMP is used to accelerate tree search in svtreeml.
-To turned off OpenMP, please set "omp =" in makefile and comment out "#include <omp.h>" in svtreeml.cpp.
+To turned off OpenMP, please set "omp =" in makefile.
 
 To build the C++ code, change into the code directory and type make:
 ```shell
@@ -88,6 +89,7 @@ There are three Markov models of evolution for the copy number profiles:
 * 0: Mk model (extension of JC69 model)
 * 1: model of total copy number
 * 2: model of allele-specific copy number
+* 3: model of independent Markov chains (when WGD and chromosome gain/loss are incorporated)
 
 There are two ways of simulating mutations along a tree:
 1. simulating waiting times along a branch (default)
@@ -96,9 +98,11 @@ There are two ways of simulating mutations along a tree:
 Please see run-sveta.sh to learn how to set different parameters
 
 ## Input
-* --epop Ne: The initial coalescence tree has a expected tree height smaller than 2. Ne can be used to scale the tree height by Ne, by multipling each branch length with Ne.
+* --epop Ne: Ne is used to scale the tree height so that the branch length is measured in the unit of year, by multipling each branch length with Ne.
 
 * --tiff delta_t: On the initial tree, the tip nodes have the same time. This parameter can be used to introduce different times at the tip nodes. The terminal branches are increased by random multiples of delta_t. The maximum multiple is the number of samples.
+
+* --cn_max cn_max: The maximum copy number allowed in the program depends on the heap space.
 
 
 ## Output
@@ -119,11 +123,18 @@ File *-rel-times.txt can provide the timing information of tip nodes to allow et
 
 Files *-tree.* provide the real tree, which can be used for measuring the accuracy of tree building programs.
 
-File *-info.txt and *-mut.txt can be used to map mutations onto the tree?
+File *-info.txt and *-mut.txt can be used to map mutations onto the tree.
+The columns in *-mut.txt: sample_ID, edge_ID, muttype_ID, mut_btime, mut_etime, chr_haplotype, chr, seg_ID
+For chromosome gain/loss, seg_ID is assigned to -1.
+For whole genome doubling, chr is assigned to 0 and seg_ID is assigned to -1.
 
 
 
 # Tree building with ML
+<!-- ## How to prepare MP trees -->
+## Input
+The initial trees for tree searching can be obtained by maximum parsimony methods.
+
 There are 4 running modes in svtreeml.
 * mode 0: building maximum likelihood tree from input copy numbers
 * mode 1: a simple comprehensive test on a simulated tree
@@ -136,10 +147,9 @@ There are 3 tree searching method:
 * hill climbing
 * genetic algorithm (may be slow)
 
-<!-- ## How to prepare MP trees -->
-The initial trees for tree searching can be obtained by maximum parsimony methods.
-
 Please see run-svtreeml.sh to learn how to set different parameters
+
+## Output
 
 
 # Tree building with MCMC

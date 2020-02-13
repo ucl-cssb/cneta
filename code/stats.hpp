@@ -11,7 +11,6 @@
 #include <set>
 #include <climits>
 
-
 #include "lbfgsb/lbfgsb_new.h"
 #include "matexp/matrix_exponential.hpp"
 #include "matexp/r8lib.hpp"
@@ -67,13 +66,17 @@ const double SMALL_LNL = -1e20;
 const double SMALL_VAL = 1.0e-10;
 // The maximum mutation rates allowed
 const double MAX_MRATE = 1;
+// The maximum age ratio allowed
+const double MIN_RATIO = 1e-2;
+const double MAX_RATIO = 0.99;
 // The shortest branch length allowed (in year)
-const double SMALL_BLEN = 0.01;
+const double SMALL_BLEN = 1e-9;
 // Scaling tree height to 1/HEIGHT_SCALE if the current height is larger than the upper bound (patient age at last sample)
 const int HEIGHT_SCALE = 3;
 // The difference from minmial height
 const int HEIGHT_OFFSET = 10;
 
+int opt_one_branch = 0;
 
 // Pairing function: see https://en.wikipedia.org/wiki/Pairing_function
 int pairInteger(int int1, int int2) {
@@ -264,7 +267,7 @@ void generate_coal_tree(const int& nsample, vector<int>& edges, vector<double>& 
 
 
 // Scale the total time by given time
-evo_tree generate_coal_tree(const int& nsample, int Ne = 1, double beta = 0, double gtime=1){
+evo_tree generate_coal_tree(const int& nsample, int Ne = 1, double beta = 0, double gtime=0.002739726){
   //cout << "GENERATING COAL TREE" << endl;
   vector<int> edges;
   vector<double> lengths;
@@ -1553,7 +1556,7 @@ void initialize_asr_table(vector<int>& obs, evo_tree &rtree, map<double, double*
 // Create likelihood vectors and state vectors at the tip node for reconstructing joint ancestral state, for independent chain model
 // L_sk_k (S_sk_k) has one row for each tree node and one column for each possible state
 void initialize_asr_table_decomp(vector<int>& obs, evo_tree &rtree, map<double, double*>& pmats_wgd, map<double, double*>& pmats_chr, map<double, double*>& pmats_seg, vector<vector<double>>& L_sk_k, vector<vector<int>>& S_sk_k, int Ns, int model, int nstate, int is_total){
-    int debug = 1;
+    int debug = 0;
     if(debug) cout << "Initializing tables for reconstructing joint ancestral state" << endl;
     int s_wgd, s_chr, s_seg, s_chr2, s_seg2;
     int e_wgd, e_chr, e_seg, e_chr2, e_seg2;
@@ -2169,7 +2172,7 @@ void insert_tuple_allele_specific(map<int, set<vector<int>>>& decomp_table, set<
 }
 
 // Adjust the value of m_max based on the maximum copy number for a sample
-int adjust_m_max(){
+void adjust_m_max(){
     // For samples without WGD but with larger copy number
     int max_sum = pow(2, 1) + m_max * max_chr_change + max_site_change;
     int orig_m_max = m_max;
@@ -3208,7 +3211,7 @@ double reconstruct_marginal_ancestral_state(evo_tree &rtree, ofstream& fout, dou
 
 // Infer the copy number of all internal nodes given a tree at a site, assuming independent Markov chains
 void reconstruct_joint_ancestral_state_decomp(evo_tree &rtree, ofstream& fout, double min_asr){
-    int debug = 1;
+    int debug = 0;
     if(debug) cout << "\treconstruct joint ancestral state with independent chain model" << endl;
 
     if(!is_tree_valid(rtree, cons)){
@@ -4352,10 +4355,6 @@ void my_err_handler(const char * reason, const char * file, int line, int gsl_er
 }
 
 
-// Retrieve parameter values after optimization of specific branches
-void get_variables_one_branch(evo_tree &rtree, int model, int cons, int maxj, double *x){
-}
-
 void get_variables(evo_tree &rtree, int model, int cons, int maxj, double *x){
     int debug = 0;
     // create a new tree from current value of parameters
@@ -4476,94 +4475,6 @@ int get_first_sample(vector<double> tobs){
     return -1;
 }
 
-
-// Update the tree with estimated parameters
-// void update_tree(evo_tree &rtree, const vector<edge>& enew, int Ns, int model, int cons, int maxj, double *x, int only_seg){
-void update_tree(evo_tree &rtree, const vector<edge>& enew, double *x){
-    int debug = 0;
-    int npar_ne;
-    evo_tree new_tree;
-
-    if(cons == 0){
-        npar_ne = rtree.nedge-1;
-        new_tree = evo_tree(Ns+1, enew);
-        new_tree.tobs = rtree.tobs;
-    }else{
-        npar_ne = rtree.nintedge + 1;
-        new_tree = evo_tree(rtree.nleaf, enew, 1);
-        new_tree.tobs = rtree.tobs;
-
-        adjust_tree_blens(new_tree);
-        adjust_tree_height(new_tree);
-        adjust_tree_tips(new_tree);
-
-        if(debug){
-          cout << "Adjust the tree to keep it valid" << endl;
-        }
-        if(!is_tree_valid(rtree, cons)){
-          cout << "Wrong after tip adjustment " << endl;
-          rtree.print();
-        }
-
-        int sample1 = 0;
-        new_tree.get_ntime_interval(new_tree.nleaf - 1, sample1);
-        // If max_len is very small, this tree seems not feasible with current variables
-        if( new_tree.tobs[sample1] > 0 ){
-          cout << "The first tip node in the new tree " << sample1 + 1 << " is not a first sample! " << endl;
-          // minL = - SMALL_LNL;
-          // return rtree;
-        }
-    }
-
-    if(maxj==0){
-        if(model == 0){
-            new_tree.mu = rtree.mu;
-        }
-        else{
-            new_tree.dup_rate = rtree.dup_rate;
-            new_tree.del_rate = rtree.del_rate;
-            if(!only_seg){
-                new_tree.chr_gain_rate = rtree.chr_gain_rate;
-                new_tree.chr_loss_rate = rtree.chr_loss_rate;
-                new_tree.wgd_rate = rtree.wgd_rate;
-            }
-        }
-    }else{
-        if(model == 0){
-            // rtree.nedge
-            // rtree.nintedge+2 for constrained branches
-            new_tree.mu = x[npar_ne+1];
-            if(debug){
-                for(int i=0; i<=npar_ne+1; i++){ cout << x[i] << '\n';}
-                cout << "mu value so far: " << new_tree.mu << endl;
-            }
-        }
-        else{
-            new_tree.dup_rate = x[npar_ne+1];
-            new_tree.del_rate = x[npar_ne+2];
-            if(!only_seg){
-                new_tree.chr_gain_rate = x[npar_ne+3];
-                new_tree.chr_loss_rate = x[npar_ne+4];
-                new_tree.wgd_rate = x[npar_ne+5];
-            }
-
-            if(debug){
-                for(int i=0; i<=npar_ne+1; i++){ cout << x[i] << '\n';}
-                cout << "dup_rate value so far: " << new_tree.dup_rate << endl;
-                cout << "del_rate value so far: " << new_tree.del_rate << endl;
-                if(!only_seg){
-                    cout << "chr_gain_rate value so far: " << new_tree.chr_gain_rate << endl;
-                    cout << "chr_loss_rate value so far: " << new_tree.chr_loss_rate << endl;
-                    cout << "wgd_rate value so far: " << new_tree.wgd_rate << endl;
-                }
-            }
-        }
-    }
-    if(debug) new_tree.print();
-    rtree = evo_tree(new_tree);
-}
-
-
 vector<double> get_blens_from_intervals(evo_tree &rtree, double *x){
     vector<double> intervals;
     // The estimated value may be nan
@@ -4598,119 +4509,102 @@ vector<double> get_blens_from_intervals(evo_tree &rtree, double *x){
 // Sort node times in increasing order and take the first Ns intervals
 void get_variables_ntime(evo_tree &rtree, double *x){
     int debug = 0;
+    int npar_ne;
     // create a new tree from current value of parameters
-    vector<edge> enew;
-    for(int i=0; i<rtree.nedge; ++i){
-      enew.push_back(rtree.edges[i]);
+    if(debug){
+        cout << "rtree before at address " << &rtree <<endl;
+        rtree.print();
     }
-
-    if(cons == 0){
-        // The first element of x is not used for optimization
-        // The index of x is added by 1 compared with index for simplex method
-        for(int i=0; i<rtree.nedge-1; ++i){
-          enew[i].length = x[i + 1];
+    if(opt_one_branch==1){
+        npar_ne = 1;
+        if(debug) { cout << "update only one branch " << rtree.current_eid+1 << endl;    }
+        if(cons == 0){
+            rtree.edges[rtree.current_eid].length = x[1];
+        }else{
+            rtree.update_edge_from_ratio(x[1], rtree.current_eid);
         }
     }else{
-        // vector<double> blens = get_blens_from_intervals(rtree, x);
-        vector<double> ratios;
-        // The estimated value may be nan
-        for(int i=0; i < rtree.nleaf - 1; i++){
-            double val = x[i+1];
-            ratios.push_back(val);
+        if(cons == 0){
+            npar_ne = rtree.nedge - 1;
+            // The first element of x is not used for optimization
+            // The index of x is added by 1 compared with index for simplex method
+            for(int i=0; i<rtree.nedge-1; i++){
+              rtree.edges[i].length = x[i + 1];
+            }
+        }else{
+            npar_ne = rtree.nintedge + 1;
+            // vector<double> blens = get_blens_from_intervals(rtree, x);
+            vector<double> ratios;
+            // The estimated value may be nan
+            // cout << "estimated x: ";
+            for(int i=0; i < npar_ne; i++){
+                double val = x[i + 1];
+                // cout << "\t" << val;
+                if(std::isnan(val)){
+                    val = rtree.ratios[i];
+                }
+                ratios.push_back(val);
+            }
+            // cout << endl;
+
+            // vector<double> intervals(x, x + sizeof x / sizeof x[0]);
+            if(debug){
+                rtree.print();
+                cout << "Current values of estimated variables: " << endl;
+                for(int i = 0; i<ratios.size(); i++){
+                    cout << i + 1 << "\t" << "\t" << ratios[i] << endl;
+                }
+            }
+            rtree.ratios = ratios;
+            rtree.update_edges_from_ratios();
         }
-        // vector<double> intervals(x, x + sizeof x / sizeof x[0]);
+
         if(debug){
-            rtree.print();
-            cout << "Current values of estimated variables: " << endl;
-            for(int i = 0; i<ratios.size(); i++){
-                cout << i + 1 << "\t" << "\t" << ratios[i] << endl;
+          cout << "New branch lengths: ";
+          for(int i = 0; i < rtree.edges.size(); i++){
+              cout << i + 1 << "\t" << "\t" << rtree.edges[i].length << endl;
+          }
+        }
+        // update_tree(rtree, enew, x);
+    }
+
+    if(maxj == 1){
+        if(model == 0){
+            // rtree.nedge
+            // rtree.nintedge+2 for constrained branches
+            rtree.mu = x[npar_ne+1];
+            if(debug){
+                for(int i=0; i<=npar_ne+1; i++){ cout << x[i] << '\n';}
+                cout << "mu value so far: " << rtree.mu << endl;
             }
         }
-        vector<double> blens = rtree.get_edges_from_ratio(ratios);
-        // randomly change the branch lengths to satifisty the constraints
-        if(debug){
-          cout << "Get back branch lengths from estimated variables: " << endl;
-          cout << "New branch lengths: ";
-          for(int i = 0; i<blens.size(); i++){
-              cout << i + 1 << "\t" << "\t" << blens[i] << endl;
-          }
-        }
-        assert(blens.size() == rtree.nedge);
-        for(int i=0; i<rtree.nedge; ++i){
-          enew[i].length = blens[i];
+        else{
+            rtree.dup_rate = x[npar_ne+1];
+            rtree.del_rate = x[npar_ne+2];
+            if(!only_seg){
+                rtree.chr_gain_rate = x[npar_ne+3];
+                rtree.chr_loss_rate = x[npar_ne+4];
+                rtree.wgd_rate = x[npar_ne+5];
+            }
+
+            if(debug){
+                for(int i=0; i<=npar_ne+1; i++){ cout << x[i] << '\n';}
+                cout << "dup_rate value so far: " << rtree.dup_rate << endl;
+                cout << "del_rate value so far: " << rtree.del_rate << endl;
+                if(!only_seg){
+                    cout << "chr_gain_rate value so far: " << rtree.chr_gain_rate << endl;
+                    cout << "chr_loss_rate value so far: " << rtree.chr_loss_rate << endl;
+                    cout << "wgd_rate value so far: " << rtree.wgd_rate << endl;
+                }
+            }
         }
     }
 
-    // cout << "rtree before" << endl;
-    // rtree.print();
-    // update_tree(rtree, enew, Ns, model, cons, maxj, x, only_seg);
-    update_tree(rtree, enew, x);
-    // cout << "rtree after" << endl;
-    // rtree.print();
-}
-
-
-// Get tree branch lengths from the ratio of node times
-void get_variables_ratio(evo_tree &rtree, int model, int cons, int maxj, int only_seg, double *x){
-    int debug = 0;
-    // create a new tree from current value of parameters
-    vector<edge> enew;
-    for(int i=0; i<rtree.nedge; ++i){
-      enew.push_back(rtree.edges[i]);
+    if(debug){
+        cout << "rtree after at address " << &rtree <<endl;
+        rtree.print();
     }
 
-    if(cons == 0){
-        // The first element of x is not used for optimization
-        // The index of x is added by 1 compared with index for simplex method
-        for(int i=0; i<rtree.nedge-1; ++i){
-          enew[i].length = x[i + 1];
-        }
-    }else{
-      vector<double> intervals;
-      // The estimated value may be nan
-      for(int i=0; i < rtree.nleaf - 1; i++){
-          double len = x[i+1];
-          bool is_nan = std::isnan(len);
-          if ( is_nan || (!is_nan && len < SMALL_BLEN)){
-             len = SMALL_BLEN;
-          }
-          intervals.push_back(len);
-      }
-      // vector<double> intervals(x, x + sizeof x / sizeof x[0]);
-      if(debug){
-          rtree.print();
-          cout << "Current length of intervals: " << endl;
-          for(int i = 0; i<intervals.size(); i++){
-              cout << i + 1 << "\t" << "\t" << intervals[i] << endl;
-          }
-          cout << "Corresponding " << rtree.nleaf << " nodes: ";
-          for(int i = 0; i < rtree.top_tnodes.size(); i++){
-              cout << rtree.top_tnodes[i] + 1 << "\t" << "Prevous node time " << rtree.node_times[rtree.top_tnodes[i]] << endl;
-          }
-      }
-
-      // int sample1 = 0;
-      vector<double> blens = rtree.get_edges_from_interval(intervals, rtree.top_tnodes);
-      // randomly change the branch lengths to satifisty the constraints
-      if(debug){
-          cout << "Get back branch lengths from estimated intervals: " << endl;
-          cout << "New branch lengths: ";
-          for(int i = 0; i<blens.size(); i++){
-              cout << i + 1 << "\t" << "\t" << blens[i] << endl;
-          }
-      }
-      assert(blens.size() == rtree.nedge);
-      for(int i=0; i<rtree.nedge; ++i){
-          enew[i].length = blens[i];
-      }
-    }
-
-    // cout << "rtree before" << endl;
-    // rtree.print();
-    // update_tree(rtree, enew, Ns, model, cons, maxj, x, only_seg);
-    update_tree(rtree, enew, x);
-    // cout << "rtree after" << endl;
-    // rtree.print();
 }
 
 
@@ -4737,13 +4631,45 @@ double targetFunk(evo_tree &rtree, double x[]) {
 }
 
 
-// Compute the likelihood of the tree with one branch as parameter
-double computeFunction(evo_tree& rtree, double value) {
+// Compute the likelihood of the tree with one parameter (one branch or one mutation rate)
+double computeFunction(evo_tree& rtree, double value, int type = -1) {
     // Update the branch
-    rtree.current_it->length = value;
-    rtree.current_it_back->length = value;
-    // Need to update rtree.edges
-    rtree.edges[rtree.current_it->id].length = value;
+    switch (type)
+    {
+        case -1:{
+            rtree.current_it->length = value;
+            rtree.current_it_back->length = value;
+            // Need to update rtree.edges
+            rtree.edges[rtree.current_eid].length = value;
+            break;
+        }
+        case 0:{
+            rtree.mu = value;
+            break;
+        }
+        case 1:{
+            rtree.dup_rate = value;
+            break;
+        }
+        case 2:{
+            rtree.del_rate = value;
+            break;
+        }
+        case 3:{
+            rtree.chr_gain_rate = value;
+            break;
+        }
+        case 4:{
+            rtree.chr_loss_rate = value;
+            break;
+        }
+        case 5:{
+            rtree.wgd_rate = value;
+            break;
+        }
+        default:
+            break;
+    }
 
     double nlnl = 0;
     if(model == 3){
@@ -4816,7 +4742,7 @@ int get_ndim(int model, int maxj, int npar_ne, int only_seg){
 #define SIGN(a,b) ((b) >= 0.0 ? fabs(a) : -fabs(a))
 
 /* Brents method in one dimension */
-double brent_opt (evo_tree &rtree, double ax, double bx, double cx, double tol,
+double brent_opt (evo_tree &rtree, int type, double ax, double bx, double cx, double tol,
                           double *foptx, double *f2optx, double fax, double fbx, double fcx) {
 	int iter;
 	double a,b,d=0,etemp,fu,fv,fw,fx,p,q,r,tol1,tol2,u,v,w,x,xm;
@@ -4875,7 +4801,7 @@ double brent_opt (evo_tree &rtree, double ax, double bx, double cx, double tol,
 		}
 
 		u=(fabs(d) >= tol1 ? x+d : x+SIGN(tol1,d));
-		fu=computeFunction(rtree, u);
+		fu=computeFunction(rtree, u, type);
 		if (fu <= fx) {
 			if (u >= x)
 				a=x;
@@ -4930,7 +4856,7 @@ double brent_opt (evo_tree &rtree, double ax, double bx, double cx, double tol,
     @param fx (OUT) function value at the minimum x found
     @param ferror (OUT) Dont know
 */
-double minimizeOneDimen(evo_tree &rtree, double xmin, double xguess, double xmax, double tolerance, double *fx, double *f2x) {
+double minimizeOneDimen(evo_tree &rtree, int type, double xmin, double xguess, double xmax, double tolerance, double *fx, double *f2x) {
 	double eps, optx, ax, bx, cx, fa, fb, fc;
 	//int    converged;	/* not converged error flag */
 
@@ -4946,14 +4872,14 @@ double minimizeOneDimen(evo_tree &rtree, double xmin, double xguess, double xmax
 
 	/* check if this works */
     // compute fb first to save some computation, if any
-	fb = computeFunction(rtree, bx);
-	fa = computeFunction(rtree, ax);
-	fc = computeFunction(rtree, cx);
+	fb = computeFunction(rtree, bx, type);
+	fa = computeFunction(rtree, ax, type);
+	fc = computeFunction(rtree, cx, type);
 
 	/* if it works use these borders else be conservative */
 	if ((fa < fb) || (fc < fb)) {
-		if (ax != xmin) fa = computeFunction(rtree, xmin);
-		if (cx != xmax) fc = computeFunction(rtree, xmax);
+		if (ax != xmin) fa = computeFunction(rtree, xmin, type);
+		if (cx != xmax) fc = computeFunction(rtree, xmax, type);
 		ax = xmin;
 		cx = xmax;
 	}
@@ -4973,10 +4899,10 @@ double minimizeOneDimen(evo_tree &rtree, double xmin, double xguess, double xmax
 	}*/
 	//	optx = brent_opt(xmin, xguess, xmax, tolerance, fx, f2x, fa, fb, fc);
 	//} else
-	optx = brent_opt(rtree, ax, bx, cx, tolerance, fx, f2x, fa, fb, fc);
+	optx = brent_opt(rtree, type, ax, bx, cx, tolerance, fx, f2x, fa, fb, fc);
     if (*fx > fb) // if worse, return initial value
     {
-        *fx = computeFunction(rtree, bx);
+        *fx = computeFunction(rtree, bx, type);
         return bx;
     }
 
@@ -5176,6 +5102,18 @@ double L_BFGS_B(evo_tree &rtree, int n, double* x, double* l, double* u, double 
 			factr, pgtol, &fncount, &grcount, maxit, msg, trace, nREPORT);
 #else*/
 
+    // cout << "initial values in bfgs: ";
+    // for(int mi = 0; mi < 3; mi++){
+    //     cout << "\t" << x[mi];
+    // }
+    // cout << "\n";
+    //
+    // cout << "upper bound in bfgs: ";
+    // for(int mi = 0; mi < 3; mi++){
+    //     cout << "\t" << u[mi];
+    // }
+    // cout << "\n";
+
 	// lbfgsb(rtree, model, cons, maxj, cn_max, only_seg, correct_bias, is_total, n, m, x, l, u, nbd, &Fmin, &fail, factr, pgtol, &fncount, &grcount, maxit, msg, trace, nREPORT);
     // lbfgsb(n, m, x, l, u, nbd, &Fmin, &fail, factr, pgtol, &fncount, &grcount, maxit, msg, trace, nREPORT);
     lbfgsb(rtree, n, m, x, l, u, nbd, &Fmin, &fail, factr, pgtol, &fncount, &grcount, maxit, msg, trace, nREPORT);
@@ -5243,36 +5181,79 @@ void init_branch_by_interval(double *variables, double *upper_bound, double *low
 }
 }
 
-// initialise the best guess branch length and mu if required
-// void initialise_variables_BFGS(double *variables, double *upper_bound, double *lower_bound, evo_tree &rtree, int ndim, int cons, int maxj, int npar_ne, int age, int only_seg){
-void initialise_variables_BFGS(double *variables, double *upper_bound, double *lower_bound, evo_tree &rtree, int npar_ne){
+
+
+// Using BFGS method to get the maximum likelihood with lower and upper bounds
+// Note: the topology of rtree is fixed
+void max_likelihood_BFGS(evo_tree &rtree, double &minL, double tolerance, int miter){
     int debug = 0;
+    int npar_ne = 0;    // number of parameters to estimate
+    int ndim = 0;
+    double *variables, *upper_bound, *lower_bound;
+
+    // Set variables
+    if(opt_one_branch == 1){
+        npar_ne = 1;
+    }else{
+        if(cons == 0){
+            npar_ne = rtree.nedge-1;
+        }else{
+            npar_ne = rtree.nintedge + 1;
+        }
+    }
+    if(debug) cout << "There are " << npar_ne << " parameters to estimate " << endl;
+
+    ndim = get_ndim(model, maxj, npar_ne, only_seg);
+    variables = new double[ndim+1];
+    upper_bound = new double[ndim+1];
+    lower_bound = new double[ndim+1];
 
     if(cons == 1){
         if(debug){
             cout << "Initializing variables related to branch length" << endl;
         }
-        init_branch_by_interval(variables, upper_bound, lower_bound, rtree, npar_ne);
-        vector<int> ratios = rtree.get_ntime_ratio();
-        assert(ratios.size() == npar_ne);
-        for(int i=0; i<npar_ne; ++i){
-          variables[i+1] = ratios[i];
-          lower_bound[i+1] = 0;
-          upper_bound[i+1] = 1;
-        }
+        // init_branch_by_interval(variables, upper_bound, lower_bound, rtree, npar_ne);
+        rtree.get_ratio_from_age(rtree.current_eid);
         if(debug){
+            // cout << ratios.size() << "\t" << npar_ne << endl;
             cout << "time ratios obtained from node times: ";
-            for(int i = 0; i < ratios.size(); i++){
-                cout << "\t" << ratios[i];
+            for(int i = 0; i < rtree.ratios.size(); i++){
+                cout << "\t" << rtree.ratios[i];
             }
             cout << endl;
         }
+        // assert(rtree.ratios.size() == npar_ne);
+        if(opt_one_branch == 1){
+            int i = 0;
+            variables[i+1] = rtree.ratios[i];
+            lower_bound[i+1] = MIN_RATIO;
+            upper_bound[i+1] = MAX_RATIO;
+        }else{
+            int i = 0;
+            variables[i+1] = rtree.ratios[i];
+            double max_obs = *max_element(rtree.tobs.begin(), rtree.tobs.end());
+            lower_bound[i+1] = max_obs;
+            upper_bound[i+1] = max_obs + age;
+
+            for(int i=1; i<npar_ne; ++i){
+              variables[i+1] = rtree.ratios[i];
+              lower_bound[i+1] = MIN_RATIO;
+              upper_bound[i+1] = MAX_RATIO;
+            }
+        }
 
     }else{
-        for(int i=0; i<npar_ne; ++i){
-          variables[i+1] = rtree.edges[i].length;
-          lower_bound[i+1] = SMALL_BLEN;
-          upper_bound[i+1] = age;
+        if(opt_one_branch == 1){
+            int i = 0;
+            variables[i+1] = rtree.edges[rtree.current_eid].length;
+            lower_bound[i+1] = SMALL_BLEN;
+            upper_bound[i+1] = age;
+        }else{
+            for(int i=0; i<npar_ne; ++i){
+              variables[i+1] = rtree.edges[i].length;
+              lower_bound[i+1] = SMALL_BLEN;
+              upper_bound[i+1] = age;
+            }
         }
     }
 
@@ -5312,43 +5293,18 @@ void initialise_variables_BFGS(double *variables, double *upper_bound, double *l
             }
         }
     }
-}
-
-// Using BFGS method to get the maximum likelihood with lower and upper bounds
-// Note: the topology of rtree is fixed
-evo_tree max_likelihood_BFGS(evo_tree &rtree, double &minL, const double tolerance, int miter){
-// evo_tree max_likelihood_BFGS(evo_tree &rtree, int model, double& minL, const double tolerance, int miter,  int cons=0, int maxj=0, int cn_max=4, int only_seg=0, int correct_bias=1, int is_total=1){
-    int debug = 0;
-    int npar_ne = 0;    // number of parameters to estimate
-    int ndim = 0;
-    double *variables, *upper_bound, *lower_bound;
-
-    // Set variables
-    if(cons == 0){
-        npar_ne = rtree.nedge-1;
-    }else{
-        npar_ne = rtree.nintedge + 1;
-    }
-    ndim = get_ndim(model, maxj, npar_ne, only_seg);
-    variables = new double[ndim+1];
-    upper_bound = new double[ndim+1];
-    lower_bound = new double[ndim+1];
-    // initialise_variables_BFGS(variables, upper_bound, lower_bound, rtree, ndim, cons, maxj, npar_ne, age, only_seg);
-    initialise_variables_BFGS(variables, upper_bound, lower_bound, rtree, npar_ne);
 
     if(debug){
         cout << "Variables to estimate: " << endl;
         for(int i=0; i < ndim+1; i++){
-            cout << "\t" << variables[i] << "\t" << lower_bound[i] << "\t" << upper_bound[i] << endl;
+            cout << "\t" << variables[i] << "\tLB:" << lower_bound[i] << "\tUB:" << upper_bound[i] << endl;
         }
     }
 
     // variables contains the parameters to estimate (branch length, mutation rate)
     minL = L_BFGS_B(rtree, ndim, variables+1, lower_bound+1, upper_bound+1, tolerance, miter);
-    // curr_tree = &rtree;
-    // minL = L_BFGS_B(ndim, variables+1, lower_bound+1, upper_bound+1, tolerance, miter);
+
     if (debug){
-        // cout << "mu of current ML tree: " << rtree.mu << endl;
         cout << "lnL of current ML tree: " << minL << endl;
         rtree.print();
     }
@@ -5358,7 +5314,7 @@ evo_tree max_likelihood_BFGS(evo_tree &rtree, double &minL, const double toleran
     delete [] variables;
 
     // rtree has been updated in the optimization process
-    return rtree;
+    // return rtree;
 }
 
 // given a tree, maximise the branch lengths (and optionally mu) assuming branch lengths are independent or constrained in time

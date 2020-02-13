@@ -1,10 +1,14 @@
 #!/usr/bin/bash
 
+# This script is used to run program svtreemcmc.
+
 # Use MCMC to infer tree
 # With configuration file
 config_file=./mcmc.cfg
 
-Ns=3
+
+####################### Parameters related to input  ###########################
+Ns=3  # The number of regions
 
 # input parameters
 dir="./example"   # The output directory
@@ -13,14 +17,20 @@ prefix=sim-data-1
 is_total=1 # If yes, the input is total copy number
 input=$dir/"$prefix"-cn.txt.gz
 # input=$dir/"$prefix"-allele-cn.txt.gz
+
+# The input file of sample timings (optional, required for estimating mutation rates)
 times=$dir/"$prefix"-rel-times.txt
+
+# Optional reference real tree
 # rtree=$dir/"$prefix"-tree.txt
-rtree=""    # Optional reference tree
+rtree=""
 
 init_tree=0     # Types of starting tree for MCMC. 0: random tree, 1: provided tree, 2: random tree with the same topology as real tree
 file_itree=$dir/"$prefix"-tree.txt
+################################################################################
 
 
+####################### Set output directory and run the program ###############
 # output parameters
 odir=$dir/mcmc
 if [[ ! -d $dir ]]; then

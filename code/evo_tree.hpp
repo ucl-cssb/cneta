@@ -15,9 +15,9 @@
 
 using namespace std;
 
-const double BLEN_MIN = 1e-10;
+const double BLEN_MIN = 1e-5;
 const double BLEN_MAX = 100;
-const double RATE_MIN = 1e-10;
+const double RATE_MIN = 1e-5;
 const double RATE_MAX = 1;
 const double RATE_MIN_LOG = -10;
 const double RATE_MAX_LOG = 0;
@@ -111,6 +111,8 @@ public:
         node = nei->node;
         length = nei->length;
         id = nei->id;
+        direction = nei->direction;
+        size = nei->size;
     }
 
     /**
@@ -227,18 +229,19 @@ public:
   }
 
   Node(const Node& _n2){
+    // cout << "copying a node" << endl;
     id     = _n2.id;
     isRoot = _n2.isRoot;
     isLeaf = _n2.isLeaf;
     parent = _n2.parent;
     e_in   = _n2.e_in;
+    height = _n2.height;
 
     e_ot.clear();
     e_ot.insert(e_ot.end(), _n2.e_ot.begin(), _n2.e_ot.end() );
     daughters.clear();
     daughters.insert(daughters.end(), _n2.daughters.begin(), _n2.daughters.end() );
-    neighbors.clear();
-    neighbors.insert(neighbors.end(), _n2.neighbors.begin(), _n2.neighbors.end() );
+
   }
 
   bool is_leaf() {
@@ -258,7 +261,7 @@ public:
       for (NeighborVec::iterator it = neighbors.begin(); it != neighbors.end(); it ++)
               if ((*it)->node == node)
                       return (*it);*/
-      cout << "ERROR : Could not find neighbors of node " << node->id + 1 << endl;
+      cout << "ERROR : Could not find neighbor node " << node->id + 1 << " at " << node << " for node " << id+1 << " on tree " << this << endl;
       assert(0);
       return NULL;
   }
@@ -296,11 +299,13 @@ public:
 
   void updateNeighbor(NeighborVec::iterator nei_it, Neighbor *newnei) {
       assert(nei_it != neighbors.end());
+      // cout << "update neighbor to " << newnei->node->id+1 << endl;
       *nei_it = newnei;
   }
 
   void updateNeighbor(NeighborVec::iterator nei_it, Neighbor *newnei, double newlen) {
       assert(nei_it != neighbors.end());
+      // cout << "update neighbor to " << newnei->node->id+1 << " with length " << newlen << endl;
       *nei_it = newnei;
       newnei->length = newlen;
   }
@@ -308,12 +313,14 @@ public:
   void updateNeighbor(Node *node, Neighbor *newnei) {
       NeighborVec::iterator nei_it = findNeighborIt(node);
       assert(nei_it != neighbors.end());
+      cout << "update neighbor of " << node->id + 1 << " to " << newnei->node->id+1 << endl;
       *nei_it = newnei;
   }
 
   void updateNeighbor(Node *node, Neighbor *newnei, double newlen) {
       NeighborVec::iterator nei_it = findNeighborIt(node);
       assert(nei_it != neighbors.end());
+      // cout << "update neighbor of " << node->id + 1 << " to " << newnei->node->id+1 << " with length " << newlen << endl;
       *nei_it = newnei;
       newnei->length = newlen;
   }
@@ -379,11 +386,13 @@ public:
   int nedge;
   int ntotn;
   int nintedge;
+
   vector<edge>   edges;
   vector<double> lengths;
   // vector<int> muts;
   vector<Node>   nodes;
   vector<double> node_times;
+  vector<double> node_ages;     // count ages from present
   // pointers to internal edges
   vector<edge*> intedges;
   int root_node_id;
@@ -402,11 +411,13 @@ public:
   double total_time;
   vector<double> top_tinvls;    // Top Ns+1 intervals for optimization with constaints on tip times
   vector<int> top_tnodes;
+  vector<double> ratios;
 
   // The chosen branch
-  int branch_start, branch_end;
+  int current_eid = -1;
   Neighbor* current_it;
   Neighbor* current_it_back;
+  Node *node1 = NULL, *node2 = NULL;  // current branch involved in NNI
 
   evo_tree(){}
   evo_tree(const int& _nleaf, const vector<int>& _edges, const vector<double>& _lengths, int gen_node = 1);
@@ -423,17 +434,19 @@ public:
   void   scale_time_internal(double ratio);
   void   generate_nodes();
   void   calculate_node_times();
+  void   get_age_from_time();
   void   generate_int_edges();
   vector<int> get_internal_lengths();
 
   double get_height2sample(const int& node_id);
   void get_ntime_interval(int k, int& sample1);
-  vector<int> get_ntime_ratio();
+  void get_ratio_from_age(int eid = -1);
   pair<int, double> is_edge(int _start, int _end);
   pair<int, double> is_interval(int i, const map<pair<int, int>, double>& slens);
   double find_interval_len(int& _start, int _end, map<pair<int, int>, double>& slens);
   vector<double> get_edges_from_interval(const vector<double>& intervals, vector<int>& tnodes);
-  vector<double> get_edges_from_ratio(const vector<double>& ratios);
+  void update_edges_from_ratios();
+  void update_edge_from_ratio(double ratio, int eid);
   // The time from beginning to the time of first sample
   double get_total_time(){ return *max_element(node_times.begin(), node_times.end()) - *max_element(tobs.begin(), tobs.end()); }
   double get_tree_height(){ return *max_element(node_times.begin(), node_times.end()); }
@@ -484,18 +497,38 @@ public:
       return tips;
   }
 
-  double get_descendants_min_time(int node_id){
+  int get_edge_id(int start, int end){
+      for(int i = 0; i < edges.size(); i++){
+          edge e = edges[i];
+          if((e.start == start && e.end == end) || (e.start == end && e.end == start)){
+              return e.id;
+          }
+      }
+      return -1;
+  }
+
+  void set_edge_length(int start, int end, double blen){
+      for(int i = 0; i < edges.size(); i++){
+          edge *e = &edges[i];
+          if(e->start == start && e->end == end){
+              e->length = blen;
+          }
+      }
+  }
+
+  double get_descendants_max_age(int node_id){
       if(node_id < nleaf)
-        return node_times[node_id];
+        return node_ages[node_id];
 
       vector<int> descendants = get_tips_below(node_id);
       assert(descendants.size() >= 1);
-      double min_time = node_times[descendants[0]];
+      double max_age = node_ages[descendants[0]];
       for(int j = 1; j < descendants.size(); j++){
-          double tj = node_times[descendants[j]];
-          if(tj < min_time) min_time = tj;
+          double tj = node_ages[descendants[j]];
+          // cout << "     tip " << descendants[j] + 1 << ", time " << tj << endl;
+          if(tj > max_age) max_age = tj;
       }
-      return min_time;
+      return max_age;
   }
 
 
@@ -516,7 +549,7 @@ public:
       cout << "\t" << edges[i].id+1 << "\t" << edges[i].start+1 << "\t" << edges[i].end+1 << "\t" << edges[i].length << endl;
     }
     cout << "NODES:" << endl;
-    cout << "\tid\tparent\td1\td2\tisLeaf\tisRoot\te_in\te_o1\te_o2\ttime" << endl;
+    cout << "\tid\tparent\td1\td2\tisLeaf\tisRoot\te_in\te_o1\te_o2\ttime\tage" << endl;
     for(int i=0; i<nodes.size(); ++i){
       cout << "\t" << nodes[i].id+1 << "\t" <<  nodes[i].parent+1;
       if(nodes[i].daughters.size() == 2){
@@ -533,7 +566,7 @@ public:
       else{
         cout << "\t0\t0";
       }
-      cout << "\t" << node_times[i];
+      cout << "\t" << node_times[i] << "\t" << node_ages[i];
       cout << endl;
     }
 
@@ -575,12 +608,16 @@ public:
     if (!node) {
        node = &(nodes[root_node_id]);
     }
-    if (dad)
-       ((Neighbor*)node->findNeighbor(dad))->direction = TOWARD_ROOT;
+    // cout << " get direction for node " << node->id+1 << " at " << node << endl;
+    if (dad){
+        // cout << " dad is " << dad->id + 1 << " at " << dad << endl;
+        ((Neighbor*)node->findNeighbor(dad))->direction = TOWARD_ROOT;
+    }
     // cout << "Generating branch directions for edge ending at " << node->id + 1 << endl;
     NeighborVec::iterator it;
     FOR_NEIGHBOR_IT(node, dad, it) {
        // do not update if direction was already computed
+       // cout << " neighbor of node " << (*it)->node->id + 1 << " at " << (*it)->node << endl;
        assert(((Neighbor*)*it)->direction != TOWARD_ROOT);
        if (((Neighbor*)*it)->direction != UNDEFINED_DIRECTION)
            continue;
@@ -594,24 +631,36 @@ public:
       int debug = 0;
       for(int i = 0; i < nodes.size(); i++){
           Node *n = &nodes[i];
-          if(debug) cout << "Generating neighbors for node " << n->id + 1 << endl;
+          if(debug) cout << "Generating neighbors for node " << n->id + 1 << " at " << n << " with original size " << n->neighbors.size() << endl;
           n->neighbors.clear();
 
           Node *dad = NULL;
           if(n->e_in >= 0){  // root has no incoming edge
-              edge e = edges[n->e_in];
-              dad = &nodes[e.start];
-              n->addNeighbor(dad, e.length, e.id);
-              if(debug) cout << "\tadding node " << e.start + 1 << " with edge " << e.id << endl;
+              edge *e = &edges[n->e_in];
+              dad = &nodes[e->start];
+              n->addNeighbor(dad, e->length, e->id);
+              if(debug) cout << "\tadding node " << e->start + 1 << " with incoming edge " << e->id << endl;
           }
 
           for(int j = 0; j < n->e_ot.size(); j++){
-              edge e = edges[n->e_ot[j]];
-              n->addNeighbor(&nodes[e.end], e.length, e.id);
-              if(debug) cout << "\tadding node " << e.end + 1 << " with edge " << e.id << endl;
+              edge *e = &edges[n->e_ot[j]];
+              n->addNeighbor(&nodes[e->end], e->length, e->id);
+              if(debug) cout << "\tadding node " << e->end + 1 << " with outgoing edge " << e->id << endl;
           }
       }
 
+      if(debug){
+          for(int i = 0; i < nodes.size(); i++){
+              Node *n = &nodes[i];
+              cout << "Neighbor of node " << n->id + 1 << ":";
+              for(int i = 0; i < n->neighbors.size(); i++){
+                  cout << "\t" << (n->neighbors[i])->node->id + 1 << ", " << (n->neighbors[i])-> length << ", " << (n->neighbors[i])-> id << ", " << (n->neighbors[i])-> direction;
+              }
+              cout << endl;
+          }
+      }
+
+      if(debug) cout << "begin computing direction" << endl;
       compute_branch_direction();
 
       if(debug){
@@ -664,8 +713,6 @@ public:
       for (i1 = neivec.begin(); i1 != neivec.end(); i1++)
           if ((*i1)->node != dad)
               get_preorder_branches(nodes, nodes2, (*i1)->node, node);
-  //    FOR_NEIGHBOR_IT(node, dad, it)
-  //        get_preorder_branches(nodes, nodes2, (*it)->node, node);
   }
 
 };
@@ -692,6 +739,10 @@ evo_tree::evo_tree(const evo_tree& _t2) {
   top_tinvls = _t2.top_tinvls;
   top_tnodes = _t2.top_tnodes;
 
+  // if(_t2.node1!=NULL) node1 = new Node(*(_t2.node1));
+  // if(_t2.node2!=NULL) node2 = new Node(*(_t2.node2));
+  current_eid = _t2.current_eid;
+
   edges.clear();
   edges.insert(edges.end(), _t2.edges.begin(), _t2.edges.end() );
   lengths.clear();
@@ -700,6 +751,8 @@ evo_tree::evo_tree(const evo_tree& _t2) {
   nodes.insert(nodes.end(), _t2.nodes.begin(), _t2.nodes.end() );
   node_times.clear();
   node_times.insert(node_times.end(), _t2.node_times.begin(), _t2.node_times.end() );
+  node_ages.clear();
+  node_ages.insert(node_ages.end(), _t2.node_ages.begin(), _t2.node_ages.end() );
 
   // chars.clear();
   // for(int i=0; i< _t2.chars.size(); ++i) chars.push_back( _t2.chars[i] );
@@ -737,6 +790,7 @@ evo_tree::evo_tree(const int& _nleaf, const vector<int>& _edges, const vector<do
   if(gen_node){
     generate_nodes();
     calculate_node_times();
+    get_age_from_time();
     generate_int_edges();
     generate_neighbors();
   }
@@ -767,6 +821,7 @@ evo_tree::evo_tree(const int& _nleaf, const vector<edge>& _edges, int gen_node){
   if(gen_node){
     generate_nodes();
     calculate_node_times();
+    get_age_from_time();
     generate_int_edges();
     generate_neighbors();
   }
@@ -817,6 +872,7 @@ evo_tree::evo_tree(const int& _nleaf, const vector<edge>& _edges, const double& 
   }
 
   calculate_node_times();
+  get_age_from_time();
   generate_int_edges();
   generate_neighbors();
 
@@ -839,6 +895,7 @@ void evo_tree::scale_time(double ratio) {
         // change the time of tip node to reflect the sampling point?
     }
     calculate_node_times();
+    get_age_from_time();
 }
 
 
@@ -857,6 +914,7 @@ void evo_tree::scale_time_internal(double ratio) {
       }
     }
     calculate_node_times();
+    get_age_from_time();
 }
 
 void evo_tree::generate_int_edges(){
@@ -948,24 +1006,59 @@ void evo_tree::get_ntime_interval(int k, int& sample1){
     }
 }
 
-
-// Convert the time constraints among nodes into a set of ratios for bounded estimation
-vector<int> evo_tree::get_ntime_ratio(){
-    vector<int> ratios;
-    ratios.push_back(node_times[root_node_id]);
-
-    for (int i = root_node_id; i < ntotn; i++){
-        // double max_ti = get_descendants_min_time(i);
-        // Find its children
-        Node ni = nodes[i];
-        for(int j = 0; j < ni.daughters.size(); j++){
-            double max_tj = get_descendants_min_time(j);
-            double ratio = (node_times[i] - max_tj) / (node_times[j] - max_tj);
-            ratios.push_back(ratio);
-        }
+void evo_tree::get_age_from_time(){
+    int debug = 0;
+    if(debug) cout << "generate ages from node times" << endl;
+    assert(node_times.size()>0);
+    double max_time = *max_element(node_times.begin(), node_times.end());
+    for(int i=0; i<node_times.size();i++){
+        double ti = max_time - node_times[i];
+        node_ages.push_back(ti);
     }
 
-    return ratios;
+    if(debug){
+        cout << "ages of nodes: ";
+        for(int i = 0; i < node_ages.size(); i++){
+            cout << i + 1 << "\t" << "\t" << node_ages[i] << endl;
+        }
+    }
+}
+
+// Convert the time constraints among nodes into a set of ratios for bounded estimation
+void evo_tree::get_ratio_from_age(int eid){
+    int debug = 0;
+    if(debug) cout << "getting ratio from age by edge " << eid+1 << endl;
+    // vector<double> ratios;
+
+    if(eid==-1){    // for all branches
+        ratios.push_back(node_ages[root_node_id]);
+        for (int ni = root_node_id; ni < ntotn; ni++){
+            // double max_ti = get_descendants_max_age(i);
+            // Find its children
+            Node nodei = nodes[ni];
+            if(debug) cout << "node " << ni + 1 << ", node time " << node_ages[ni] << endl;
+            for(int j = 0; j < nodei.daughters.size(); j++){
+                int nj = nodei.daughters[j];
+                if(nj < root_node_id) continue;
+                double max_tj = get_descendants_max_age(nj);
+                double t1 = (node_ages[ni] - max_tj);
+                double t2 = (node_ages[nj] - max_tj);
+                double ratio =  t2 / t1;
+                if(debug){
+                    cout << " child node " << nj + 1 << ", node time " << node_ages[nj]  << ", max age " << max_tj  << ", ratio " << ratio  << endl;
+                }
+                ratios.push_back(ratio);
+            }
+        }
+    }else{  // get ratios for current edge
+        edge *e = &edges[eid];
+        double max_tj = get_descendants_max_age(e->end);
+        double t1 = (node_ages[e->start] - max_tj);
+        double t2 = (node_ages[e->end] - max_tj);
+        double ratio =  t2 / t1;
+        ratios.push_back(ratio);
+    }
+    // return ratios;
 }
 
 // Check whether if an interval is in the tree. If yes, return the ID.
@@ -1032,35 +1125,74 @@ double evo_tree::find_interval_len(int& _start, int _end, map<pair<int, int>, do
 
 
 // Find branch lengths from ratios of node times
-vector<double> evo_tree::get_edges_from_ratio(const vector<double>& ratios){
-    int debug = 1;
-    vector<double> blens;
-    // for root
-    node_times[root_node_id] = ratios[0];
+void evo_tree::update_edges_from_ratios(){
+    int debug = 0;
+    if(debug) cout << "getting edges back from ratio" << endl;
+
+    // for root and normal node
+    node_ages[root_node_id] = ratios[0];
+    node_ages[root_node_id-1] = ratios[0];
     for (int i = 1; i < ratios.size(); i++){
-        double ratio = ratios[i];
-        int nid = i + root_node_id;  // corresponding node ID
-        // double max_ti = get_descendants_min_time(nid);
+        int ni = i + root_node_id - 1;  // corresponding node ID
         // Find its children
-        Node ni = nodes[nid];
-        for(int j = 0; j < ni.daughters.size(); j++){
-            double max_tj = get_descendants_min_time(j);
-            double ntime = ((node_times[nid] - max_tj) / ratio) + max_tj;
-            node_times[j] = ntime;
+        Node nodei = nodes[ni];
+        for(int j = 0; j < nodei.daughters.size(); j++){
+            int nj = nodei.daughters[j];
+            if(nj < root_node_id) continue;
+            if(debug){
+                cout << " parent node " << ni + 1 << " child node " << nj + 1 << ", parent time before " << node_ages[ni]<< ", child time before " << node_ages[nj] << endl;
+            }
+            double max_tj = get_descendants_max_age(nj);
+            double ntime = ((node_ages[ni] - max_tj) * ratios[i]) + max_tj;
+            node_ages[nj] = ntime;
+            // The age of parent node should be no less than the age of its child
+            assert(node_ages[ni] >= node_ages[nj]);
+            double blen = node_ages[ni] - node_ages[nj];
+            set_edge_length(ni, nj, blen);
+            if(debug){
+                cout << " parent node " << ni + 1 << " child node " << nj + 1 << ", parent time after " << node_ages[ni]<< ", child time after " << node_ages[nj] << ", blen " << blen << endl;
+            }
         }
     }
 
     // Compute branch lengths from time intervals
-
     if(debug){
+        cout << "node ages from ratios:";
+        for(int i = 0; i < node_ages.size(); i++){
+            cout << "\t" << node_ages[i];
+        }
+        cout << endl;
+
         cout << "branch lengths from ratios:";
-        for(int i = 0; i < blens.size(); i++){
-            cout << "\t" << blens[i];
+        for(int i = 0; i < edges.size(); i++){
+            cout << "\t" << edges[i].length;
         }
         cout << endl;
     }
+}
 
-    return  blens;
+
+// Find a single branch length from the ratio of end node times
+void evo_tree::update_edge_from_ratio(double ratio, int eid){
+    int debug = 0;
+    assert(eid >= 0);
+    edge *e = &edges[eid];
+    double max_tj = get_descendants_max_age(e->end);
+    if(debug) cout << "updating edge " << eid+1 << " from ratio " << ratio << " with starting node at age " << node_ages[e->start] << " max tip time at " << max_tj << endl;
+
+    double ntime = ((node_ages[e->start] - max_tj) * ratio) + max_tj;
+    node_ages[e->end] = ntime;
+
+    // Compute branch lengths from time intervals
+    if(debug){
+        cout << "node age from ratio:" << "\t" << node_ages[e->end] << endl;
+    }
+
+    e->length = node_ages[e->start] - node_ages[e->end];
+
+    if(debug){
+        cout << "branch length from ratio: " << edges[eid].length << endl;
+    }
 }
 
 

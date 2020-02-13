@@ -1,3 +1,8 @@
+/*
+This file simulates SVs along a phylogenetic (coalescence) tree.
+*/
+
+
 #include <fstream>
 #include <string>
 #include <cstring>
@@ -744,7 +749,7 @@ int generate_chr_gain(genome& g, int c, int debug){
     for(int i=0; i<orig_size%NUM_CHR; i++){  // If c is in the genome, but has lost all segments
       if(g.chrs[c%NUM_CHR + i*NUM_CHR].size() <= 0){
           new_chr = c%NUM_CHR + i*NUM_CHR;
-          is_in == 1;
+          is_in = 1;
           break;
       }
     }
@@ -2128,25 +2133,24 @@ int main (int argc, char ** const argv) {
        ;
     po::options_description optional("Optional parameters");
     optional.add_options()
+      ("nsim,n", po::value<int>(&Nsims)->default_value(1), "number of multi-region samples")
+
       ("tree_file", po::value<string>(&tree_file)->default_value(""), "input tree file ")
+      ("nregion,r", po::value<int>(&Ns)->default_value(5), "number of regions")
+      ("age,a", po::value<int>(&age)->default_value(100), "age of the patient to simulate")
+      ("epop,e", po::value<int>(&Ne)->default_value(2), "effective population size of cell populations")
+      ("gtime", po::value<double>(&gtime)->default_value(0.002739726), "generation time in year")
+      ("beta,b", po::value<double>(&beta)->default_value(0), "population growth rate")
+      ("tdiff,t", po::value<double>(&delta_t)->default_value(1), "relative timing difference")
+      // ("stime", po::value<string>(&stime)->default_value(""), "sampling time of different samples (Format: numTipDates Date1 from to Date2 from to ... DateN from to)")
+      ("constrained", po::value<int>(&cons)->default_value(1), "constraints on branch length (0: none, 1: fixed total time)")
+
       ("mode", po::value<int>(&mode)->default_value(0), "running mode of the program (0: Simuting genome in fix-sized bins, 1: Simulating genome in random segments, 2 to 4: Test)")
       ("method", po::value<int>(&method)->default_value(0), "method of simulation (0: simulating waiting times, 1: Simulating sequences directly)")
       ("model,d", po::value<int>(&model)->default_value(0), "model of evolution (0: Mk, 1: one-step bounded (total), 2: one-step bounded (allele-specific), 3: Poisson)")
       ("cn_max", po::value<int>(&cn_max)->default_value(4), "maximum copy number of a segment")
       ("seg_max", po::value<int>(&seg_max)->default_value(100), "maximum number of segments to simulate")
       ("fix_seg", po::value<int>(&fix_seg)->default_value(1), "whether or not to fix the number of segments to simulate")
-
-      ("age,a", po::value<int>(&age)->default_value(100), "age of the patient to simulate")
-      ("epop,e", po::value<int>(&Ne)->default_value(2), "effective population size of cell populations")
-      ("gtime", po::value<double>(&gtime)->default_value(0.002739726), "generation time in year")
-      ("beta,b", po::value<double>(&beta)->default_value(0), "population growth rate")
-      ("tdiff,t", po::value<double>(&delta_t)->default_value(1), "relative timing difference")
-      ("stime", po::value<string>(&stime)->default_value(""), "sampling time of different samples (Format: numTipDates Date1 from to Date2 from to ... DateN from to)")
-      ("constrained", po::value<int>(&cons)->default_value(1), "constraints on branch length (0: none, 1: fixed total time)")
-
-      ("nregion,r", po::value<int>(&Ns)->default_value(5), "number of regions")
-      ("nsim,n", po::value<int>(&Nsims)->default_value(1), "number of multi-region samples")
-      ("prefix,p", po::value<string>(&prefix)->default_value(""), "prefix of output file (it will be sim-data-N if not specified")
 
       ("dup_rate", po::value<double>(&dup_rate)->default_value(0.0001), "duplication rate (allele/locus/year)")
       ("del_rate", po::value<double>(&del_rate)->default_value(0.0002), "deletion rate (allele/locus/year)")
@@ -2156,6 +2160,7 @@ int main (int argc, char ** const argv) {
       ("dup_size", po::value<double>(&dup_size)->default_value(30), "mean of duplication size distributions")
       ("del_size", po::value<double>(&del_size)->default_value(30), "mean of deletion size distributions")
 
+      ("prefix,p", po::value<string>(&prefix)->default_value(""), "prefix of output file (it will be sim-data-N if not specified")
       ("print_allele", po::value<int>(&print_allele)->default_value(1), "whether or not to output allele-specific copy numbers")
       ("print_mut", po::value<int>(&print_mut)->default_value(1), "whether or not to output the list of mutations")
       ("print_nex", po::value<int>(&print_nex)->default_value(1), "whether or not to output the tree in NEXUS format")
