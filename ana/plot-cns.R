@@ -99,7 +99,7 @@ print.cn <- function(in_file, out_file=""){
 }
 
 
-if(0){
+if(0){  # test
    d <- read.table("cnprofile-2.txt",header=FALSE)
    names(d) <- c("sample","chromosome","index","cn")
    nsample <- length(unique(d$sample))

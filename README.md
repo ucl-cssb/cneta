@@ -89,11 +89,13 @@ There are three Markov models of evolution for the copy number profiles:
 * 0: Mk model (extension of JC69 model)
 * 1: model of total copy number
 * 2: model of allele-specific copy number
-* 3: model of independent Markov chains (when WGD and chromosome gain/loss are incorporated)
+<!-- * 3: model of independent Markov chains (when WGD and chromosome gain/loss are incorporated) -->
 
 There are two ways of simulating mutations along a tree:
 1. simulating waiting times along a branch (default)
 2. simulating sequences at the end of a branch
+Note that when simulating waiting times, only allele-specific model is allowed. If model of total copy number is specified, it will automatically be converted to model of allele-specific copy number.
+
 
 Please see run-sveta.sh to learn how to set different parameters
 
@@ -115,9 +117,9 @@ Please see run-sveta.sh to learn how to set different parameters
 * *-tree.nex: The simulated tree in NEWICK format, with branch length reprenting calender time
 * *-tree-nmut.nex: The simulated tree in NEWICK format, with branch length reprenting number of mutations
 
-File *-cn.txt.gz can serve as the input to a tree building program that used total copy number.
+File *-cn.txt.gz can serve as the input to a tree building program that used integer total copy number.
 
-File *-allele-cn.txt.gz can serve as the input to a tree building program that used allele-specific copy number.
+File *-allele-cn.txt.gz can serve as the input to a tree building program that used integer allele-specific copy number.
 
 File *-rel-times.txt can provide the timing information of tip nodes to allow etimation of divergence time and mutation rates.
 
@@ -150,6 +152,10 @@ There are 3 tree searching method:
 Please see run-svtreeml.sh to learn how to set different parameters
 
 ## Output
+
+
+## Model of evolution
+For tree recontruction with svtreeml on data with chromosome gain/loss and WGD, model 3 (model of independent Markov chains) should be used. This model is different from the model used for simulating the data, which is usually model 2 (model of allele-specific copy number) in sveta.
 
 
 # Tree building with MCMC
