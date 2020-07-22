@@ -1,5 +1,5 @@
 /*
-This file simulates SVs along a phylogenetic (coalescence) tree.
+This program aims to simulate SVs along a phylogenetic tree.
 */
 
 
@@ -442,15 +442,13 @@ int generate_duplication(genome& g, int c, int seg_id, int model, int cn_max, in
     if(mdup > 1) len = gsl_ran_exponential(r, mdup);
 
     if(debug){
-      cout << "before dup, Chr " << c+1 << " has " << g.chrs[c].size() << " segments" << endl;
-      // for(int i=0; i<g.chrs[c].size(); i++){
-      //     cout << "\t" << g.chrs[c][i].seg_id;
-      // }
-      // cout << endl;
-      cout << "dup len:" << len << endl;
-    }
+        cout << "before dup, Chr " << c+1 << " has " << g.chrs[c].size() << " segments" << endl;
+        // for(int i=0; i<g.chrs[c].size(); i++){
+        //     cout << "\t" << g.chrs[c][i].seg_id;
+        // }
+        // cout << endl;
+        cout << "dup len:" << len << endl;
 
-    if(debug){
         //cout << "SV: insert: " << loc+len+1 << "\t" << loc << "\t" << loc+len+1 << endl;
         cout << "\tSV: duplicating segment, chr, seg_id, len: " << c+1 << "\t" << seg_id << "\t" << len+1 << endl;
         cout << "Previous state: ";
@@ -1943,9 +1941,9 @@ evo_tree generate_random_tree(int Ns, int Ne, int age, double beta, double gtime
       test_tree0.print();
     }
 
+    tobs = vector<double>(Ns, 0);
     if(cons == 0){
         age = MAX_AGE;
-        tobs = vector<double>(Ns, 0);
     }
     assign_tip_times(delta_t, Ns, tobs, edges, lengths);
 
@@ -2220,11 +2218,11 @@ int main (int argc, char ** const argv) {
       // int bin_size = accumulate(CHR_BIN_SIZE.begin(), CHR_BIN_SIZE.end(), 0);
       // cout << "Total number of bins is " << bin_size << endl;
       int total_seg = 0;
-      for(int i = 0; i<NUM_CHR; i++){
+      for(int i = 0; i < NUM_CHR; i++){
           alpha[i] = CHR_BIN_SIZE[i];
       }
       gsl_ran_dirichlet(r, NUM_CHR, alpha, theta);
-      for(int i = 0; i<NUM_CHR; i++){
+      for(int i = 0; i < NUM_CHR; i++){
           chr_lengths[i] = ceil(theta[i] * num_seg);
           assert(chr_lengths[i] > 0);
           total_seg += chr_lengths[i];
@@ -2233,7 +2231,7 @@ int main (int argc, char ** const argv) {
       if(total_seg > num_seg){
           int diff = total_seg - num_seg;
           while(diff != 0){
-              for(int i = 0; i<NUM_CHR; i++){
+              for(int i = 0; i < NUM_CHR; i++){
                   if(chr_lengths[i] > 1){
                       chr_lengths[i] -= 1;
                       diff--;
