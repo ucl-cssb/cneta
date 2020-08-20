@@ -3893,7 +3893,7 @@ double get_likelihood_revised(evo_tree &rtree){
   }
   else{
       if(debug) cout << "Computing the likelihood with consideration of WGD" << endl;
-      logL += (1-rtree.wgd_rate) * get_likelihood_chr(vobs, rtree, knodes, pmats, 0, model, nstate, only_seg, is_total);
+      logL += (1 - rtree.wgd_rate) * get_likelihood_chr(vobs, rtree, knodes, pmats, 0, model, nstate, only_seg, is_total);
       logL += rtree.wgd_rate * get_likelihood_chr(vobs, rtree, knodes, pmats, 1, model, nstate, only_seg, is_total);
   }
 
@@ -3912,13 +3912,15 @@ double get_likelihood_revised(evo_tree &rtree){
   }
 
   if(std::isnan(logL) || logL < SMALL_LNL) logL = SMALL_LNL;
-  if(debug) cout << "Final likelihood: " << logL << endl;
+  if(debug){
+      cout << "Final likelihood: " << logL << endl;
+      cout << "Free memory" << endl;
+  }
 
   free(qmat);
   for(auto m : pmats){
       free(m.second);
   }
-
 
   return logL;
 }
@@ -3950,19 +3952,19 @@ double get_likelihood_decomp(evo_tree &rtree){
 
   if(max_wgd > 0){
       qmat_wgd = new double[dim_wgd * dim_wgd];  // WGD
-      memset(qmat_wgd, 0, (dim_wgd)*(dim_wgd)*sizeof(double));
+      memset(qmat_wgd, 0, (dim_wgd) * (dim_wgd) * sizeof(double));
       get_rate_matrix_wgd(qmat_wgd, rtree.wgd_rate, max_wgd);
   }
 
   if(max_chr_change > 0){
-      qmat_chr = new double[(dim_chr)*(dim_chr)];   // chromosome gain/loss
-      memset(qmat_chr, 0, (dim_chr)*(dim_chr)*sizeof(double));
+      qmat_chr = new double[(dim_chr) * (dim_chr)];   // chromosome gain/loss
+      memset(qmat_chr, 0, (dim_chr) * (dim_chr) * sizeof(double));
       get_rate_matrix_chr_change(qmat_chr, rtree.chr_gain_rate, rtree.chr_loss_rate, max_chr_change);
   }
 
   if(max_site_change > 0){
-      qmat_seg = new double[(dim_seg)*(dim_seg)];  // segment duplication/deletion
-      memset(qmat_seg, 0, (dim_seg)*(dim_seg)*sizeof(double));
+      qmat_seg = new double[(dim_seg) * (dim_seg)];  // segment duplication/deletion
+      memset(qmat_seg, 0, (dim_seg) * (dim_seg) * sizeof(double));
       get_rate_matrix_site_change(qmat_seg, rtree.dup_rate, rtree.del_rate, max_site_change);
   }
 
@@ -3972,7 +3974,7 @@ double get_likelihood_decomp(evo_tree &rtree){
 
   //create a list of nodes to loop over (only internal nodes), making sure the root is last
   vector<int> knodes;
-  for(int k=Ns+2; k<rtree.ntotn; ++k) knodes.push_back( k );
+  for(int k = Ns+2; k < rtree.ntotn; ++k) knodes.push_back( k );
   knodes.push_back(Ns+1);
 
   for(int kn=0; kn<knodes.size(); ++kn){
@@ -4069,25 +4071,28 @@ double get_likelihood_decomp(evo_tree &rtree){
   }
 
   if(std::isnan(logL) || logL < SMALL_LNL) logL = SMALL_LNL;
-  if(debug) cout << "Final likelihood: " << logL << endl;
+  if(debug){
+      cout << "Final likelihood: " << logL << endl;
+      cout << "Free memory" << endl;
+  }
 
   if(max_wgd > 0){
       free(qmat_wgd);
+      for(auto m : pmats_wgd){
+          free(m.second);
+      }
   }
   if(max_chr_change > 0){
       free(qmat_chr);
+      for(auto m : pmats_chr){
+          free(m.second);
+      }
   }
   if(max_site_change > 0){
       free(qmat_seg);
-  }
-  for(auto m : pmats_wgd){
-      free(m.second);
-  }
-  for(auto m : pmats_chr){
-      free(m.second);
-  }
-  for(auto m : pmats_seg){
-      free(m.second);
+      for(auto m : pmats_seg){
+          free(m.second);
+      }
   }
 
   return logL;
@@ -4095,6 +4100,13 @@ double get_likelihood_decomp(evo_tree &rtree){
 
 
 // Compute the likelihood without grouping sites by chromosome, only considering segment duplication/deletion
+/*
+Ns: number of samples
+Nchar: number of characters for each sample
+vobs: the observed data matrix
+rtree: the given tree
+model: model of evolution
+*/
 double get_likelihood(int Ns, int Nchar, const vector<vector<int>>& vobs, evo_tree &rtree, int model, int cons, const int cn_max, int is_total=1){
   int debug = 0;
   if(debug) cout << "\tget_likelihood" << endl;
@@ -4150,7 +4162,7 @@ double get_likelihood(int Ns, int Nchar, const vector<vector<int>>& vobs, evo_tr
       double bli = rtree.edges[rtree.nodes[k].e_ot[0]].length;
       int nj = rtree.edges[rtree.nodes[k].e_ot[1]].end;
       double blj = rtree.edges[rtree.nodes[k].e_ot[1]].length;
-      if(model>0){
+      if(model > 0){
            get_transition_matrix_bounded(qmat, pmati, bli, nstate);
            get_transition_matrix_bounded(qmat, pmatj, blj, nstate);
            if(debug){
@@ -4544,6 +4556,7 @@ void get_variables_ntime(evo_tree &rtree, double *x){
                     val = rtree.ratios[i];
                 }
                 ratios.push_back(val);
+                rtree.ratios[i] = val;
             }
             // cout << endl;
 
@@ -4551,11 +4564,11 @@ void get_variables_ntime(evo_tree &rtree, double *x){
             if(debug){
                 rtree.print();
                 cout << "Current values of estimated variables: " << endl;
-                for(int i = 0; i<ratios.size(); i++){
+                for(int i = 0; i< ratios.size(); i++){
                     cout << i + 1 << "\t" << "\t" << ratios[i] << endl;
                 }
             }
-            rtree.ratios = ratios;
+            // rtree.ratios = ratios;
             rtree.update_edges_from_ratios();
         }
 
@@ -4623,10 +4636,10 @@ double targetFunk(evo_tree &rtree, double x[]) {
         // cout << "Getting target function for optimization" << endl;
         // cout << max_wgd << "\t" << max_chr_change << "\t" << max_site_change << "\t" << decomp_table.size() << endl;
         // return -1.0*get_likelihood_decomp(Ns, Nchar, num_invar_bins, vobs, curr_tree, decomp_table, cons, cn_max, m_max, max_wgd, max_chr_change, max_site_change, correct_bias, is_total);
-        return -1.0*get_likelihood_decomp(rtree);
+        return -1.0 * get_likelihood_decomp(rtree);
     }else{
         // return -1.0*get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, curr_tree, model, cons, cn_max, only_seg, correct_bias, is_total);
-        return -1.0*get_likelihood_revised(rtree);
+        return -1.0 * get_likelihood_revised(rtree);
     }
 }
 
@@ -5195,7 +5208,7 @@ void max_likelihood_BFGS(evo_tree &rtree, double &minL, double tolerance, int mi
     if(opt_one_branch == 1){
         npar_ne = 1;
     }else{
-        if(cons == 0){
+        if(cons == 0){  // only estimate internal branches
             npar_ne = rtree.nedge-1;
         }else{
             npar_ne = rtree.nintedge + 1;
@@ -5217,12 +5230,12 @@ void max_likelihood_BFGS(evo_tree &rtree, double &minL, double tolerance, int mi
         if(debug){
             // cout << ratios.size() << "\t" << npar_ne << endl;
             cout << "time ratios obtained from node times: ";
-            for(int i = 0; i < rtree.ratios.size(); i++){
+            for(int i = 0; i < rtree.nnode; i++){
                 cout << "\t" << rtree.ratios[i];
             }
             cout << endl;
         }
-        // assert(rtree.ratios.size() == npar_ne);
+        // assert(rtree.nleaf == npar_ne);
         if(opt_one_branch == 1){
             int i = 0;
             variables[i+1] = rtree.ratios[i];
@@ -5230,18 +5243,18 @@ void max_likelihood_BFGS(evo_tree &rtree, double &minL, double tolerance, int mi
             upper_bound[i+1] = MAX_RATIO;
         }else{
             int i = 0;
+            // root
             variables[i+1] = rtree.ratios[i];
             double max_obs = *max_element(rtree.tobs.begin(), rtree.tobs.end());
             lower_bound[i+1] = max_obs;
             upper_bound[i+1] = max_obs + age;
 
-            for(int i=1; i<npar_ne; ++i){
+            for(int i=1; i < npar_ne; ++i){
               variables[i+1] = rtree.ratios[i];
               lower_bound[i+1] = MIN_RATIO;
               upper_bound[i+1] = MAX_RATIO;
             }
         }
-
     }else{
         if(opt_one_branch == 1){
             int i = 0;
@@ -5257,7 +5270,7 @@ void max_likelihood_BFGS(evo_tree &rtree, double &minL, double tolerance, int mi
         }
     }
 
-    if(maxj==1){
+    if(maxj==1){    // estimate mutation rates
         if(model == 0){
             int i = npar_ne;
             variables[i+1] = rtree.mu;
@@ -5316,6 +5329,7 @@ void max_likelihood_BFGS(evo_tree &rtree, double &minL, double tolerance, int mi
     // rtree has been updated in the optimization process
     // return rtree;
 }
+
 
 // given a tree, maximise the branch lengths (and optionally mu) assuming branch lengths are independent or constrained in time
 evo_tree max_likelihood(evo_tree &rtree, int model, double& minL, const double ssize, const double tolerance, int miter, int cons=0, int maxj=0, int cn_max=4, int only_seg=0, int correct_bias=1, int is_total=1){

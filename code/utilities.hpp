@@ -102,7 +102,7 @@ vector<double> read_time_info(const string& filename, const int& Ns, int& age){
   ifstream infile (filename.c_str());
   if (infile.is_open()){
     std::string line;
-    while(!getline(infile,line).eof()){
+    while(!getline(infile, line).eof()){
       if(line.empty()) continue;
 
       std::vector<std::string> split;
@@ -123,17 +123,18 @@ vector<double> read_time_info(const string& filename, const int& Ns, int& age){
         age = *min_element(ages.begin(), ages.end());
     }
   }else{
-    std::cerr << "Error: open of time data unsuccessful: " <<  filename << std::endl;
+    std::cerr << "Error: open of time data unsuccessful: " << filename << std::endl;
     exit(1);
   }
 
   if( t_info.size() != Ns ){
-    std::cerr << "Error: timing information does not contain Ns entries: " <<  filename << std::endl;
+    std::cerr << "Error: timing information does not contain Ns entries: " << filename << std::endl;
     exit(1);
   }
 
   return t_info;
 }
+
 
 evo_tree read_tree_info(const string& filename, const int& Ns){
   if(debug) cout << "\tread_tree_info" << endl;
@@ -144,7 +145,7 @@ evo_tree read_tree_info(const string& filename, const int& Ns){
   ifstream infile (filename.c_str());
   if (infile.is_open()){
     std::string line;
-    while(!getline(infile,line).eof()){
+    while(!getline(infile, line).eof()){
       if(line.empty()) continue;
 
       std::vector<std::string> split;
@@ -231,14 +232,14 @@ vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int &num_tot
     vector<vector<vector<int>>> s_info;
     num_total_bins = 0;
     // data indexed by [sample][data][ chr, bid, cn ]
-    for(int i=0; i<Ns; ++i) s_info.push_back(vector<vector<int>>());
+    for(int i=0; i < Ns; ++i) s_info.push_back(vector<vector<int>>());
 
     igzstream infile (filename.c_str());
     int counter = 0;
     std::string line;
     int prev_sample = 1;
 
-    while(!getline(infile,line).eof()){
+    while(!getline(infile, line).eof()){
       if(line.empty()) continue;
 
       std::vector<std::string> split;
@@ -308,7 +309,9 @@ void get_num_wgd(const vector<vector<vector<int>>>& s_info, int cn_max, vector<i
             }
         }
 
-        int nwgd = ceil(log2(most_freq_cn)) - 1;
+        int nwgd = 0;
+        int mode_logcn = ceil(log2(most_freq_cn));
+        if(mode_logcn > 1) nwgd = mode_logcn - 1;
         obs_num_wgd.push_back(nwgd);
         if(debug) cout << "Sample " << i+1 << " has " << nwgd << " WGD events" << endl;
     }
@@ -403,11 +406,11 @@ vector<vector<int>> get_invar_segs(const vector<vector<vector<int>>>& s_info, in
     if(debug){
         cout << "\tVariable bins found:" << endl;
         for(int k=0; k<num_total_bins; ++k){
-          if(var_bins[k] == 1){
+            if(var_bins[k] == 1){
             cout << s_info[0][k][0] << "\t" << s_info[0][k][1];
             for(int i=0; i<Ns; ++i) cout << "\t" << s_info[i][k][2];
             cout << endl;
-          }
+            }
         }
     }
 
@@ -658,8 +661,10 @@ vector<vector<int>> group_segs(const vector<vector<int>>& segs, const vector<vec
 vector<vector<int>> read_data_var_regions(const string& filename, const int& Ns, const int& max_cn, int& num_invar_bins, int& num_total_bins, int& seg_size, vector<int>&  obs_num_wgd, vector<vector<int>>& obs_change_chr, int is_total=1){
     cout << "reading data and calculating CNA regions" << endl;
     vector<vector<vector<int>>> s_info = read_cn(filename, Ns, num_total_bins, is_total);
-    get_num_wgd(s_info, cn_max, obs_num_wgd, is_total);
-    get_change_chr(s_info, obs_change_chr, cn_max, is_total);
+    if(model == 3){
+        get_num_wgd(s_info, cn_max, obs_num_wgd, is_total);
+        get_change_chr(s_info, obs_change_chr, cn_max, is_total);
+    }
     get_sample_mcn(s_info, sample_max_cn, cn_max, is_total);
     // We now need to convert runs of variable bins into segments of constant cn values, grouped by chromosome
     vector<vector<int>> segs = get_invar_segs(s_info, Ns, num_total_bins, num_invar_bins);
@@ -679,8 +684,10 @@ vector<vector<int>> read_data_var_regions(const string& filename, const int& Ns,
 map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filename, const int& Ns, const int& max_cn, int& num_invar_bins, int& num_total_bins, int &seg_size, vector<int>&  obs_num_wgd, vector<vector<int>>& obs_change_chr, int is_total=1){
     cout << "reading data and calculating CNA regions by chromosome" << endl;
     vector<vector<vector<int>>> s_info = read_cn(filename, Ns, num_total_bins, is_total);
-    get_num_wgd(s_info, cn_max, obs_num_wgd, is_total);
-    get_change_chr(s_info, obs_change_chr, cn_max, is_total);
+    if(model == 3){
+        get_num_wgd(s_info, cn_max, obs_num_wgd, is_total);
+        get_change_chr(s_info, obs_change_chr, cn_max, is_total);
+    }
     get_sample_mcn(s_info, sample_max_cn, cn_max, is_total);
     vector<vector<int>> segs = get_invar_segs(s_info, Ns, num_total_bins, num_invar_bins, is_total);
     seg_size = segs.size();
@@ -698,8 +705,10 @@ map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filenam
 map<int, vector<vector<int>>> read_data_regions_by_chr(const string& filename, const int& Ns, const int& max_cn, int& num_invar_bins, int& num_total_bins, int& seg_size, vector<int>&  obs_num_wgd, vector<vector<int>>& obs_change_chr, int incl_all=1, int is_total=1){
     cout << "reading data and calculating CNA regions by chromosome" << endl;
     vector<vector<vector<int>>> s_info = read_cn(filename, Ns, num_total_bins, is_total);
-    get_num_wgd(s_info, cn_max, obs_num_wgd, is_total);
-    get_change_chr(s_info, obs_change_chr, cn_max, is_total);
+    if(model == 3){
+        get_num_wgd(s_info, cn_max, obs_num_wgd, is_total);
+        get_change_chr(s_info, obs_change_chr, cn_max, is_total);
+    }
     get_sample_mcn(s_info, sample_max_cn, cn_max, is_total);
     // We now need to convert runs of variable bins into segments of constant cn values, grouped by chromosome
     vector<vector<int>> segs = get_all_segs(s_info, Ns, num_total_bins, num_invar_bins, incl_all, is_total);
@@ -755,5 +764,18 @@ void get_bootstrap_vector_by_chr(map<int, vector<vector<int>>>& data, map<int, v
       vobs[nchr] = obs_chr;
     }
 }
+
+
+// to validate the rate matrix
+void check_matrix_row_sum(double *mat, int nstate){
+    for(int i = 0; i < nstate; i++){
+        double sum = 0;
+        for(int j = 0; j < nstate; j++){    // jth column
+            sum += mat[i + j * nstate];
+        }
+        cout << "Total probability of changing from " << i << " is " << sum << endl;
+    }
+}
+
 
 #endif

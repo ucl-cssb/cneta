@@ -10,12 +10,12 @@ Nsim=1  # The number of simulations. Number of patients to simulate
 ####################### Parameters related to tree generation ##################
 Ns=3  # The number of tumor regions to sample. Output will be Ns+1 including germline normal region
 tree_file=""  # The input tree file. If given, mutations will be generated along this tree
-cons=1  # Whether the tree height is constrained by age or not
 Ne=9000000  # effective population size for the coalescence tree
 beta=1.563e-3  # exponential growth rate
 gtime=0.002739726 # generation time in year
 age=60  # Age of the patient at first sample
-dt=2  # time step for simulating different sampling times
+cons=1  # Whether the tree height is constrained by age or not
+dt=2  # time step for simulating different sampling times (must be > 0 when cons=1)
 ################################################################################
 
 

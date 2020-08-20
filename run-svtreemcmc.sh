@@ -33,7 +33,7 @@ file_itree=$dir/"$prefix"-tree.txt
 ####################### Set output directory and run the program ###############
 # output parameters
 odir=$dir/mcmc
-if [[ ! -d $dir ]]; then
+if [[ ! -d $odir ]]; then
   mkdir -p $odir
 fi
 suffix=$prefix
