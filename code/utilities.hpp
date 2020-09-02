@@ -313,7 +313,7 @@ void get_num_wgd(const vector<vector<vector<int>>>& s_info, int cn_max, vector<i
         int mode_logcn = ceil(log2(most_freq_cn));
         if(mode_logcn > 1) nwgd = mode_logcn - 1;
         obs_num_wgd.push_back(nwgd);
-        if(debug) cout << "Sample " << i+1 << " has " << nwgd << " WGD events" << endl;
+        if(debug) cout << "Sample " << i+1 << " probably has " << nwgd << " WGD event(s)" << endl;
     }
 }
 
@@ -384,31 +384,46 @@ void get_sample_mcn(const vector<vector<vector<int>>>& s_info, vector<int>& samp
 }
 
 
-// Distinguish invariable and variable sites; Combine adjacent invariable sites
+// Distinguish invariable and variable sites;
+// Combine adjacent invariable sites
 vector<vector<int>> get_invar_segs(const vector<vector<vector<int>>>& s_info, int Ns, int num_total_bins, int& num_invar_bins, int is_total=1){
     num_invar_bins = 0;
     // Find the number of invariable sites for each character (state)
-    // Loop over and output only the regions that have varied
+    // Loop over and output only the regions that have varied, which provide information for tree building
     vector<int> var_bins(num_total_bins, 0);
-    for(int k=0; k<num_total_bins; ++k){
-        int sum = 0;
-        for(int i=0; i<Ns; ++i){
-            sum += abs(s_info[i][k][2]);
+    for(int k = 0; k < num_total_bins; ++k){
+        // // using sum to detect variant bins -- not work for aneuploid genomes
+        // int sum = 0;
+        // for(int i = 0; i < Ns; ++i){
+        //     sum += abs(s_info[i][k][2]);
+        // }
+        // if((is_total == 1 && sum != 2 * Ns) || (is_total == 0 && sum != 4 * Ns)){    // each site has number 2 when it is total CN or 4 when it is allele-specific CN
+        //     var_bins[k] = 1;
+        // }
+        // else{
+        //     num_invar_bins += 1;
+        // }
+        int has_diff = 0;
+        int cn1 = s_info[0][k][2];
+        for(int i = 1; i < Ns; ++i){
+            int cn2 = s_info[i][k][2];
+            if(cn2 != cn1){
+              has_diff = 1;
+              var_bins[k] = 1;
+              break;
+            }
         }
-        if((is_total==1 && sum != 2*Ns) || (is_total==0 && sum != 4*Ns)){    // each site has number 2 when it is total CN or 4 when it is allele-specific CN
-            var_bins[k] = 1;
-        }
-        else{
-            num_invar_bins += 1;
+        if(has_diff == 0){
+          num_invar_bins += 1;
         }
     }
 
     if(debug){
         cout << "\tVariable bins found:" << endl;
-        for(int k=0; k<num_total_bins; ++k){
+        for(int k = 0; k < num_total_bins; ++k){
             if(var_bins[k] == 1){
             cout << s_info[0][k][0] << "\t" << s_info[0][k][1];
-            for(int i=0; i<Ns; ++i) cout << "\t" << s_info[i][k][2];
+            for(int i = 0; i < Ns; ++i) cout << "\t" << s_info[i][k][2];
             cout << endl;
             }
         }
@@ -420,7 +435,7 @@ vector<vector<int>> get_invar_segs(const vector<vector<vector<int>>>& s_info, in
     cout << "\tFound invariable bins:\t" << num_invar_bins << endl;
 
     vector<vector<int>> segs;
-    for(int k=0; k<num_total_bins;){
+    for(int k = 0; k<num_total_bins;){
         if(var_bins[k] == 1){
           //in_seg = true;
           int chr = s_info[0][k][0];
@@ -475,7 +490,7 @@ vector<vector<int>> get_all_segs(const vector<vector<vector<int>>>& s_info, int 
     // Find the number of invariable sites for each character (state)
     // Loop over and output only the regions that have varied
     vector<int> var_bins(num_total_bins, 0);
-    for(int k=0; k<num_total_bins; ++k){
+    for(int k = 0; k<num_total_bins; ++k){
         int sum = 0;
         for(int i=0; i<Ns; ++i){
           sum += abs(s_info[i][k][2]);
@@ -490,7 +505,7 @@ vector<vector<int>> get_all_segs(const vector<vector<vector<int>>>& s_info, int 
 
     if(debug){
         cout << "\tVariable bins found:" << endl;
-        for(int k=0; k<num_total_bins; ++k){
+        for(int k = 0; k<num_total_bins; ++k){
           if(var_bins[k] == 1){
             cout << s_info[0][k][0] << "\t" << s_info[0][k][1];
             for(int i=0; i<Ns; ++i) cout << "\t" << s_info[i][k][2];
@@ -506,7 +521,7 @@ vector<vector<int>> get_all_segs(const vector<vector<vector<int>>>& s_info, int 
 
     vector<vector<int>> segs;
     if(incl_all){
-        for(int k=0; k<num_total_bins; k++){
+        for(int k = 0; k<num_total_bins; k++){
               int chr = s_info[0][k][0];
               int seg_start = s_info[0][k][1];
               int id_start = k;
@@ -524,7 +539,7 @@ vector<vector<int>> get_all_segs(const vector<vector<vector<int>>>& s_info, int 
         }
     }
     else{
-        for(int k=0; k<num_total_bins; k++){
+        for(int k = 0; k<num_total_bins; k++){
             if(var_bins[k] == 1){
                 int chr = s_info[0][k][0];
                 int seg_start = s_info[0][k][1];
@@ -596,7 +611,7 @@ map<int, vector<vector<int>>>  group_segs_by_chr(const vector<vector<int>>& segs
             vector<vector<int>> sites = it.second;
             for(int j=0; j<sites.size(); ++j){
                  cout << "\t" << sites[j][0];
-                 for(int k=0; k<Ns; ++k){
+                 for(int k = 0; k<Ns; ++k){
                      cout << "\t" << sites[j][k+3];
                  }
                  cout << endl;
@@ -647,7 +662,7 @@ vector<vector<int>> group_segs(const vector<vector<int>>& segs, const vector<vec
     cout << "\tUsing segments:\t\t" << ret.size() << endl;
     if(debug){
         for(int j=0; j<ret.size(); ++j){
-             for(int k=0; k<Ns; ++k){
+             for(int k = 0; k<Ns; ++k){
                  cout << "\t" << ret[j][k+3];
              }
              cout << endl;

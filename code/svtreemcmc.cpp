@@ -2082,10 +2082,10 @@ int main (int argc, char ** const argv) {
     po::options_description required("Required parameters");
     required.add_options()
             ("cfile,c", po::value<string>(&datafile)->required(), "input copy number profile file")
-            ("tfile,t", po::value<string>(&timefile)->required(), "input time information file")
     ;
     po::options_description optional("Optional parameters");
     optional.add_options()
+            ("tfile,t", po::value<string>(&timefile)->default_value(""), "input time information file")
             ("config_file", po::value<string>(&config_file)->default_value(""), "configuration file of input parameters")
             ("Ns,s", po::value<int>(&Ns)->default_value(5), "number of samples or regions")
             ("cn_max", po::value<int>(&cn_max)->default_value(4), "maximum copy number of a segment")

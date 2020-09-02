@@ -2623,7 +2623,7 @@ int main (int argc, char ** const argv) {
      ;
     po::options_description optional("Optional parameters");
     optional.add_options()
-     ("tfile,t", po::value<string>(&timefile)->required(), "input time information file")
+     ("tfile,t", po::value<string>(&timefile)->default_value(""), "input time information file")
 
     ("nsample,s", po::value<int>(&Ns)->default_value(5), "number of samples or regions")
     ("ofile,o", po::value<string>(&ofile)->default_value("maxL-tree.txt"), "output tree file with maximum likelihood")

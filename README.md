@@ -19,7 +19,7 @@ This package is mostly written in C++. There are a few scripts written in R and 
 ## Dependencies
 
 * Required C/C++ libraries
-  * CMake is required for BFGS optimization
+  * [CMake](https://cmake.org/install/) is required for BFGS optimization
   * C libaries: gsl, boost (version >= 1.42)
 
 * Required R libraries
@@ -148,14 +148,14 @@ Please see run-sveta.sh to learn how to set different parameters
 * *-info.txt: The time of each node and the total number of mutations simulated on each branch of the tree, grouped by lineages of tip nodes.
 * *-mut.txt: The list of simulated mutations on each branch of the tree.
 * *-tree.txt: The simulated tree in tab-delimited format
-* *-tree.nex: The simulated tree in NEWICK format, with branch length reprenting calender time
-* *-tree-nmut.nex: The simulated tree in NEWICK format, with branch length reprenting number of mutations
+* *-tree.nex: The simulated tree in NEWICK format, with branch length representing calender time
+* *-tree-nmut.nex: The simulated tree in NEWICK format, with branch length representing number of mutations
 
 File *-cn.txt.gz can serve as the input to a tree building program that used integer total copy number.
 
 File *-allele-cn.txt.gz can serve as the input to a tree building program that used integer allele-specific copy number.
 
-File *-rel-times.txt can provide the timing information of tip nodes to allow etimation of divergence time and mutation rates.
+File *-rel-times.txt can provide the timing information of tip nodes to allow estimation of divergence time and mutation rates.
 
 Files *-tree.* provide the real tree, which can be used for measuring the accuracy of tree building programs.
 The nodes in the tree are specified in a fixed order. The patient samples are indexed from 0 to n-1, where n is the number of samples. The normal sample has ID n. The root has ID n+1. For the internal nodes have ID from n+2 to 2n+1 from bottom to up.
@@ -179,7 +179,7 @@ There are 4 running modes in svtreeml.
 * mode 0: building maximum likelihood tree from input copy numbers
 * mode 1: a simple comprehensive test on a simulated tree
 * mode 2: computing likelihood given a tree and its parameters (branch length and mutation rates)
-* mode 3: computing maximum likelihood tree given a tree topolgy
+* mode 3: computing maximum likelihood tree given a tree topology
 The last three modes can be used to validate the computation of likelihood.
 
 There are 3 tree searching method:
@@ -195,27 +195,27 @@ There are four Markov models of evolution for building trees from the copy numbe
 * model 2: bounded model of allele-specific copy number
 * model 3: independent Markov chain model (with 3 chains)
 
-For tree recontruction with svtreeml on data with chromosome gain/loss and WGD, model 3 (model of independent Markov chains) should be used.
+For tree reconstruction with svtreeml on data with chromosome gain/loss and WGD, model 3 (model of independent Markov chains) should be used.
 This model is DIFFERENT from the model used for simulating the data, which is usually model 2 (model of allele-specific copy number) in sveta.
 Model 2 may also be used but there is a strong assumption of event order, that WGD is followed by chromosomal gain or loss and then segment duplication or deletion.
 
 
 There are four important parameters for independent Markov chain model (model 3) to specify the number of states for each chain.
 * max_wgd: the maximum number of WGD events in a sample. When it is 0,
-* max_chr_change: the maximum number of chromosome gain/loss events accross all chromosomes in a sample. When it is 0, chromosome-level CNAs are not considered.
-* max_site_change: the maximum number of segment duplication/deletion events accross all sites in a sample. When it is 0, segment-level CNAs are not considered.
+* max_chr_change: the maximum number of chromosome gain/loss events across all chromosomes in a sample. When it is 0, chromosome-level CNAs are not considered.
+* max_site_change: the maximum number of segment duplication/deletion events across all sites in a sample. When it is 0, segment-level CNAs are not considered.
 * m_max: The maximum number of copies of a segment before chromosome gain/loss events.
 
-Here, max_wgd, max_chr_change, and max_site_change determines the size of transition matrix of the 3 Markov chains for different levels of CNAs.
+Here, max_wgd, max_chr_change, and max_site_change determine the size of transition matrix of the 3 Markov chains for different levels of CNAs.
 If one type of event is known to be missing in the data, please specify corresponding max_TYPE to be 0.
 
-It is IMPORTANT to specify the appropriate values so that the probability of copy number state transition can be properly computed. Lower values will lead to wrong computation of tree likelihood. Higher values are perferred, but it will slow down the computation.
+It is IMPORTANT to specify the appropriate values so that the probability of copy number state transition can be properly computed. Lower values will lead to wrong computation of tree likelihood. Higher values are preferred, but it will slow down the computation.
 
 Since at most one WGD is allowed for each sample, max_wgd should be 1.
 The maximum chromosome change (max_chr_change) should be 1 in most cases, but it should be increased accordingly if some chromosomes undergo more than one gain/loss events.
 The segment-level CNAs are very likely to overlap, so max_site_change are often larger than 1.
 Suppose there is no WGD and chromosome gain/loss, if the maximum copy number in the sample is 5, then max_site_change should be 3 (5 - 2).
-You need adjust the values of max_site_change according to the input data.
+You need to adjust the values of max_site_change according to the input data.
 
 You may check the copy number counts in the input data using similar command as below:
 `less sim-data-1-cn.txt.gz | cut -f4 | sort | uniq -c`.
@@ -223,17 +223,17 @@ You may check the copy number counts in the input data using similar command as 
 
 
 When estimating branch length, time constraints can be considered by specifying the following parameters.
-* cons: When cons = 1, optimization is done with time constraints.
+* cons: When cons = 1, optimization is done with time constraints on patient age and/or tip timing. Mutation rates can be estimated when there are considerate time differences among tips.
 
 
 When building the tree, mutation rates can be estimated by specifying the following parameters.
-* maxj: Whether or not to estimate mutation rate. When maxj = 1, mutation rates will be estimated. This is only reliable when the sampling times of tip nodes provide sufficient information.
+* maxj: Whether or not to estimate mutation rate. When maxj = 1, mutation rates will be estimated. This is only reliable when the sampling times of tip nodes provide sufficient information (cons=1 and dt>0).
 * only_seg: When only_seg=1, only estimate segment duplication/deletion rates. Otherwise, the rates for chromosome gain/loss and WGD will be estimated.
 
 
 ## Output
 * *-tree.txt: The reconstructed tree in tab-delimited format
-* *-tree.nex: The reconstructed tree in NEWICK format, with branch length reprenting calender time
+* *-tree.nex: The reconstructed tree in NEWICK format, with branch length representing calendar time
 
 
 
@@ -250,7 +250,7 @@ When building the tree, mutation rates can be estimated by specifying the follow
 
 Please see run-svtreemcmc.sh to learn how to set different parameters
 
-There are two runing modes depending on whether a reference tree is provided.
+There are two running modes depending on whether a reference tree is provided.
 With a reference tree, the tree topolgy is fixed.
 
 

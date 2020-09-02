@@ -1734,7 +1734,7 @@ vector<vector<double>> initialize_lnl_table_decomp(vector<int>& obs, int chr, ev
     // construct a table for each state of each node
     vector<vector<double>> L_sk_k(rtree.ntotn, vector<double>(nstate,0));
 
-    for(int i=0; i<Ns; ++i){
+    for(int i = 0; i < Ns; ++i){
         // For total copy number, all the possible combinations have to be considered.
         // Set related allele specific cases to be 1, with index from obs[i] * (obs[i] + 1)/2 to obs[i] * (obs[i] + 1)/2 + obs[i]. The index is computed based on pre-specified order.
         int cn = obs[i];
@@ -2787,7 +2787,7 @@ void get_likelihood_site_decomp(vector<vector<double>>& L_sk_k, evo_tree &rtree,
             }
         }
   }
-  if(debug){
+  if(debug > 0){
     print_tree_lnl(rtree, L_sk_k, nstate);
   }
 }
@@ -3676,13 +3676,13 @@ double get_likelihood_chr_decomp(map<int, vector<vector<int>>>& vobs, evo_tree &
     int debug = 0;
     double logL = 0;    // for all chromosmes
 
-    for(int nchr=1; nchr<=vobs.size(); nchr++){     // for each chromosome
+    for(int nchr = 1; nchr <= vobs.size(); nchr++){     // for each chromosome
       if(debug) cout << "Computing likelihood on Chr " << nchr << endl;
       double site_logL = 0;   // log likelihood for all sites on a chromosome
       // Use a map to store computed log likelihood
       map<vector<int>, vector<vector<double>>> sites_lnl_map;
       // cout << " chromosome number change is " << 0 << endl;
-      for(int nc=0; nc<vobs[nchr].size(); nc++){    // for each segment on the chromosome
+      for(int nc = 0; nc < vobs[nchr].size(); nc++){    // for each segment on the chromosome
           // cout << "Number of sites for this chr " << vobs[nchr].size() << endl;
           // for each site of the chromosome (may be repeated)
           vector<int> obs = vobs[nchr][nc];
