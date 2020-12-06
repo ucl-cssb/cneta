@@ -65,12 +65,14 @@ const double LARGE_LNL = -1e9;
 const double SMALL_LNL = -1e20;
 const double SMALL_VAL = 1.0e-10;
 // The maximum mutation rates allowed
+const double MIN_MRATE = 1.0e-20;
+// The maximum mutation rates allowed
 const double MAX_MRATE = 1;
 // The maximum age ratio allowed
 const double MIN_RATIO = 1e-2;
 const double MAX_RATIO = 0.99;
 // The shortest branch length allowed (in year)
-const double SMALL_BLEN = 1e-9;
+// const double BLEN_MIN = 1e-9;
 // Scaling tree height to 1/HEIGHT_SCALE if the current height is larger than the upper bound (patient age at last sample)
 const int HEIGHT_SCALE = 3;
 // The difference from minmial height
@@ -497,8 +499,8 @@ void adjust_all_tips(evo_tree &rtree, vector<double>& tobs, int age){
     }
 
     // Reduce to_reduce from all tips
-    // Add SMALL_BLEN keep some distance from age to ensure minimal branch length after reduction
-    double to_reduce = ttime - age + SMALL_BLEN;
+    // Add BLEN_MIN keep some distance from age to ensure minimal branch length after reduction
+    double to_reduce = ttime - age + BLEN_MIN;
 
     // Reduce some amount from terminal branches to keep all of them still positive
     vector<double> tip_blens;
@@ -513,7 +515,7 @@ void adjust_all_tips(evo_tree &rtree, vector<double>& tobs, int age){
         cout << "Minimal terminal branch length " << min_tblen << endl;
     }
 
-    if(min_tblen >= to_reduce + SMALL_BLEN){
+    if(min_tblen >= to_reduce + BLEN_MIN){
         if(debug) cout << "Only need to adjust tips " << endl;
         for(int j = 0; j < rtree.nedge; j++){
            if (rtree.edges[j].end < Ns ){
@@ -523,24 +525,24 @@ void adjust_all_tips(evo_tree &rtree, vector<double>& tobs, int age){
            }
         }
     }
-    else{   // min_tblen < to_reduce + SMALL_BLEN
+    else{   // min_tblen < to_reduce + BLEN_MIN
         // Always need to adjust terminal branch lengths
         vector<double> internal_blens;
         for(int j = 0; j < rtree.nedge; j++){
             if (rtree.edges[j].end < Ns ){
-                // Reduce SMALL_BLEN so that the shortest terminal branch has length SMALL_BLEN after reduction
-                rtree.edges[j].length = rtree.edges[j].length - (min_tblen - SMALL_BLEN);
+                // Reduce BLEN_MIN so that the shortest terminal branch has length BLEN_MIN after reduction
+                rtree.edges[j].length = rtree.edges[j].length - (min_tblen - BLEN_MIN);
             }
             if (rtree.edges[j].end > Ns){
                internal_blens.push_back(rtree.edges[j].length);
             }
         }
         // If there are still residuals, find some internal edge with larger length and reduce it
-        double to_reduce2 = to_reduce - (min_tblen - SMALL_BLEN);
+        double to_reduce2 = to_reduce - (min_tblen - BLEN_MIN);
         assert(to_reduce2 > 0);
         if(debug) cout << "Differences to reduce further " << to_reduce2 << endl;
         double max_iblen = *max_element(internal_blens.begin(), internal_blens.end());
-        if(max_iblen >= to_reduce2 + SMALL_BLEN){
+        if(max_iblen >= to_reduce2 + BLEN_MIN){
             if(debug){
                 cout << "Adjust one internal branch length " << endl;
                 cout << "Edge lengths before: ";
@@ -555,7 +557,7 @@ void adjust_all_tips(evo_tree &rtree, vector<double>& tobs, int age){
                 cout << endl;
             }
             for(int j = 0; j < rtree.nedge; j++){
-                if (rtree.edges[j].end > Ns && rtree.edges[j].length >= to_reduce2 + SMALL_BLEN ){
+                if (rtree.edges[j].end > Ns && rtree.edges[j].length >= to_reduce2 + BLEN_MIN ){
                     if(debug) cout << "Adjusting edge " << j << endl;
                     rtree.edges[j].length = rtree.edges[j].length - to_reduce2;
                     break;
@@ -568,17 +570,17 @@ void adjust_all_tips(evo_tree &rtree, vector<double>& tobs, int age){
                 }
                 cout << endl;
             }
-        }else{  // max_iblen < to_reduce2 + SMALL_BLEN, rarely needed
+        }else{  // max_iblen < to_reduce2 + BLEN_MIN, rarely needed
             if(debug) cout << "Adjust several internal branch lengths " << endl;
-            // All internal branch lengths are smaller than to_reduce2 + SMALL_BLEN, so reduction has to be done multiple times
+            // All internal branch lengths are smaller than to_reduce2 + BLEN_MIN, so reduction has to be done multiple times
             double delta = to_reduce2;
             for(int j = 0; j < rtree.nedge; j++){
-                if (rtree.edges[j].end > Ns && rtree.edges[j].length > 2 * SMALL_BLEN){
-                    if(delta >= (rtree.edges[j].length - SMALL_BLEN)){   // need another reduction
-                        rtree.edges[j].length = SMALL_BLEN;
-                        delta = delta - (rtree.edges[j].length - SMALL_BLEN);
+                if (rtree.edges[j].end > Ns && rtree.edges[j].length > 2 * BLEN_MIN){
+                    if(delta >= (rtree.edges[j].length - BLEN_MIN)){   // need another reduction
+                        rtree.edges[j].length = BLEN_MIN;
+                        delta = delta - (rtree.edges[j].length - BLEN_MIN);
                     }
-                    else{   // delta < (rtree.edges[j].length - SMALL_BLEN
+                    else{   // delta < (rtree.edges[j].length - BLEN_MIN
                         rtree.edges[j].length = rtree.edges[j].length - delta;
                         delta = -1;
                     }
@@ -693,7 +695,7 @@ void adjust_tree_blens_all(evo_tree &rtree){
 
     double min_blen = *min_element(blens.begin(), blens.end());
     if(min_blen < 0){
-        double delta = min_blen - SMALL_BLEN;
+        double delta = min_blen - BLEN_MIN;
         if(debug){
             cout << "Estimated branch lengths have negative values!" << endl;
             cout << "Increase all branch lengths (except the branch to normal node) to eliminate negative values by " << -delta << endl;
@@ -718,8 +720,8 @@ void adjust_tree_blens(evo_tree &rtree){
     for(int i=0; i<rtree.nedge; ++i){
         if(rtree.edges[i].length < 0){
             if(debug) cout << "Negative length for edge " << i << endl;
-            rtree.edges[i].length = SMALL_BLEN;
-            rtree.node_times[rtree.edges[i].end] = rtree.node_times[rtree.edges[i].start] + SMALL_BLEN;
+            rtree.edges[i].length = BLEN_MIN;
+            rtree.node_times[rtree.edges[i].end] = rtree.node_times[rtree.edges[i].start] + BLEN_MIN;
         }
     }
 }
@@ -3677,13 +3679,15 @@ double get_likelihood_chr_decomp(map<int, vector<vector<int>>>& vobs, evo_tree &
     double logL = 0;    // for all chromosmes
 
     for(int nchr = 1; nchr <= vobs.size(); nchr++){     // for each chromosome
-      if(debug) cout << "Computing likelihood on Chr " << nchr << endl;
+      if(debug){
+        cout << "Computing likelihood on Chr " << nchr << endl;
+        cout << "Number of sites for this chr " << vobs[nchr].size() << endl;
+      }
       double site_logL = 0;   // log likelihood for all sites on a chromosome
       // Use a map to store computed log likelihood
       map<vector<int>, vector<vector<double>>> sites_lnl_map;
       // cout << " chromosome number change is " << 0 << endl;
       for(int nc = 0; nc < vobs[nchr].size(); nc++){    // for each segment on the chromosome
-          // cout << "Number of sites for this chr " << vobs[nchr].size() << endl;
           // for each site of the chromosome (may be repeated)
           vector<int> obs = vobs[nchr][nc];
           vector<vector<double>> L_sk_k;
@@ -3705,8 +3709,9 @@ double get_likelihood_chr_decomp(map<int, vector<vector<int>>>& vobs, evo_tree &
           site_logL += lnl;
 
           if(debug){
-              cout << "\nLikelihood for site " << nc << " is " << lnl << endl;
-              cout << "CNs at this site: ";
+              cout << "\nLikelihood for site " << nc << ": " << lnl;
+               // << endl;
+              // cout << "CNs at this site: ";
               for(int i = 0; i < obs.size(); i++){
                   cout << "\t" << obs[i];
               }
@@ -4493,8 +4498,8 @@ vector<double> get_blens_from_intervals(evo_tree &rtree, double *x){
     for(int i=0; i < rtree.nleaf - 1; i++){
         double len = x[i+1];
         bool is_nan = std::isnan(len);
-        if ( is_nan || (!is_nan && len < SMALL_BLEN)){
-           len = SMALL_BLEN;
+        if ( is_nan || (!is_nan && len < BLEN_MIN)){
+           len = BLEN_MIN;
         }
         intervals.push_back(len);
     }
@@ -4547,15 +4552,28 @@ void get_variables_ntime(evo_tree &rtree, double *x){
             npar_ne = rtree.nintedge + 1;
             // vector<double> blens = get_blens_from_intervals(rtree, x);
             vector<double> ratios;
+            int nratios = rtree.nnode;
+            for(int i = 0; i < nratios; i++){
+                ratios.push_back(rtree.ratios[i]);
+            }
+            if(debug){
+                rtree.print();
+                cout << "There are " << nratios << " ratios" << endl;
+                cout << "Original values of estimated variables: " << endl;
+                for(int i = 0; i < nratios; i++){
+                    cout << i + 1 << "\t" << "\t" << ratios[i] << endl;
+                }
+            }
             // The estimated value may be nan
             // cout << "estimated x: ";
             for(int i=0; i < npar_ne; i++){
                 double val = x[i + 1];
                 // cout << "\t" << val;
-                if(std::isnan(val)){
-                    val = rtree.ratios[i];
+                if(std::isnan(val)){  // return previous values
+                    if(debug) cout << "nan returned in BFGS!" << endl;
+                    val = ratios[i];
                 }
-                ratios.push_back(val);
+                // ratios.push_back(val);
                 rtree.ratios[i] = val;
             }
             // cout << endl;
@@ -4564,11 +4582,10 @@ void get_variables_ntime(evo_tree &rtree, double *x){
             if(debug){
                 rtree.print();
                 cout << "Current values of estimated variables: " << endl;
-                for(int i = 0; i< ratios.size(); i++){
-                    cout << i + 1 << "\t" << "\t" << ratios[i] << endl;
+                for(int i = 0; i < nratios; i++){
+                    cout << i + 1 << "\t" << "\t" << rtree.ratios[i] << endl;
                 }
             }
-            // rtree.ratios = ratios;
             rtree.update_edges_from_ratios();
         }
 
@@ -5076,69 +5093,69 @@ void lbfgsb(evo_tree &rtree, int n, int m, double *x, double *l, double *u, int 
 */
 // double L_BFGS_B(evo_tree &rtree, int model, int cons, int maxj, int cn_max, int only_seg, int correct_bias, int is_total, int n, double* x, double* l, double* u, double pgtol, int maxit)
 double L_BFGS_B(evo_tree &rtree, int n, double* x, double* l, double* u, double pgtol, int maxit) {
-    int debug = 0;
-    int i;
-	double Fmin;
-	int fail;
-	int fncount;
-	int grcount;
-	char msg[100];
+  int debug = 0;
+  int i;
+  double Fmin;
+  int fail;
+  int fncount;
+  int grcount;
+  char msg[100];
 
-	int m = 10;          // number of BFGS updates retained in the "L-BFGS-B" method. It defaults to 5.
+  int m = 10;          // number of BFGS updates retained in the "L-BFGS-B" method. It defaults to 5.
 
-	int *nbd;           // 0: unbounded; 1: lower bounded; 2: both lower & upper; 3: upper bounded
-	nbd = new int[n];
-	for (i=0; i<n; i++)
-		nbd[i] = 2;
+  int *nbd;           // 0: unbounded; 1: lower bounded; 2: both lower & upper; 3: upper bounded
+  nbd = new int[n];
+  for (i=0; i<n; i++)
+  nbd[i] = 2;
 
-	double factr = 1e+7; // control the convergence of the "L-BFGS-B" method.
-	// Convergence occurs when the reduction in the object is within this factor
-	// of the machine tolerance.
-	// Default is 1e7, that is a tolerance of about 1e-8
+  double factr = 1e+7; // control the convergence of the "L-BFGS-B" method.
+  // Convergence occurs when the reduction in the object is within this factor
+  // of the machine tolerance.
+  // Default is 1e7, that is a tolerance of about 1e-8
 
-//	double pgtol = 0;   // helps control the convergence of the "L-BFGS-B" method.
-//    pgtol = 0.0;
-	// It is a tolerance on the projected gradient in the current search direction.
-	// Default is zero, when the check is suppressed
+  //	double pgtol = 0;   // helps control the convergence of the "L-BFGS-B" method.
+  //    pgtol = 0.0;
+  // It is a tolerance on the projected gradient in the current search direction.
+  // Default is zero, when the check is suppressed
 
-	int trace = 0;      // non-negative integer.
-    if (debug)
-        trace = 1;
-	// If positive, tracing information on the progress of the optimization is produced.
-	// Higher values may produce more tracing information.
+  int trace = 0;      // non-negative integer.
+  if (debug)
+      trace = 1;
+  // If positive, tracing information on the progress of the optimization is produced.
+  // Higher values may produce more tracing information.
 
-	int nREPORT = 10;   // The frequency of reports for the "L-BFGS-B" methods if "trace" is positive.
-	// Defaults to every 10 iterations.
+  int nREPORT = 10;   // The frequency of reports for the "L-BFGS-B" methods if "trace" is positive.
+  // Defaults to every 10 iterations.
 
-/*#ifdef USE_OLD_PARAM
-	lbfgsb(n, m, x, l, u, nbd, &Fmin, fn, gr1, &fail, ex,
-			factr, pgtol, &fncount, &grcount, maxit, msg, trace, nREPORT);
-#else*/
+  /*#ifdef USE_OLD_PARAM
+  lbfgsb(n, m, x, l, u, nbd, &Fmin, fn, gr1, &fail, ex,
+  	factr, pgtol, &fncount, &grcount, maxit, msg, trace, nREPORT);
+  #else*/
 
-    // cout << "initial values in bfgs: ";
-    // for(int mi = 0; mi < 3; mi++){
-    //     cout << "\t" << x[mi];
-    // }
-    // cout << "\n";
-    //
-    // cout << "upper bound in bfgs: ";
-    // for(int mi = 0; mi < 3; mi++){
-    //     cout << "\t" << u[mi];
-    // }
-    // cout << "\n";
+  // cout << "initial values in bfgs: ";
+  // for(int mi = 0; mi < 3; mi++){
+  //     cout << "\t" << x[mi];
+  // }
+  // cout << "\n";
+  //
+  // cout << "upper bound in bfgs: ";
+  // for(int mi = 0; mi < 3; mi++){
+  //     cout << "\t" << u[mi];
+  // }
+  // cout << "\n";
 
-	// lbfgsb(rtree, model, cons, maxj, cn_max, only_seg, correct_bias, is_total, n, m, x, l, u, nbd, &Fmin, &fail, factr, pgtol, &fncount, &grcount, maxit, msg, trace, nREPORT);
-    // lbfgsb(n, m, x, l, u, nbd, &Fmin, &fail, factr, pgtol, &fncount, &grcount, maxit, msg, trace, nREPORT);
-    lbfgsb(rtree, n, m, x, l, u, nbd, &Fmin, &fail, factr, pgtol, &fncount, &grcount, maxit, msg, trace, nREPORT);
-//#endif
+  // lbfgsb(rtree, model, cons, maxj, cn_max, only_seg, correct_bias, is_total, n, m, x, l, u, nbd, &Fmin, &fail, factr, pgtol, &fncount, &grcount, maxit, msg, trace, nREPORT);
+  // lbfgsb(n, m, x, l, u, nbd, &Fmin, &fail, factr, pgtol, &fncount, &grcount, maxit, msg, trace, nREPORT);
+  lbfgsb(rtree, n, m, x, l, u, nbd, &Fmin, &fail, factr, pgtol, &fncount, &grcount, maxit, msg, trace, nREPORT);
+  //#endif
 
-    if (fail == 51 || fail == 52) {
-        cout << msg << endl;
-    }
+  if (fail == 51 || fail == 52) {
+      cout << msg << endl;
+  }
 
-	delete[] nbd;
+  delete[] nbd;
 
-    return Fmin;
+  return Fmin;
 }
 
 
@@ -5157,7 +5174,7 @@ void init_branch_by_interval(double *variables, double *upper_bound, double *low
 
     for(int i=0; i< rtree.top_tinvls.size(); ++i){
       variables[i+1] = rtree.top_tinvls[i];
-      lower_bound[i+1] = SMALL_BLEN;
+      lower_bound[i+1] = BLEN_MIN;
       // cout << "Starting node of the interval " << rtree.top_tnodes[i] << "\t" << rtree.node_times[rtree.top_tnodes[i]] << endl;
       upper_bound[i+1] = age / 2;
       // When the interval is below the first sample, it should be smaller than the time difference between tip below it and 1st sample
@@ -5174,7 +5191,7 @@ void init_branch_by_interval(double *variables, double *upper_bound, double *low
           // If max_len is very small, this tree seems not feasible
           if( fabs(max_len - 0) < SMALL_VAL){
               cout << "The terminal branch length under " << rtree.top_tnodes[i] + 1 << " in the proposed tree will not be valid! " << endl;
-              upper_bound[i+1] = SMALL_BLEN + SMALL_BLEN;
+              upper_bound[i+1] = BLEN_MIN + BLEN_MIN;
               // return rtree;
           }else{
               upper_bound[i+1] = max_len;
@@ -5243,10 +5260,10 @@ void max_likelihood_BFGS(evo_tree &rtree, double &minL, double tolerance, int mi
             upper_bound[i+1] = MAX_RATIO;
         }else{
             int i = 0;
-            // root
+            // age of root
             variables[i+1] = rtree.ratios[i];
             double max_obs = *max_element(rtree.tobs.begin(), rtree.tobs.end());
-            lower_bound[i+1] = max_obs;
+            lower_bound[i+1] = max_obs + MIN_RATIO;
             upper_bound[i+1] = max_obs + age;
 
             for(int i=1; i < npar_ne; ++i){
@@ -5259,12 +5276,12 @@ void max_likelihood_BFGS(evo_tree &rtree, double &minL, double tolerance, int mi
         if(opt_one_branch == 1){
             int i = 0;
             variables[i+1] = rtree.edges[rtree.current_eid].length;
-            lower_bound[i+1] = SMALL_BLEN;
+            lower_bound[i+1] = BLEN_MIN;
             upper_bound[i+1] = age;
         }else{
             for(int i=0; i<npar_ne; ++i){
               variables[i+1] = rtree.edges[i].length;
-              lower_bound[i+1] = SMALL_BLEN;
+              lower_bound[i+1] = BLEN_MIN;
               upper_bound[i+1] = age;
             }
         }
@@ -5274,34 +5291,34 @@ void max_likelihood_BFGS(evo_tree &rtree, double &minL, double tolerance, int mi
         if(model == 0){
             int i = npar_ne;
             variables[i+1] = rtree.mu;
-            lower_bound[i+1] = 0;
+            lower_bound[i+1] = MIN_MRATE;
             upper_bound[i+1] = MAX_MRATE;
         }
         else{
             int i = npar_ne;
             variables[i+1] = rtree.dup_rate;
-            lower_bound[i+1] = 0;
+            lower_bound[i+1] = MIN_MRATE;
             upper_bound[i+1] = MAX_MRATE;
 
             i = npar_ne+1;
             variables[i+1] = rtree.del_rate;
-            lower_bound[i+1] = 0;
+            lower_bound[i+1] = MIN_MRATE;
             upper_bound[i+1] = MAX_MRATE;
 
             if(!only_seg){
                 i = npar_ne+2;
                 variables[i+1] = rtree.chr_gain_rate;
-                lower_bound[i+1] = 0;
+                lower_bound[i+1] = MIN_MRATE;
                 upper_bound[i+1] = MAX_MRATE;
 
                 i = npar_ne+3;
                 variables[i+1] = rtree.chr_loss_rate;
-                lower_bound[i+1] = 0;
+                lower_bound[i+1] = MIN_MRATE;
                 upper_bound[i+1] = MAX_MRATE;
 
                 i = npar_ne+4;
                 variables[i+1] = rtree.wgd_rate;
-                lower_bound[i+1] = 0;
+                lower_bound[i+1] = MIN_MRATE;
                 upper_bound[i+1] = MAX_MRATE;
             }
         }

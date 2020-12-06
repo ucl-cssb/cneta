@@ -386,6 +386,7 @@ void get_sample_mcn(const vector<vector<vector<int>>>& s_info, vector<int>& samp
 
 // Distinguish invariable and variable sites;
 // Combine adjacent invariable sites
+// TODO: Distinguish different types of invariant sites: 2 vs 4, which have different likelihoods
 vector<vector<int>> get_invar_segs(const vector<vector<vector<int>>>& s_info, int Ns, int num_total_bins, int& num_invar_bins, int is_total=1){
     num_invar_bins = 0;
     // Find the number of invariable sites for each character (state)

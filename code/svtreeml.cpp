@@ -1737,9 +1737,9 @@ void do_exhaustive_search(evo_tree& min_lnL_tree, string real_tstring, int Ngen,
     for(int i=0; i < max_tree_num; ++i){
         string tstring = order_tree_string_uniq(create_tree_string_uniq(init_trees[i]));
         if(debug){
-            cout << "String for tree " << i << " is " << tstring << endl;
+            cout << "String for tree " << i+1 << " is " << tstring << endl;
             string newick = init_trees[i].make_newick(PRINT_PRECISION);
-            cout << "Newick String for tree " << i << " is " << newick << endl;
+            cout << "Newick String for tree " << i+1 << " is " << newick << endl;
         }
         string tid = to_string(i);
         if(tstring == real_tstring){
@@ -2435,14 +2435,14 @@ double compute_tree_likelihood(const string& tree_file, map<int, set<vector<int>
     }
 
     double Ls = 0;
-    if(only_seg){
-        cout << "\nComputing the likelihood based on allele-specific model " << endl;
-        // Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, tree, model, cons, cn_max, only_seg, correct_bias, is_total);
-        Ls = get_likelihood_revised(tree);
+    if(model == 3){
+      cout << "\nComputing the likelihood based on independent Markov chain model " << endl;
+      // Ls = get_likelihood_decomp(Ns, Nchar, num_invar_bins, vobs, tree, decomp_table, cons, cn_max, m_max, max_wgd, max_chr_change, max_site_change, correct_bias, is_total);
+      Ls = get_likelihood_decomp(tree);
     }else{
-        cout << "\nComputing the likelihood based on independent Markov chain model " << endl;
-        // Ls = get_likelihood_decomp(Ns, Nchar, num_invar_bins, vobs, tree, decomp_table, cons, cn_max, m_max, max_wgd, max_chr_change, max_site_change, correct_bias, is_total);
-        Ls = get_likelihood_decomp(tree);
+      cout << "\nComputing the likelihood based on allele-specific model " << endl;
+      // Ls = get_likelihood_revised(Ns, Nchar, num_invar_bins, vobs, tree, model, cons, cn_max, only_seg, correct_bias, is_total);
+      Ls = get_likelihood_revised(tree);
     }
 
 
@@ -2673,7 +2673,7 @@ int main (int argc, char ** const argv) {
 
     ("model,d", po::value<int>(&model)->default_value(2), "model of evolution (0: Mk, 1: one-step bounded (total), 2: one-step bounded (allele-specific, 3: independent Markov chains)")
     ("constrained", po::value<int>(&cons)->default_value(1), "constraints on branch length (0: none, 1: fixed total time)")
-    ("fixm", po::value<int>(&maxj)->default_value(0), "estimation of mutation rate (0: mutation rate fixed to be the given value, 1: estimating mutation rate)")
+    ("estmu,u", po::value<int>(&maxj)->default_value(0), "estimation of mutation rate (0: mutation rate fixed to be the given value, 1: estimating mutation rate)")
     ("optim", po::value<int>(&optim)->default_value(1), "method of optimization (0: Simplex, 1: L-BFGS-B)")
     ("tree_search", po::value<int>(&tree_search)->default_value(1), "method of searching tree space (0: Genetic algorithm, 1: Random-restart hill climbing, 2: Exhaustive search)")
     ("speed_nni", po::value<int>(&speed_nni)->default_value(1), "whether or not to do reduced NNI while doing hill climbing NNIs")
@@ -2840,7 +2840,7 @@ int main (int argc, char ** const argv) {
     if(model == 3){
         adjust_m_max();
         cout << "maximum number of WGD events is " << max_wgd << endl;
-        cout << "maximum number of chromosme gain/loss events on one chromosme is " << max_chr_change << endl;
+        cout << "maximum number of chromosome gain/loss events on one chromosome is " << max_chr_change << endl;
         cout << "maximum number of segment duplication/deletion events is " << max_site_change << endl;
         decomp_table = build_decomp_table();
         // decomp_table = build_decomp_table_withm();
@@ -2942,7 +2942,7 @@ int main (int argc, char ** const argv) {
           string ofile_mrca = ofile + ".mrca.state";
           ofstream fout(ofile_mrca);
           double lnl = 0;
-          if(model==3){
+          if(model == 3){
              lnl = reconstruct_marginal_ancestral_state_decomp(real_tree, fout, min_asr);
          }else{
              lnl = reconstruct_marginal_ancestral_state(real_tree, fout, min_asr);
@@ -2954,7 +2954,7 @@ int main (int argc, char ** const argv) {
           cout << "\tInferring joint ancestral states" << endl;
           string ofile_state = ofile + ".joint.state";
           ofstream fout_state(ofile_state);
-          if(model==3){
+          if(model == 3){
              reconstruct_joint_ancestral_state_decomp(real_tree, fout_state, min_asr);
          }else{
              reconstruct_joint_ancestral_state(real_tree, fout_state, min_asr);

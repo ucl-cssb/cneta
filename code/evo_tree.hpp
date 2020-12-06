@@ -15,7 +15,7 @@
 
 using namespace std;
 
-const double BLEN_MIN = 1e-5;
+const double BLEN_MIN = 1e-3;
 const double BLEN_MAX = 100;
 const double RATE_MIN = 1e-5;
 const double RATE_MAX = 1;
@@ -1194,6 +1194,7 @@ double evo_tree::find_interval_len(int& _start, int _end, map<pair<int, int>, do
 
 
 // Convert the time constraints among nodes into a set of ratios for bounded estimation
+// number of ratios:
 void evo_tree::get_ratio_from_age(int eid){
     int debug = 0;
     if(debug){
@@ -1272,6 +1273,7 @@ void evo_tree::update_edges_from_ratios(){
     // cout << "root daughter node is " << nj + 1 << endl;
     double max_tj = get_descendants_max_age(nj);
     // cout << "maximum time below root daughter node " << nj+1 << " is " << max_tj << endl;
+    // If node age for root is the same as max_tj, all other nodes will be equal to max_tj
     double ntime = ((node_ages[root_node_id] - max_tj) * ratios[nnode-1]) + max_tj;
     node_ages[nj] = ntime;
     // cout << "new age for node " << nj+1 << " is " << ntime << ", converted from ratio " << ratios[nnode-1] << endl;
@@ -1297,6 +1299,7 @@ void evo_tree::update_edges_from_ratios(){
                 assert(node_ages[ni] >= node_ages[nj]);
             }
             double blen = node_ages[ni] - node_ages[nj];
+            if(blen < BLEN_MIN) blen = BLEN_MIN;
             set_edge_length(ni, nj, blen);
             // if(debug){
             //     cout << " parent node " << ni + 1 << " child node " << nj + 1 << ", parent time after " << node_ages[ni] << ", child time after " << node_ages[nj] << ", blen after " << blen << endl;
@@ -1342,7 +1345,10 @@ void evo_tree::update_edge_from_ratio(double ratio, int eid){
         cout << "node age from ratio:" << "\t" << node_ages[e->end] << endl;
     }
 
-    e->length = node_ages[e->start] - node_ages[e->end];
+    double blen = node_ages[e->start] - node_ages[e->end];
+    if(blen < BLEN_MIN) blen = BLEN_MIN;
+    e->length = blen;
+
 
     if(debug){
         cout << "branch length from ratio: " << edges[eid].length << endl;
