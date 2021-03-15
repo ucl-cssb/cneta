@@ -31,14 +31,24 @@ This package is mostly written in C++. There are a few scripts written in R and 
   * newick2elist.py: networkx
 
 ### How to install CMake
+#### Installing with package manager
+On Mac:
+```
+brew install cmake
+```
 
+On Ubunbu:
+```
+sudo apt-get install cmake
+```
+
+#### Compiling from source
 Get the latest “Unix/Linux Source” *.tar.gz file.
 ```
 HOME=~/local
 mkdir -p $HOME
 tar -xf cmake*.tar.gz
 cd cmake*
-HOME=~/local
 ./configure --prefix=$HOME
 make
 make install
@@ -77,8 +87,10 @@ You may use the provided bash scripts to run the programs.
 ```shell
 # Simulating mutations on a coalescence tree
 > bash run-sveta.sh
+
 # Build a tree from copy number profile with maximum likelihood method
 > bash run-svtreeml.sh
+
 # Build a tree from copy number profile with MCMC method
 > bash run-svtreemcmc.sh
 ```
@@ -87,10 +99,12 @@ You may use the provided bash scripts to run the programs.
 # Simulation with sveta
 SVETA simulates structural variations that alter copy numbers along a coalescence tree of multiple samples.
 The coalescence tree can be either normal or exponential growing.
-Each node in the tree corresponds to the genome of a sample, which is represented by a consecutive set of pre-specified sites.
-Each site is considered as a segment of unknown size.
+1. Each node in the tree corresponds to the genome of a sample, which is represented by a consecutive set of pre-specified sites.
+
+2. Each site is considered as a segment of unknown size.
 These sites can be seen as the segments obtained by segmentation methods when calling copy numbers from real data.
-The tip dates can be adjusted to reflect different sampling times.
+
+3. The tip dates can be adjusted to reflect different sampling times.
 
 The program generates a set of files, which record the simulated allele-specific and total copy number profiles, tree topology, and mutations along the branches respectively.
 The simulated copy number profiles and/or tip timing information served as input for the tree building methods.
@@ -108,13 +122,18 @@ The procedure of simulations is as follows:
 
 
 There are three Markov models of evolution for the copy number profiles:
-* model 0: Mk model (extension of JC69 model)
+* model 0: Mk model
 * model 1: bounded model of total copy number
-* model 2: bounded model of allele-specific copy number
+* model 2: bounded model of allele-specific copy number (default)
 <!-- * 3: model of independent Markov chains (when WGD and chromosome gain/loss are incorporated) -->
 
+Mk model is an extension of JC69 model on total copy numbers, where segment duplication rate equals to segment deletion rate.
+
+In bounded model, segment duplication rate may be different from segment deletion rate. Once a copy number becomes 0, it cannot be changed. Once a copy number becomes maximum (cn_max), it cannot be increased.
+
+
 There are two ways of simulating mutations along a tree:
-1. Simulating waiting times along a branch (default). A random waiting time is generated from the exponential distribution with mean $1/r$. Here, $r$ is the total mutation rate across the genome, obtained by adding up the duplication and deletion rates across all sites in the genome, chromosomal gain or loss rates across all chromosomes and whole genome doubling rate. When a mutation is generated, its type is randomly chosen based on the relative rates of different types of mutational events.
+1. Simulating waiting times along a branch (default). A random waiting time is generated from the exponential distribution with mean `1/r`. Here, `r` is the total mutation rate across the genome, obtained by adding up the duplication and deletion rates across all sites in the genome, chromosomal gain or loss rates across all chromosomes and whole genome doubling rate. When a mutation is generated, its type is randomly chosen based on the relative rates of different types of mutational events.
 2. Simulating sequences at the end of a branch. This is appropriate when the mutational events are not of interest. In this way, we can quickly simulate a much larger number of segments with a larger range of mutation rates.
 
 Note that when simulating waiting times, only allele-specific model is allowed. If model of total copy number is specified, it will automatically be converted to model of allele-specific copy number.
@@ -124,7 +143,7 @@ The maximum copy number of the mutated genome is constrained by a user-specified
 
 
 The mutation probability of each site is limited by its current copy number state.
-Chromosomal gain is possible when the maximum copy number in the chromosome is smaller than the specified maximum copy number.
+Chromosomal gain is ONLY possible when the maximum copy number in the chromosome is smaller than the specified maximum copy number.
 So when the specified mutation/duplication rate is high, the actual mutation rates along the lower branches gradually decrease due to copy number saturation.
 
 The units of mutation rates are different at site (segment), chromosome, and whole genome levels. When computing the relative rates of a specific mutation type, they are summarized at different scales: total duplication/deletion rates obtained by summarizing over all sites, chromosome gain/loss rates obtained by summarizing over all chromosomes.
@@ -132,9 +151,9 @@ The units of mutation rates are different at site (segment), chromosome, and who
 Please see run-sveta.sh to learn how to set different parameters
 
 ## Input
-* --epop Ne: Ne is used to scale the tree height so that the branch length is measured in the unit of year, by multipling each branch length with Ne.
+* --epop Ne: Ne (effective population size) is used to scale the tree height so that the branch length is measured in the unit of year, by multiplying each branch length with Ne.
 
-* --tiff delta_t: On the initial tree, the tip nodes have the same time. This parameter can be used to introduce different times at the tip nodes. The terminal branches are increased by random multiples of delta_t. The maximum multiple is the number of samples.
+* --tiff delta_t: The tip nodes of an initial tree may have the same time. This parameter can be used to introduce different times at the tip nodes. The terminal branches are increased by random multiples of delta_t. The maximum multiple is the number of samples.
 
 * --cn_max cn_max: The maximum copy number allowed in the program depends on the heap space.
 
@@ -176,10 +195,11 @@ The initial trees for tree searching can be obtained by maximum parsimony method
 
 
 There are 4 running modes in svtreeml.
-* mode 0: building maximum likelihood tree from input copy numbers
+* mode 0 (default): building maximum likelihood tree from input copy numbers
 * mode 1: a simple comprehensive test on a simulated tree
 * mode 2: computing likelihood given a tree and its parameters (branch length and mutation rates)
 * mode 3: computing maximum likelihood tree given a tree topology
+
 The last three modes can be used to validate the computation of likelihood.
 
 There are 3 tree searching method:
@@ -190,15 +210,15 @@ There are 3 tree searching method:
 Please see run-svtreeml.sh to learn how to set different parameters
 
 There are four Markov models of evolution for building trees from the copy number profiles:
-* model 0: Mk model (extension of JC69 model)
+* model 0: Mk model
 * model 1: bounded model of total copy number
 * model 2: bounded model of allele-specific copy number
 * model 3: independent Markov chain model (with 3 chains)
 
-For tree reconstruction with svtreeml on data with chromosome gain/loss and WGD, model 3 (model of independent Markov chains) should be used.
+The first three models are the same as those for simulation.
+The last one (model of independent Markov chains) should be used for tree reconstruction with svtreeml on data with chromosome gain/loss and WGD.
 This model is DIFFERENT from the model used for simulating the data, which is usually model 2 (model of allele-specific copy number) in sveta.
 Model 2 may also be used but there is a strong assumption of event order, that WGD is followed by chromosomal gain or loss and then segment duplication or deletion.
-
 
 There are four important parameters for independent Markov chain model (model 3) to specify the number of states for each chain.
 * max_wgd: the maximum number of WGD events in a sample. When it is 0,
@@ -220,16 +240,14 @@ You need to adjust the values of max_site_change according to the input data.
 You may check the copy number counts in the input data using similar command as below:
 `less sim-data-1-cn.txt.gz | cut -f4 | sort | uniq -c`.
 
-
-
-When estimating branch length, time constraints can be considered by specifying the following parameters.
+When estimating branch length, time constraints (in longitudinal samples) can be considered by specifying the following parameters.
 * cons: When cons = 1, optimization is done with time constraints on patient age and/or tip timing. Mutation rates can be estimated when there are considerate time differences among tips.
 
-
 When building the tree, mutation rates can be estimated by specifying the following parameters.
-* maxj: Whether or not to estimate mutation rate. When maxj = 1, mutation rates will be estimated. This is only reliable when the sampling times of tip nodes provide sufficient information (cons=1 and dt>0).
-* only_seg: When only_seg=1, only estimate segment duplication/deletion rates. Otherwise, the rates for chromosome gain/loss and WGD will be estimated.
+* estmu: Whether or not to estimate mutation rate. When estmu = 1, mutation rates will be estimated. This is only reliable when the sampling times of tip nodes provide sufficient information (cons = 1 and dt > 0).
+* only_seg: When only_seg = 1, only estimate segment duplication/deletion rates. Otherwise, the rates for chromosome gain/loss and WGD will be estimated.
 
+Mutation rates are implicit parameters in the computing tree likelihood, so the reconstructed tree should be more accurate when cons = 1 and estmu = 1 given longitudinal samples, unless mutation rates are known as in simulated data.
 
 ## Output
 * *-tree.txt: The reconstructed tree in tab-delimited format
@@ -241,7 +259,7 @@ When building the tree, mutation rates can be estimated by specifying the follow
 
 # Tree building with MCMC
 
-
+Only basic MCMC algorithm is implemented here.
 
 ## Input
 * (Required) A file containing copy numbers for all the samples, including the normal sample (*-cn.txt.gz or *-allele-cn.txt.gz)

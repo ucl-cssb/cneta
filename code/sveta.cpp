@@ -2139,24 +2139,24 @@ int main (int argc, char ** const argv) {
       ("epop,e", po::value<int>(&Ne)->default_value(2), "effective population size of cell populations")
       ("gtime", po::value<double>(&gtime)->default_value(0.002739726), "generation time in year")
       ("beta,b", po::value<double>(&beta)->default_value(0), "population growth rate")
-      ("tdiff,t", po::value<double>(&delta_t)->default_value(1), "relative timing difference")
+      ("tdiff,t", po::value<double>(&delta_t)->default_value(0), "relative timing difference")
       // ("stime", po::value<string>(&stime)->default_value(""), "sampling time of different samples (Format: numTipDates Date1 from to Date2 from to ... DateN from to)")
       ("constrained", po::value<int>(&cons)->default_value(1), "constraints on branch length (0: none, 1: fixed total time)")
 
-      ("mode", po::value<int>(&mode)->default_value(0), "running mode of the program (0: Simuting genome in fix-sized bins, 1: Simulating genome in random segments, 2 to 4: Test)")
+      ("mode", po::value<int>(&mode)->default_value(0), "running mode of the program (0: Simulating genome in fix-sized bins, 1: Simulating genome in  segments of random size, 2 to 4: Test)")
       ("method", po::value<int>(&method)->default_value(0), "method of simulation (0: simulating waiting times, 1: Simulating sequences directly)")
       ("model,d", po::value<int>(&model)->default_value(0), "model of evolution (0: Mk, 1: one-step bounded (total), 2: one-step bounded (allele-specific), 3: Poisson)")
       ("cn_max", po::value<int>(&cn_max)->default_value(4), "maximum copy number of a segment")
       ("seg_max", po::value<int>(&seg_max)->default_value(100), "maximum number of segments to simulate")
-      ("fix_seg", po::value<int>(&fix_seg)->default_value(1), "whether or not to fix the number of segments to simulate")
+      ("fix_seg", po::value<int>(&fix_seg)->default_value(1), "whether or not to fix the number of segments to simulate. If not, the number of segments on each chromosome is proportional to chromosome size")
 
-      ("dup_rate", po::value<double>(&dup_rate)->default_value(0.0001), "duplication rate (allele/locus/year)")
-      ("del_rate", po::value<double>(&del_rate)->default_value(0.0002), "deletion rate (allele/locus/year)")
+      ("dup_rate", po::value<double>(&dup_rate)->default_value(0.001), "duplication rate (allele/locus/year)")
+      ("del_rate", po::value<double>(&del_rate)->default_value(0.001), "deletion rate (allele/locus/year)")
       ("chr_gain", po::value<double>(&chr_gain)->default_value(0), "chromosome gain rate (haplotype/chr/year)")
       ("chr_loss", po::value<double>(&chr_loss)->default_value(0), "chromosome loss rate (haplotype/chr/year)")
       ("wgd", po::value<double>(&wgd)->default_value(0), "WGD (whole genome doubling) rate (year)")
-      ("dup_size", po::value<double>(&dup_size)->default_value(30), "mean of duplication size distributions")
-      ("del_size", po::value<double>(&del_size)->default_value(30), "mean of deletion size distributions")
+      ("dup_size", po::value<double>(&dup_size)->default_value(1), "mean of duplication size distributions (in bins)")
+      ("del_size", po::value<double>(&del_size)->default_value(1), "mean of deletion size distributions (in bins)")
 
       ("prefix,p", po::value<string>(&prefix)->default_value(""), "prefix of output file (it will be sim-data-N if not specified")
       ("print_allele", po::value<int>(&print_allele)->default_value(1), "whether or not to output allele-specific copy numbers")
@@ -2187,94 +2187,96 @@ int main (int argc, char ** const argv) {
           return 1;
     }
 
-  setup_rng(seed);
+    if(cons > 0) assert(delta_t > 0);
 
-  // output directory
-  if(dir.back() != '/'){
-      dir = dir + "/";
-  }
+    setup_rng(seed);
 
-  vector<int> chr_lengths = CHR_BIN_SIZE;
-  int num_seg = 0;
-
-  if(method==1) {   // when simulating sequences directly, each site is a final segment
-      mode = 1;
-  }
-
-  if(mode==1){
-      cout << "Under this mode, each site is treated as a final segment. The mean duplication/deletion size is currently fixed to be 1" << endl;
-      dup_size = 1;
-      del_size = 1;
-      // Randomly generate the number of segments
-      if(fix_seg){
-           num_seg = seg_max;
-      }else{
-           num_seg = runiform(r, 0.2, 0.8) * seg_max;
-      }
-      // cout << "Approximate number of segments to simulate is " << num_seg << endl;
-      // Distribute the segments according to the size of chromosomes
-      double theta[NUM_CHR] = {};
-      double alpha[NUM_CHR] = {};
-      // int bin_size = accumulate(CHR_BIN_SIZE.begin(), CHR_BIN_SIZE.end(), 0);
-      // cout << "Total number of bins is " << bin_size << endl;
-      int total_seg = 0;
-      for(int i = 0; i < NUM_CHR; i++){
-          alpha[i] = CHR_BIN_SIZE[i];
-      }
-      gsl_ran_dirichlet(r, NUM_CHR, alpha, theta);
-      for(int i = 0; i < NUM_CHR; i++){
-          chr_lengths[i] = ceil(theta[i] * num_seg);
-          assert(chr_lengths[i] > 0);
-          total_seg += chr_lengths[i];
-          // cout << alpha[i] << "\t" << theta[i] << "\t" << chr_lengths[i] << endl;
-      }
-      if(total_seg > num_seg){
-          int diff = total_seg - num_seg;
-          while(diff != 0){
-              for(int i = 0; i < NUM_CHR; i++){
-                  if(chr_lengths[i] > 1){
-                      chr_lengths[i] -= 1;
-                      diff--;
-                  }
-                  if(diff == 0) break;
-              }
-          }
-      }
-      cout << "Number of segments simulated is " << num_seg << endl;
-  }else{    // When simulating waiting times, only simulate allele-specific model
-    if(model == 1){
-        cout << "When simulating waiting times, only allele-specific model is allowed" << endl;
-        model = 2;
+    // output directory
+    if(dir.back() != '/'){
+        dir = dir + "/";
     }
-  }
 
-  vector<double> var_size = {dup_size, del_size};
-  vector<double> rate_consts = {dup_rate, del_rate, chr_gain, chr_loss, wgd};
+    vector<int> chr_lengths = CHR_BIN_SIZE;
+    int num_seg = 0;
 
-  if(method == 0){
-      cout << "\nSimulating waiting times" << endl;
-  }
-  else{
-      cout << "\nSimulating sequences directly" << endl;
-  }
+    if(method==1) {   // when simulating sequences directly, each site is a final segment
+        mode = 1;
+    }
 
-  cout << "\nEvolution model simulated: " << model << endl;
-  cout << "\tMaximum copy number of a segment is " << cn_max << endl;
-  cout << "\tMutation rates:\t" << rate_consts[0] << "\t" << rate_consts[1]  << "\t" << rate_consts[2]  << "\t" << rate_consts[3]  << "\t" << rate_consts[4] << endl;
-  cout << "\tSizes of segment duplication/deletion:\t" << var_size[0] << "\t" << var_size[1] << endl;
-
-  // simulate coalescent tree and apply SVs
-  if(mode >= 0){
-      if(beta > 0){
-          cout << "\nSimulating exponential growth" << endl;
+    if(mode==1){
+        cout << "Under this mode, each site is treated as a final segment. The mean duplication/deletion size is currently fixed to be 1" << endl;
+        dup_size = 1;
+        del_size = 1;
+        // Randomly generate the number of segments
+        if(fix_seg){
+             num_seg = seg_max;
+        }else{
+             num_seg = runiform(r, 0.2, 0.8) * seg_max;
+        }
+        // cout << "Approximate number of segments to simulate is " << num_seg << endl;
+        // Distribute the segments according to the size of chromosomes
+        double theta[NUM_CHR] = {};
+        double alpha[NUM_CHR] = {};
+        // int bin_size = accumulate(CHR_BIN_SIZE.begin(), CHR_BIN_SIZE.end(), 0);
+        // cout << "Total number of bins is " << bin_size << endl;
+        int total_seg = 0;
+        for(int i = 0; i < NUM_CHR; i++){
+            alpha[i] = CHR_BIN_SIZE[i];
+        }
+        gsl_ran_dirichlet(r, NUM_CHR, alpha, theta);
+        for(int i = 0; i < NUM_CHR; i++){
+            chr_lengths[i] = ceil(theta[i] * num_seg);
+            assert(chr_lengths[i] > 0);
+            total_seg += chr_lengths[i];
+            // cout << alpha[i] << "\t" << theta[i] << "\t" << chr_lengths[i] << endl;
+        }
+        if(total_seg > num_seg){
+            int diff = total_seg - num_seg;
+            while(diff != 0){
+                for(int i = 0; i < NUM_CHR; i++){
+                    if(chr_lengths[i] > 1){
+                        chr_lengths[i] -= 1;
+                        diff--;
+                    }
+                    if(diff == 0) break;
+                }
+            }
+        }
+        cout << "Number of segments simulated is " << num_seg << endl;
+    }else{    // When simulating waiting times, only simulate allele-specific model
+      if(model == 1){
+          cout << "When simulating waiting times, only allele-specific model is allowed" << endl;
+          model = 2;
       }
+    }
 
-      run_simulations(tree_file, mode, method, chr_lengths, num_seg, Ns, Nsims, cn_max, model, cons, Ne, beta, gtime, delta_t, age, rate_consts, var_size, dir, prefix, print_allele, print_mut, print_nex);
-      // cout << "FINISHED" << endl;
-  }
-  else{
-      cout << "\nRunning test" << endl;
-      run_test(mode, dir);
-  }
+    vector<double> var_size = {dup_size, del_size};
+    vector<double> rate_consts = {dup_rate, del_rate, chr_gain, chr_loss, wgd};
+
+    if(method == 0){
+        cout << "\nSimulating waiting times" << endl;
+    }
+    else{
+        cout << "\nSimulating sequences directly" << endl;
+    }
+
+    cout << "\nEvolution model simulated: " << model << endl;
+    cout << "\tMaximum copy number of a segment is " << cn_max << endl;
+    cout << "\tMutation rates:\t" << rate_consts[0] << "\t" << rate_consts[1]  << "\t" << rate_consts[2]  << "\t" << rate_consts[3]  << "\t" << rate_consts[4] << endl;
+    cout << "\tSizes of segment duplication/deletion:\t" << var_size[0] << "\t" << var_size[1] << endl;
+
+    // simulate coalescent tree and apply SVs
+    if(mode >= 0){
+        if(beta > 0){
+            cout << "\nSimulating exponential growth" << endl;
+        }
+
+        run_simulations(tree_file, mode, method, chr_lengths, num_seg, Ns, Nsims, cn_max, model, cons, Ne, beta, gtime, delta_t, age, rate_consts, var_size, dir, prefix, print_allele, print_mut, print_nex);
+        // cout << "FINISHED" << endl;
+    }
+    else{
+        cout << "\nRunning test" << endl;
+        run_test(mode, dir);
+    }
 
 }

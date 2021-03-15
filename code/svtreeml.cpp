@@ -41,7 +41,7 @@ This file builds phylogenetic tree from integer copy numbers of multiple samples
 using namespace std;
 
 
-// The number of tree for at most 11 samples
+// The number of tree for at most 11 samples, become slow with >6 leaves
 static const int num_trees[] = {1, 1, 3, 15, 105, 945, 10395, 135135, 2027025, 34459425, 654729075};
 // The maximum number of samples in the tree which allows exhaustive search
 const int LARGE_TREE = 11;
@@ -434,11 +434,12 @@ vector<evo_tree> get_initial_trees(int init_tree, string dir_itrees, int Npop, c
                     rtree.node_times[i] += tobs[i];
                 }
                 rtree.get_age_from_time();
+
+                // update branch lengths based on node times
                 for(int i=0; i < rtree.edges.size(); i++){
                     edge *e = &rtree.edges[i];
                     if(e->end < Ns) e->length += tobs[e->end];
                 }
-                // update lengths
                 rtree.update_length();
             }
 
@@ -614,17 +615,23 @@ bool is_inner_branch(Node *node1, Node *node2){
     return(node1->degree() >= 3 && node2->degree() >= 3 && is_a_branch(node1, node2));
 }
 
-
+// Get all branches where NNI is feasible, namely all internal branches
+// NNI is only feasible when it does not violate parent-child age constraint
 void get_NNI_branches(Branches &nniBranches, Node *node, Node *dad) {
     assert(node != NULL);
+
     FOR_NEIGHBOR_IT(node, dad, it) {
         if (is_inner_branch((*it)->node, node)) {
             Branch curBranch;
             curBranch.first = (*it)->node;
             curBranch.second = node;
+            // check age of sibling of node
+
+
             int branchID = pairInteger(curBranch.first->id, curBranch.second->id);
             nniBranches.insert(pair<int, Branch>(branchID, curBranch));
         }
+
         get_NNI_branches(nniBranches, (*it)->node, node);
     }
 }
@@ -638,14 +645,17 @@ void get_neighbor_inner_branches(Node *node, Node *dad, int depth, Branches &sur
 
     if (depth == 0)
       return;
+
       FOR_NEIGHBOR_IT(node, dad, it) {
           if (!(*it)->node->is_leaf() && is_inner_branch((*it)->node, node)) {
               Branch curBranch;
               curBranch.first = node;
               curBranch.second = (*it)->node;
+
               int branchID = pairInteger(node->id, (*it)->node->id);
               if (surrBranches.find(branchID) == surrBranches.end())
                   surrBranches.insert(pair<int,Branch>(branchID, curBranch));
+
               get_neighbor_inner_branches((*it)->node, node, depth-1, surrBranches);
           }
       }
@@ -665,9 +675,12 @@ void filter_NNI_branches(vector<NNIMove> &appliedNNIs, Branches &nniBranches) {
         Branch curBranch;
         curBranch.first = it->node1;
         curBranch.second = it->node2;
+
         int branchID = pairInteger(it->node1->id, it->node2->id);
         if (nniBranches.find(branchID) == nniBranches.end())
             nniBranches.insert(pair<int,Branch>(branchID, curBranch));
+
+        // find neighbors of node1 except node2
         get_neighbor_inner_branches(it->node1, it->node2, 2, nniBranches);
         get_neighbor_inner_branches(it->node2, it->node1, 2, nniBranches);
     }
@@ -711,7 +724,7 @@ void do_one_NNI(evo_tree &rtree, NNIMove &move) {
     node2->updateNeighbor(node2Nei_it, node1Nei);
     node1Nei->node->updateNeighbor(node1, node2);
 
-    // update edges
+    // update edges (node times and ages do not change)
     int eid = rtree.get_edge_id(node1->id, node1Nei->node->id);
     rtree.edges[eid].end = node2Nei->node->id;
     rtree.nodes[node2Nei->node->id].e_in = eid;
@@ -735,78 +748,79 @@ void do_one_NNI(evo_tree &rtree, NNIMove &move) {
 
 
 // Update branch lengths related to the NNI move
+// include four adjacent branched when nni5 is true
 void change_NNI_Brans(evo_tree &rtree, NNIMove nnimove, bool nni5) {
-    int debug = 0;
-    if(debug) cout << "  Update branch lengths related to the NNI move" << endl;
-	Node *node1 = nnimove.node1;
-	Node *node2 = nnimove.node2;
+  int debug = 0;
+  if(debug) cout << "  Update branch lengths related to the NNI move" << endl;
+  Node *node1 = nnimove.node1;
+  Node *node2 = nnimove.node2;
 
+  NeighborVec::iterator it;
+  if(debug)
+  {
+      cout << " old neighbors of node " << node1->id + 1 << endl;
+      FOR_NEIGHBOR(node1, node2, it)
+          cout << "\t" << (*it)-> node->id + 1 << "," << (*it)->id + 1 << "," << (*it)->length;
+      cout << endl;
+      cout << " old neighbors of node " << node2->id + 1 << endl;
+      FOR_NEIGHBOR(node2, node1, it)
+          cout << "\t" << (*it)-> node->id + 1 << "," << (*it)->id + 1 << "," << (*it)->length;
+      cout << endl;
+  }
+
+  Neighbor *node1_node2_nei = (Neighbor*) node1->findNeighbor(node2);
+  Neighbor *node2_node1_nei = (Neighbor*) node2->findNeighbor(node1);
+  node1_node2_nei->setLength(nnimove.newLen[0]);
+  node2_node1_nei->setLength(nnimove.newLen[0]);
+  // cout << node1_node2_nei->node->id <<  "\t" << node1_node2_nei->length << endl;
+
+  int eid = rtree.get_edge_id(node1->id, node2->id);
+  rtree.edges[eid].length = nnimove.newLen[0][0];
+
+  if (nni5) {
+    int i = 1;
+    Neighbor* nei;
+    Neighbor* nei_back;
     NeighborVec::iterator it;
-    if(debug)
+    FOR_NEIGHBOR(node1, node2, it)
     {
-        cout << " old neighbors of node " << node1->id + 1 << endl;
-        FOR_NEIGHBOR(node1, node2, it)
-            cout << "\t" << (*it)-> node->id + 1 << "," << (*it)->id + 1 << "," << (*it)->length;
-        cout << endl;
-        cout << " old neighbors of node " << node2->id + 1 << endl;
-        FOR_NEIGHBOR(node2, node1, it)
-            cout << "\t" << (*it)-> node->id + 1 << "," << (*it)->id + 1 << "," << (*it)->length;
-        cout << endl;
-    }
-
-	Neighbor *node1_node2_nei = (Neighbor*) node1->findNeighbor(node2);
-	Neighbor *node2_node1_nei = (Neighbor*) node2->findNeighbor(node1);
-	node1_node2_nei->setLength(nnimove.newLen[0]);
-	node2_node1_nei->setLength(nnimove.newLen[0]);
-    // cout << node1_node2_nei->node->id <<  "\t" << node1_node2_nei->length << endl;
-
-    int eid = rtree.get_edge_id(node1->id, node2->id);
-    rtree.edges[eid].length = nnimove.newLen[0][0];
-
-	if (nni5) {
-		int i = 1;
-		Neighbor* nei;
-		Neighbor* nei_back;
-		NeighborVec::iterator it;
-		FOR_NEIGHBOR(node1, node2, it)
-		{
-			nei = (*it)->node->findNeighbor(node1);
-			nei_back = (node1)->findNeighbor((*it)->node);
-			nei->setLength(nnimove.newLen[i]);
-			nei_back->setLength(nnimove.newLen[i]);
+    	nei = (*it)->node->findNeighbor(node1);
+    	nei_back = (node1)->findNeighbor((*it)->node);
+    	nei->setLength(nnimove.newLen[i]);
+    	nei_back->setLength(nnimove.newLen[i]);
 
             eid = rtree.get_edge_id(node1->id, (*it)->node->id);
             // cout << "update edge " << eid << " with node " << node1->id+1 << "\t" << (*it)->node->id+1 << " by length " << nnimove.newLen[i][0] << endl;
             rtree.edges[eid].length = nnimove.newLen[i][0];
 
-			i++;
-		}
-		FOR_NEIGHBOR(node2, node1, it)
-		{
-			nei = (*it)->node->findNeighbor(node2);
-			nei_back = (node2)->findNeighbor((*it)->node);
-			nei->setLength(nnimove.newLen[i]);
-			nei_back->setLength(nnimove.newLen[i]);
+    	i++;
+    }
+    FOR_NEIGHBOR(node2, node1, it)
+    {
+    	nei = (*it)->node->findNeighbor(node2);
+    	nei_back = (node2)->findNeighbor((*it)->node);
+    	nei->setLength(nnimove.newLen[i]);
+    	nei_back->setLength(nnimove.newLen[i]);
 
             eid = rtree.get_edge_id(node2->id, (*it)->node->id);
             // cout << "update edge " << eid << " with node " << node2->id+1 << "\t" << (*it)->node->id+1 << " by length " << nnimove.newLen[i][0] << endl;
             rtree.edges[eid].length = nnimove.newLen[i][0];
 
-			i++;
-		}
-	}
-    if(debug){
-        cout << " new neighbors of node " << node1->id + 1 << endl;
-        FOR_NEIGHBOR(node1, node2, it)
-            cout << "\t" << (*it)->node->id + 1 << "\t" << (*it)->id + 1 << "\t" << (*it)->length;
-        cout << endl;
-        cout << " new neighbors of node " << node2->id + 1 << endl;
-        FOR_NEIGHBOR(node2, node1, it)
-            cout << "\t" << (*it)->node->id + 1 << "\t" << (*it)->id + 1 << "\t" << (*it)->length;
-        cout << endl;
-        cout << " tree after branch length change " << endl;
-        rtree.print();
+    	i++;
     }
+  }
+  if(debug){
+      cout << " new neighbors of node " << node1->id + 1 << endl;
+      FOR_NEIGHBOR(node1, node2, it)
+          cout << "\t" << (*it)->node->id + 1 << "\t" << (*it)->id + 1 << "\t" << (*it)->length;
+      cout << endl;
+      cout << " new neighbors of node " << node2->id + 1 << endl;
+      FOR_NEIGHBOR(node2, node1, it)
+          cout << "\t" << (*it)->node->id + 1 << "\t" << (*it)->id + 1 << "\t" << (*it)->length;
+      cout << endl;
+      cout << " tree after branch length change " << endl;
+      rtree.print();
+  }
 }
 
 
@@ -819,8 +833,8 @@ void do_all_NNIs(evo_tree &rtree, vector<NNIMove> &compatibleNNIs, bool changeBr
         // cout << "tree address for node " << it->node2->id+1 << " is " << &rtree.nodes[it->node2->id] << endl;
 		do_one_NNI(rtree, *it);
         if (changeBran){
-            // apply new branch lengths
-			change_NNI_Brans(rtree, *it, nni5);
+          // apply new branch lengths
+			    change_NNI_Brans(rtree, *it, nni5);
         }
     }
 }
@@ -853,7 +867,7 @@ NNIMove get_random_NNI(Branch &branch) {
             nni.node1Nei_it = node1NeiIt;
             break;
         }
-    // int randInt = random_int(branch.second->neighbors.size()-1);
+
     int randInt = myrng(branch.second->neighbors.size()-1);
     int cnt = 0;
     FOR_NEIGHBOR_IT(branch.second, branch.first, node2NeiIt) {
@@ -865,9 +879,10 @@ NNIMove get_random_NNI(Branch &branch) {
             cnt++;
         }
     }
-	assert(*nni.node1Nei_it != NULL && *nni.node2Nei_it != NULL);
+	  assert(*nni.node1Nei_it != NULL && *nni.node2Nei_it != NULL);
     assert(((Neighbor*)*nni.node1Nei_it)->direction != TOWARD_ROOT && ((Neighbor*)*nni.node2Nei_it)->direction != TOWARD_ROOT);
     nni.newloglh = 0.0;
+
     return nni;
 }
 
@@ -880,23 +895,29 @@ void do_random_NNIs(evo_tree &rtree) {
     int cntNNI = 0;
     int numRandomNNI;
     Branches nniBranches;
-    numRandomNNI = floor((rtree.nleaf - 3) * 0.5);
-    if (rtree.nleaf >= 4 && numRandomNNI == 0)
-        numRandomNNI = 1;
+    // half the number of internal branches in a rooted tree
+    numRandomNNI = floor((rtree.nleaf - 2) * 0.5);
 
     while (cntNNI < numRandomNNI) {
         nniBranches.clear();
         get_NNI_branches(nniBranches, &rtree.nodes[rtree.nleaf], NULL);
+
         if (nniBranches.size() == 0) break;
+
         // Convert the map data structure Branches to vector of Branch
         vector<Branch> vectorNNIBranches;
+        int i = 0;
         for (Branches::iterator it = nniBranches.begin(); it != nniBranches.end(); ++it) {
             vectorNNIBranches.push_back(it->second);
+            i++;
+            // cout << "NNI branch " << i << " is " << it->second->first->id << ", " << it->second->second->id << endl;
         }
-        // int randInt = random_int((int) vectorNNIBranches.size());
+
         int randInt = myrng(vectorNNIBranches.size());
         NNIMove randNNI = get_random_NNI(vectorNNIBranches[randInt]);
+
         do_one_NNI(rtree, randNNI);
+
         cntNNI++;
     }
     if (debug)
@@ -914,34 +935,34 @@ double optimize_mutation_rates(evo_tree& rtree){
     double ferror, optx;
 
     if(model == 0){
-        optx = minimizeOneDimen(rtree, 0, RATE_MIN, rtree.mu, RATE_MAX, RATE_MIN, &negative_lh, &ferror);
+        optx = minimizeOneDimen(rtree, 0, RATE_MIN, rtree.mu, RATE_MAX, tolerance, &negative_lh, &ferror);
     }else{
-        optx = minimizeOneDimen(rtree, 1, RATE_MIN, rtree.dup_rate, RATE_MAX, RATE_MIN, &negative_lh, &ferror);
+        optx = minimizeOneDimen(rtree, 1, RATE_MIN, rtree.dup_rate, RATE_MAX, tolerance, &negative_lh, &ferror);
         rtree.dup_rate = optx;
         if (debug) {
             cout << "\tmax Brent logl: " << -negative_lh << " optimized duplication rate " << optx << endl;
         }
 
-        optx = minimizeOneDimen(rtree, 2, RATE_MIN, rtree.del_rate, RATE_MAX, RATE_MIN, &negative_lh, &ferror);
+        optx = minimizeOneDimen(rtree, 2, RATE_MIN, rtree.del_rate, RATE_MAX, tolerance, &negative_lh, &ferror);
         rtree.del_rate = optx;
         if (debug) {
             cout << "\tmax Brent logl: " << -negative_lh << " optimized deletion rate " << optx << endl;
         }
 
         if(!only_seg){
-            optx = minimizeOneDimen(rtree, 3, RATE_MIN, rtree.chr_gain_rate, RATE_MAX, RATE_MIN, &negative_lh, &ferror);
+            optx = minimizeOneDimen(rtree, 3, RATE_MIN, rtree.chr_gain_rate, RATE_MAX, tolerance, &negative_lh, &ferror);
             rtree.chr_gain_rate = optx;
             if (debug) {
                 cout << "\tmax Brent logl: " << -negative_lh << " optimized chromosome gain rate " << optx << endl;
             }
 
-            optx = minimizeOneDimen(rtree, 4, RATE_MIN, rtree.chr_loss_rate, RATE_MAX, RATE_MIN, &negative_lh, &ferror);
+            optx = minimizeOneDimen(rtree, 4, RATE_MIN, rtree.chr_loss_rate, RATE_MAX, tolerance, &negative_lh, &ferror);
             rtree.chr_loss_rate = optx;
             if (debug) {
                 cout << "\tmax Brent logl: " << -negative_lh << " optimized chromosome loss rate " << optx << endl;
             }
 
-            optx = minimizeOneDimen(rtree, 5, RATE_MIN, rtree.wgd_rate, RATE_MAX, RATE_MIN, &negative_lh, &ferror);
+            optx = minimizeOneDimen(rtree, 5, RATE_MIN, rtree.wgd_rate, RATE_MAX, tolerance, &negative_lh, &ferror);
             rtree.wgd_rate = optx;
             if (debug) {
                 cout << "\tmax Brent logl: " << -negative_lh << " optimized WGD rate " << optx << endl;
@@ -979,7 +1000,7 @@ void optimize_one_branch(evo_tree& rtree, Node *node1, Node *node2) {
     double ferror, optx;
 
     // Brent method
-    optx = minimizeOneDimen(rtree, -1, BLEN_MIN, current_len, BLEN_MAX, BLEN_MIN, &negative_lh, &ferror);
+    optx = minimizeOneDimen(rtree, -1, BLEN_MIN, current_len, BLEN_MAX, tolerance, &negative_lh, &ferror);
 
     rtree.current_it->length = optx;
     rtree.current_it_back->length = optx;
@@ -1386,6 +1407,7 @@ void compute_best_traversal(evo_tree& rtree, NodeVector &nodes, NodeVector &node
 }
 
 
+// optimize each branch
 double optimize_all_branches(evo_tree& rtree, int my_iterations, double tolerance) {
     int debug = 0;
     if (debug)
@@ -1622,7 +1644,7 @@ void do_hill_climbing_NNI(evo_tree& rtree, int speed_nni, bool nni5 = true) {
             // cout << "tree address for node " << appliedNNIs[0].node2->id+1 << " is " << &rtree.nodes[appliedNNIs[0].node2->id] << endl;
         }
 
-        if(cons == 1){
+        if(cons == 1){  // optimization under time constraints
             max_likelihood_BFGS(rtree, curScore, tolerance, miter);
         }else{
             curScore = optimize_all_branches(rtree, 2, loglh_epsilon);
@@ -1813,9 +1835,11 @@ void do_exhaustive_search(evo_tree& min_lnL_tree, string real_tstring, int Ngen,
 // Npop determines the maximum number of unique trees to try
 void do_hill_climbing(evo_tree& min_lnL_tree, int Npop, int Ngen, int init_tree, const string& dir_itrees, const vector<double>& rates, double ssize, int optim, int Ne = 1, double beta = 0, double gtime=1){
     int debug = 0;
-    // initialize candidate tree set
+
     int max_tree_num = INT_MAX;
     if(Ns <= LARGE_TREE)   max_tree_num = num_trees[Ns - 1];
+
+    // initialize candidate tree set
     vector<evo_tree> trees = get_initial_trees(init_tree, dir_itrees, Npop, rates, max_tree_num, Ne, beta, gtime);
     int num2init = trees.size();
     vector<double> lnLs(num2init,0);
@@ -1827,7 +1851,7 @@ void do_hill_climbing(evo_tree& min_lnL_tree, int Npop, int Ngen, int init_tree,
     for(int i=0; i < num2init; ++i){
         evo_tree rtree;
         double Lf = 0;
-        if(optim == 0){
+        if(optim == 0){  // use gsl libaries
             while( !(Lf > 0) ){
                 Lf = 0;
                 rtree = max_likelihood(trees[i], model, Lf, ssize, tolerance, miter, cons, maxj, cn_max, only_seg, correct_bias, is_total);
@@ -2416,23 +2440,23 @@ double compute_tree_likelihood(const string& tree_file, map<int, set<vector<int>
     }
     cout<< endl;
 
-    int sample1 = 0;
-    tree.get_ntime_interval(Ns, sample1);
-    cout << "Top " << Ns << " time intervals: ";
-    for(int i = 0; i < tree.top_tinvls.size(); i++){
-        cout << "\t" << tree.top_tinvls[i];
-    }
-    cout<< endl;
-    cout << "Corresponding " << Ns + 1 << " nodes: ";
-    for(int i = 0; i < tree.top_tnodes.size(); i++){
-        cout << tree.top_tnodes[i] + 1 << "\t" << "\t" << tree.node_times[tree.top_tnodes[i]] << endl;
-    }
-
-    vector<double> blens = tree.get_edges_from_interval(tree.top_tinvls, tree.top_tnodes);
-    cout << "Branch lengths computed from intervals: ";
-    for(int i = 0; i<blens.size(); i++){
-        cout << i + 1 << "\t" << "\t" << blens[i] << endl;
-    }
+    // int sample1 = 0;
+    // tree.get_ntime_interval(Ns, sample1);
+    // cout << "Top " << Ns << " time intervals: ";
+    // for(int i = 0; i < tree.top_tinvls.size(); i++){
+    //     cout << "\t" << tree.top_tinvls[i];
+    // }
+    // cout<< endl;
+    // cout << "Corresponding " << Ns + 1 << " nodes: ";
+    // for(int i = 0; i < tree.top_tnodes.size(); i++){
+    //     cout << tree.top_tnodes[i] + 1 << "\t" << "\t" << tree.node_times[tree.top_tnodes[i]] << endl;
+    // }
+    //
+    // vector<double> blens = tree.get_edges_from_interval(tree.top_tinvls, tree.top_tnodes);
+    // cout << "Branch lengths computed from intervals: ";
+    // for(int i = 0; i<blens.size(); i++){
+    //     cout << i + 1 << "\t" << "\t" << blens[i] << endl;
+    // }
 
     double Ls = 0;
     if(model == 3){
@@ -2450,6 +2474,7 @@ double compute_tree_likelihood(const string& tree_file, map<int, set<vector<int>
 }
 
 
+// Given a tree, compute its maximum likelihood
 void maximize_tree_likelihood(const string& tree_file, const string& ofile, int Ns, int Nchar, vector<double>& tobs, vector<double>& rates, double ssize, double tolerance, int miter, int model, int optim, int cons, int maxj, int cn_max, int only_seg, int correct_bias, int is_total){
     evo_tree tree;
     // string format = tree_file.substr(tree_file.find_last_of(".") + 1);
@@ -2522,7 +2547,7 @@ void find_ML_tree(string real_tstring, int total_chr, int num_total_bins, string
         do_hill_climbing(min_lnL_tree, Npop, Ngen, init_tree, dir_itrees, rates, ssize, optim, Ne, beta, gtime);
     }
     else{
-        cout << "\nSearching tree space exhaustively" << endl;
+        cout << "\nSearching tree space exhaustively (only feasible for small trees)" << endl;
         cout << "Parameters: " << Ngen << "\t" << Ns << "\t" << Nchar << "\t" << num_invar_bins << "\t" << model << "\t" << cons << "\t" << cn_max << "\t" << only_seg << "\t" << correct_bias << "\t" << is_total << endl;
         do_exhaustive_search(min_lnL_tree, real_tstring, Ngen, init_tree, dir_itrees, max_static, rates, ssize, tolerance, miter, optim, Ne, beta, gtime);
     }

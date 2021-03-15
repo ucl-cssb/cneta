@@ -39,7 +39,7 @@ max_chr_change=0
 max_site_change=3
 m_max=1
 
-maxj=1  # Whether or not to estimate mutation rate
+estmu=1  # Whether or not to estimate mutation rate
 only_seg=1  # 1: only estimate segment duplication/deletion rates; 0: otherwise
 
 ################################################################################
@@ -51,7 +51,7 @@ opt=1   # 1: L-BFGS-B method; 0: simplex method
 tolerance=1e-2
 miter=2000
 
-tree_search=1  # 0: genetic algorithm, 1: hill climbing, 2: exhaustive search
+tree_search=2  # 0: genetic algorithm, 1: hill climbing, 2: exhaustive search
 # Parameters used in genetic algorithm
 Npop=100  # size of initial trees for hill climbing
 Ngen=20
@@ -88,10 +88,10 @@ if [[ ! -d $dir ]]; then
 fi
 
 if [[ $mode -eq 0 ]]; then
-  suffix=m$model-o"$opt"-s"$tree_search"-"$prefix"
+  suffix=m$model-o"$opt"-s"$tree_search"-cons${cons}-estmu${estmu}-"$prefix"
   mltree=$dir/MaxL-"$suffix".txt
 
-  code/svtreeml -c $input -t $times --tree_file "$tree_file" --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change --is_bin $is_bin --incl_all $incl_all -s $Ns -p $Npop -g $Ngen -e $Nstop -r $tolerance -o $mltree -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $maxj --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode --speed_nni $speed_nni --seed $seed > $dir/std_svtreeml_"$suffix"
+  code/svtreeml -c $input -t $times --tree_file "$tree_file" --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change --is_bin $is_bin --incl_all $incl_all -s $Ns -p $Npop -g $Ngen -e $Nstop -r $tolerance -o $mltree -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $estmu --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode --speed_nni $speed_nni --seed $seed > $dir/std_svtreeml_"$suffix"
   # #
   #
   Rscript ana/plot-trees-all.R -f $mltree -b 0 -t "single" -l "xlim" --time_file $times  #>& /dev/null
@@ -112,7 +112,7 @@ if [[ $mode -eq 0 ]]; then
       echo $i
       ofile=$bdir/MaxL-"$suffix"-btree-$i.txt
 
-      code/svtreeml -c $input -t $times --tree_file "$tree_file" --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change --is_bin $is_bin --incl_all $incl_all -s $Ns -p $Npop -g $Ngen -e $Nstop -r $tolerance -o $ofile -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $maxj  --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2  --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode -b 1 > $bdir/std_svtreeml_"$suffix"-btree-$i
+      code/svtreeml -c $input -t $times --tree_file "$tree_file" --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change --is_bin $is_bin --incl_all $incl_all -s $Ns -p $Npop -g $Ngen -e $Nstop -r $tolerance -o $ofile -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $estmu  --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2  --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode -b 1 > $bdir/std_svtreeml_"$suffix"-btree-$i
     done
     # Draw the ML tree with bootstapping support
     Rscript ana/plot-trees-all.R -s $bdir -f $mltree -o $dir/MaxL-tree-"$suffix"-bootstrap.pdf -t "bootstrap" -l "age" --time_file $times -p "MaxL-"$suffix"-btree-*txt"
@@ -122,29 +122,29 @@ elif [[ $mode -eq 1 ]]; then
   suffix=sim1-m$model-test-"$prefix"
   mltree=$dir/MaxL-"$suffix".txt
 
-  code/svtreeml -c $input -t $times --is_bin $is_bin --incl_all $incl_all --tree_file "$tree_file"  --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change -s $Ns -p $Npop -g $Ngen -e $Nstop -r $tolerance -o $mltree -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $maxj --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose > $dir/std_svtreeml_"$suffix"
+  code/svtreeml -c $input -t $times --is_bin $is_bin --incl_all $incl_all --tree_file "$tree_file"  --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change -s $Ns -p $Npop -g $Ngen -e $Nstop -r $tolerance -o $mltree -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $estmu --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose > $dir/std_svtreeml_"$suffix"
 
   # Rscript ana/plot-trees-all.R -d $dir/ -b 0 -t "all" -l "xlim" --time_file $times -p "sim-data-*-tree*_bfgs.txt"
   # Rscript ana/plot-trees-all.R -d $dir/ -b 1 -t "all" -l "xlim" --time_file $times -p "sim-data-*-tree*_bfgs.txt"
 
 elif [[ $mode -eq 2 ]]; then
   # In this mode, the mutation rates have to be specified
-  suffix=m$model-"$cons""$maxj"-mode"$mode"-"$prefix"-"$1"
+  suffix=m$model-"$cons""$estmu"-mode"$mode"-"$prefix"-"$1"
 
   code/svtreeml -c $input -t $times --is_bin $is_bin --incl_all $incl_all -s $Ns --tree_file "$tree_file" --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change -d $model --cn_max $cn_max --only_seg $only_seg --constrained $cons --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode  --seed $seed > $dir/std_svtreeml_"$suffix"
 
 elif [[ $mode -eq 3 ]]; then
   # In this mode, the mutation rates can be specified or not
-  suffix=m$model-o"$opt"-"$cons""$maxj"-mode"$mode"-"$prefix"-"$1"
+  suffix=m$model-o"$opt"-"$cons""$estmu"-mode"$mode"-"$prefix"-"$1"
   mltree=$dir/MaxL-"$prefix"-"$suffix".txt
 
-  code/svtreeml -c $input -t $times --is_bin $is_bin --incl_all $incl_all -s $Ns --tree_file "$tree_file"  --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change -o $mltree -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $maxj --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode > $dir/std_svtreeml_"$suffix"
+  code/svtreeml -c $input -t $times --is_bin $is_bin --incl_all $incl_all -s $Ns --tree_file "$tree_file"  --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change -o $mltree -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $estmu --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode > $dir/std_svtreeml_"$suffix"
 
   Rscript ana/plot-trees-all.R -f $mltree -b 0 -t "single" -l "xlim" --time_file $times  #>& /dev/null
 
 elif [[ $mode -eq 4 ]]; then
   # In this mode, the mutation rates have to be specified
-  suffix=m$model-"$cons""$maxj"-mode"$mode"-"$prefix"-"$1"
+  suffix=m$model-"$cons""$estmu"-mode"$mode"-"$prefix"-"$1"
   mltree=$dir/MaxL-"$suffix".txt
 
   code/svtreeml -c $input -t $times -o $mltree --is_bin $is_bin --incl_all $incl_all -s $Ns --tree_file "$tree_file" --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change -d $model --cn_max $cn_max --only_seg $only_seg --constrained $cons --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode  --seed $seed > $dir/std_svtreeml_"$suffix"

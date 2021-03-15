@@ -92,7 +92,7 @@ plot.tree.xlim.age <- function(tree, diff, age, title = "") {
 
 plot.tree.bootstrap <- function(tree, fout, title = ""){
   pdf(fout)
-  
+
   p <- ggtree(tree) #+ geom_rootedge()
   # support <- character(length(tree$node.label))
   # #The following three lines define your labeling scheme.
@@ -106,15 +106,15 @@ plot.tree.bootstrap <- function(tree, fout, title = ""){
   colnames(edge)=c("parent", "node", "edge_num", "edge_len")
   p <- p %<+% edge + geom_text(aes(x = branch, label = edge_len), nudge_y = 0.1) + ggtitle(title)
   print(p)
-  
+
   dev.off()
 }
 
 
-# Plot bootstrapped tree with x-axis being patient age 
+# Plot bootstrapped tree with x-axis being patient age
 plot.tree.bootstrap.age <- function(tree, fout, diff, age, title = ""){
   pdf(fout)
-  
+
   p <- ggtree(tree) #+ geom_rootedge()
   # support <- character(length(tree$node.label))
   # #The following three lines define your labeling scheme.
@@ -132,15 +132,15 @@ plot.tree.bootstrap.age <- function(tree, fout, diff, age, title = ""){
   colnames(edge)=c("parent", "node", "edge_num", "edge_len")
   p <- p %<+% edge + geom_text(aes(x = branch, label = edge_len), nudge_y = 0.1, nudge_x = diff) + ggtitle(title)
   print(p)
-  
+
   dev.off()
 }
 
 
-# Prepare the tree for plotting 
+# Prepare the tree for plotting
 get.tree <- function(tree_file, out_file = "", branch_num = 0, labels = NA){
   dd <- read.table(tree_file, header = T)
-  
+
   dir <- dirname(tree_file)
   stub <- file_path_sans_ext(basename(tree_file))
   if(out_file!=""){
@@ -156,7 +156,7 @@ get.tree <- function(tree_file, out_file = "", branch_num = 0, labels = NA){
     fout <- file.path(dir, paste("plot-",mfix,".pdf",sep=""))
   }
   cat("\n\nrunning over", stub, fout, "\n", sep = "\t")
-  
+
   # dd$start <- dd$start + 1 dd$end <- dd$end + 1
   if (branch_num == 0) {
     dd$length <- as.numeric(dd$length)
@@ -171,14 +171,14 @@ get.tree <- function(tree_file, out_file = "", branch_num = 0, labels = NA){
     dd <- dd[, c("start", "end", "nmut")]
   }
   mytree <- make.tree(dd, labels)
-  
+
   return(list(mytree = mytree, fout = fout))
 }
 
 
 print.tree <- function(mytree, fout, tree_style, time_file="", title = "") {
   pdf(fout)
-  
+
   if(tree_style=="simple"){
     plot.tree(mytree, title)
   }else if(tree_style=="xlim"){
@@ -286,24 +286,24 @@ if (plot_type == "all"){
   for (f in files) {
     cat("running on:", f, "\n")
     fname = file.path(dir, f)
-    tree = get.tree(tree_file, out_file = out_file, branch_num = branch_num)
+    tree = get.tree(fname, out_file = out_file, branch_num = branch_num)
     print.tree(tree$mytree, tree$fout, tree_style, time_file = time_file, title = title)
   }
-  
+
 }else if (plot_type == "single"){
   cat(paste0("Plotting the tree in ", tree_file))
   labels = get.labels(annot_file)
   tree = get.tree(tree_file, out_file = out_file, branch_num = branch_num, labels = labels)
   print.tree(tree$mytree, tree$fout, tree_style, time_file = time_file, title = title)
-  
+
 } else if (plot_type == "bootstrap"){
   cat(paste0("Plotting bootstrap values for the tree in ", tree_file))
-  
+
   labels = get.labels(annot_file)
   tree = get.tree(tree_file, out_file = out_file, branch_num = branch_num, labels = labels)
-  mytree = tree$mytree 
+  mytree = tree$mytree
   fout = tree$fout
-  
+
   btrees = list()
   cat("Patterns to match bootstrapping trees: ", pattern, "\n")
   files = list.files(path = bstrap_dir, pattern = glob2rx(pattern), recursive = F)
@@ -313,12 +313,12 @@ if (plot_type == "all"){
     btree = make.tree(dt, labels)
     btrees[[i]] = btree
   }
-  
+
   # prop.clades calls internally prop.part with the option check.labels = TRUE
   clad <- prop.clades(mytree, btrees, rooted = TRUE)
   clad[is.na(clad)] = 0
   mytree$node.label = as.integer(clad * 100 / length(files))
-  
+
   if(tree_style=="age"){
     # The lengths of tips are at the beginning
     elens=node.depth.edgelength(mytree)
@@ -331,8 +331,7 @@ if (plot_type == "all"){
   }else{
     plot.tree.bootstrap(mytree, fout, title)
   }
-  
+
 } else{
   message("plotting type not supported!")
 }
-

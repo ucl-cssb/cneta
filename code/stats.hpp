@@ -64,11 +64,11 @@ const int MAX_AGE = 100;
 const double LARGE_LNL = -1e9;
 const double SMALL_LNL = -1e20;
 const double SMALL_VAL = 1.0e-10;
-// The maximum mutation rates allowed
+// The minimum mutation rates allowed
 const double MIN_MRATE = 1.0e-20;
 // The maximum mutation rates allowed
 const double MAX_MRATE = 1;
-// The maximum age ratio allowed
+// The minimum age ratio allowed
 const double MIN_RATIO = 1e-2;
 const double MAX_RATIO = 0.99;
 // The shortest branch length allowed (in year)
@@ -2236,7 +2236,7 @@ map<int, set<vector<int>>> build_decomp_table()
         //     }
         // }
 
-        for(int i=1; i<=max_wgd; i++){
+        for(int i = 1; i<=max_wgd; i++){
             for(int j=0; j<=max_chr_change; j++){
                 for(int k=0; k<=max_site_change; k++){
                     for(int j0=0; j0<=max_chr_change - j; j0++){
@@ -2317,7 +2317,7 @@ map<int, set<vector<int>>> build_decomp_table_withm()
             }
         }
 
-        for(int i=1; i<=max_wgd; i++){
+        for(int i = 1; i<=max_wgd; i++){
             for(int j=0; j<=max_chr_change; j++){
                 for(int j0=0; j0<=max_chr_change - j; j0++){
                     for(int k=0; k<=max_site_change; k++){
@@ -2655,7 +2655,7 @@ void get_likelihood_site(vector<vector<double>>& L_sk_k, evo_tree &rtree, const 
       cout << nstate << endl;
   }
 
-  for(int kn=0; kn<knodes.size(); ++kn){
+  for(int kn = 0; kn < knodes.size(); ++kn){
         int k = knodes[kn];
         int ni = rtree.edges[rtree.nodes[k].e_ot[0]].end;
         double bli = rtree.edges[rtree.nodes[k].e_ot[0]].length;
@@ -2698,7 +2698,7 @@ void get_ancestral_states_site(vector<vector<double>>& L_sk_k, vector<vector<int
       cout << "Getting ancestral state for one site" << endl;
   }
 
-  for(int kn=0; kn<knodes.size(); ++kn){
+  for(int kn = 0; kn < knodes.size(); ++kn){
         int k = knodes[kn];
         int np = rtree.edges[rtree.nodes[k].e_in].start;
         double blen = rtree.edges[rtree.nodes[k].e_in].length;
@@ -2740,7 +2740,7 @@ void get_likelihood_site_decomp(vector<vector<double>>& L_sk_k, evo_tree &rtree,
       cout << dim_wgd << "\t" << dim_chr << "\t"  << dim_seg << "\t"  << nstate << endl;
   }
 
-  for(int kn=0; kn<knodes.size(); ++kn){
+  for(int kn = 0; kn < knodes.size(); ++kn){
         int k = knodes[kn];
         int ni = rtree.edges[rtree.nodes[k].e_ot[0]].end;
         double bli = rtree.edges[rtree.nodes[k].e_ot[0]].length;
@@ -2805,7 +2805,7 @@ void get_ancestral_states_site_decomp(vector<vector<double>>& L_sk_k, vector<vec
       cout << dim_wgd << "\t" << dim_chr << "\t"  << dim_seg << "\t"  << nstate << endl;
   }
 
-  for(int kn=0; kn<knodes.size(); ++kn){
+  for(int kn = 0; kn < knodes.size(); ++kn){
         int k = knodes[kn];
         int np = rtree.edges[rtree.nodes[k].e_in].start;
         int ni = rtree.edges[rtree.nodes[k].e_ot[0]].end;
@@ -2913,7 +2913,7 @@ double reconstruct_marginal_ancestral_state_decomp(evo_tree &rtree, ofstream& fo
     for(int k=Ns+2; k<rtree.ntotn; ++k) knodes.push_back( k );
     knodes.push_back(Ns+1);
 
-    for(int kn=0; kn<knodes.size(); ++kn){
+    for(int kn = 0; kn < knodes.size(); ++kn){
            int k = knodes[kn];
            double bli = rtree.edges[rtree.nodes[k].e_ot[0]].length;
            double blj = rtree.edges[rtree.nodes[k].e_ot[1]].length;
@@ -3117,7 +3117,7 @@ double reconstruct_marginal_ancestral_state(evo_tree &rtree, ofstream& fout, dou
 
     // Find the transition probability matrix for each branch
     map<double, double*> pmats;
-    for(int kn=0; kn<knodes.size(); ++kn){
+    for(int kn = 0; kn < knodes.size(); ++kn){
     int k = knodes[kn];
     double bli = rtree.edges[rtree.nodes[k].e_ot[0]].length;
     double blj = rtree.edges[rtree.nodes[k].e_ot[1]].length;
@@ -3263,7 +3263,7 @@ void reconstruct_joint_ancestral_state_decomp(evo_tree &rtree, ofstream& fout, d
     for(int k=Ns+2; k<rtree.ntotn; ++k) knodes.push_back( k );
     knodes.push_back(Ns+1);
 
-    for(int kn=0; kn<knodes.size(); ++kn){
+    for(int kn = 0; kn < knodes.size(); ++kn){
            int k = knodes[kn];
            double bli = rtree.edges[rtree.nodes[k].e_ot[0]].length;
            double blj = rtree.edges[rtree.nodes[k].e_ot[1]].length;
@@ -3452,7 +3452,7 @@ void reconstruct_joint_ancestral_state(evo_tree &rtree, ofstream &fout, double m
 
     // Find the transition probability matrix for each branch
     map<double, double*> pmats;
-    for(int kn=0; kn<knodes.size(); ++kn){
+    for(int kn = 0; kn < knodes.size(); ++kn){
       int k = knodes[kn];
       double bli = rtree.edges[rtree.nodes[k].e_ot[0]].length;
       double blj = rtree.edges[rtree.nodes[k].e_ot[1]].length;
@@ -3746,7 +3746,7 @@ double get_likelihood_invariant(evo_tree &rtree, const vector<int>& knodes, map<
     vector<int> obs(Ns, normal_cn);
     vector<vector<double>> L_sk_k = initialize_lnl_table(obs, rtree, Ns, model, nstate, is_total);
 
-    for(int kn=0; kn<knodes.size(); ++kn){
+    for(int kn = 0; kn < knodes.size(); ++kn){
         int k = knodes[kn];
         int ni = rtree.edges[rtree.nodes[k].e_ot[0]].end;
         double bli = rtree.edges[rtree.nodes[k].e_ot[0]].length;
@@ -3846,12 +3846,12 @@ double get_likelihood_revised(evo_tree &rtree){
   }
 
   //create a list of nodes to loop over (only internal nodes), making sure the root is last
-  for(int k=Ns+2; k<rtree.ntotn; ++k) knodes.push_back( k );
+  for(int k = Ns+2; k < rtree.ntotn; ++k) knodes.push_back( k );
   knodes.push_back(Ns+1);
 
   // Find the transition probability matrix for each branch
   map<double, double*> pmats;
-  for(int kn=0; kn<knodes.size(); ++kn){
+  for(int kn = 0; kn < knodes.size(); ++kn){
     int k = knodes[kn];
     double bli = rtree.edges[rtree.nodes[k].e_ot[0]].length;
     double blj = rtree.edges[rtree.nodes[k].e_ot[1]].length;
@@ -3982,7 +3982,7 @@ double get_likelihood_decomp(evo_tree &rtree){
   for(int k = Ns+2; k < rtree.ntotn; ++k) knodes.push_back( k );
   knodes.push_back(Ns+1);
 
-  for(int kn=0; kn<knodes.size(); ++kn){
+  for(int kn = 0; kn < knodes.size(); ++kn){
          int k = knodes[kn];
          double bli = rtree.edges[rtree.nodes[k].e_ot[0]].length;
          double blj = rtree.edges[rtree.nodes[k].e_ot[1]].length;
@@ -4161,7 +4161,7 @@ double get_likelihood(int Ns, int Nchar, const vector<vector<int>>& vobs, evo_tr
     for(int k=Ns+2; k<rtree.ntotn; ++k) knodes.push_back( k );
     knodes.push_back(Ns+1);
 
-    for(int kn=0; kn<knodes.size(); ++kn){
+    for(int kn = 0; kn < knodes.size(); ++kn){
       int k = knodes[kn];
       int ni = rtree.edges[rtree.nodes[k].e_ot[0]].end;
       double bli = rtree.edges[rtree.nodes[k].e_ot[0]].length;
@@ -4545,7 +4545,7 @@ void get_variables_ntime(evo_tree &rtree, double *x){
             npar_ne = rtree.nedge - 1;
             // The first element of x is not used for optimization
             // The index of x is added by 1 compared with index for simplex method
-            for(int i=0; i<rtree.nedge-1; i++){
+            for(int i = 0; i < rtree.nedge - 1; i++){
               rtree.edges[i].length = x[i + 1];
             }
         }else{
@@ -4566,7 +4566,7 @@ void get_variables_ntime(evo_tree &rtree, double *x){
             }
             // The estimated value may be nan
             // cout << "estimated x: ";
-            for(int i=0; i < npar_ne; i++){
+            for(int i = 0; i < npar_ne; i++){
                 double val = x[i + 1];
                 // cout << "\t" << val;
                 if(std::isnan(val)){  // return previous values
@@ -5158,7 +5158,7 @@ double L_BFGS_B(evo_tree &rtree, int n, double* x, double* l, double* u, double 
   return Fmin;
 }
 
-
+// deprecated due to stochastic bugs
 void init_branch_by_interval(double *variables, double *upper_bound, double *lower_bound, evo_tree &rtree, int npar_ne){
     int debug = 0;
     // estimate the top Ns intervals, which will be dynamic in different trees
@@ -5212,7 +5212,6 @@ void init_branch_by_interval(double *variables, double *upper_bound, double *low
 }
 
 
-
 // Using BFGS method to get the maximum likelihood with lower and upper bounds
 // Note: the topology of rtree is fixed
 void max_likelihood_BFGS(evo_tree &rtree, double &minL, double tolerance, int miter){
@@ -5226,8 +5225,8 @@ void max_likelihood_BFGS(evo_tree &rtree, double &minL, double tolerance, int mi
         npar_ne = 1;
     }else{
         if(cons == 0){  // only estimate internal branches
-            npar_ne = rtree.nedge-1;
-        }else{
+            npar_ne = rtree.nedge - 1;
+        }else{    // estimate internal branches and mutation rate
             npar_ne = rtree.nintedge + 1;
         }
     }
@@ -5238,7 +5237,7 @@ void max_likelihood_BFGS(evo_tree &rtree, double &minL, double tolerance, int mi
     upper_bound = new double[ndim+1];
     lower_bound = new double[ndim+1];
 
-    if(cons == 1){
+    if(cons == 1){    // edges converted to ratio to incorporate time constraints
         if(debug){
             cout << "Initializing variables related to branch length" << endl;
         }
@@ -5253,7 +5252,7 @@ void max_likelihood_BFGS(evo_tree &rtree, double &minL, double tolerance, int mi
             cout << endl;
         }
         // assert(rtree.nleaf == npar_ne);
-        if(opt_one_branch == 1){
+        if(opt_one_branch == 1){   // only optimize one branch
             int i = 0;
             variables[i+1] = rtree.ratios[i];
             lower_bound[i+1] = MIN_RATIO;
@@ -5264,9 +5263,10 @@ void max_likelihood_BFGS(evo_tree &rtree, double &minL, double tolerance, int mi
             variables[i+1] = rtree.ratios[i];
             double max_obs = *max_element(rtree.tobs.begin(), rtree.tobs.end());
             lower_bound[i+1] = max_obs + MIN_RATIO;
+            // age at 1st sample, so need to add time until last sample
             upper_bound[i+1] = max_obs + age;
 
-            for(int i=1; i < npar_ne; ++i){
+            for(int i = 1; i < npar_ne; ++i){
               variables[i+1] = rtree.ratios[i];
               lower_bound[i+1] = MIN_RATIO;
               upper_bound[i+1] = MAX_RATIO;
@@ -5287,7 +5287,7 @@ void max_likelihood_BFGS(evo_tree &rtree, double &minL, double tolerance, int mi
         }
     }
 
-    if(maxj==1){    // estimate mutation rates
+    if(maxj == 1){    // estimate mutation rates
         if(model == 0){
             int i = npar_ne;
             variables[i+1] = rtree.mu;
@@ -5349,6 +5349,7 @@ void max_likelihood_BFGS(evo_tree &rtree, double &minL, double tolerance, int mi
 
 
 // given a tree, maximise the branch lengths (and optionally mu) assuming branch lengths are independent or constrained in time
+// use GSL simplex optimization
 evo_tree max_likelihood(evo_tree &rtree, int model, double& minL, const double ssize, const double tolerance, int miter, int cons=0, int maxj=0, int cn_max=4, int only_seg=0, int correct_bias=1, int is_total=1){
   int debug = 0;
   const gsl_multimin_fminimizer_type *T = gsl_multimin_fminimizer_nmsimplex2;
@@ -5379,7 +5380,7 @@ evo_tree max_likelihood(evo_tree &rtree, int model, double& minL, const double s
     for(int i=0; i<npar_ne; ++i){
       gsl_vector_set (x, i, log(rtree.edges[i].length));
     }
-    if(maxj==1){
+    if(maxj == 1){
         if(model==0){
             gsl_vector_set (x, npar_ne, log(rtree.mu));
         }
@@ -5419,7 +5420,7 @@ evo_tree max_likelihood(evo_tree &rtree, int model, double& minL, const double s
 
     // initialise with current total tree time
     gsl_vector_set (x, rtree.nintedge, log(rtree.get_total_time()) );
-    if(maxj==1){
+    if(maxj == 1){
         if(model==0){
             gsl_vector_set (x, npar_ne, log(rtree.mu) );
         }

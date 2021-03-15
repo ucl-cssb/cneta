@@ -22,7 +22,6 @@ const double RATE_MAX = 1;
 const double RATE_MIN_LOG = -10;
 const double RATE_MAX_LOG = 0;
 
-
 typedef vector<double> DoubleVector;
 
 /**
@@ -414,10 +413,9 @@ public:
   vector<double> lengths;
   // vector<int> muts;
   vector<Node>   nodes;
-  vector<double> node_times;
-  vector<double> node_ages;     // count ages from present (recent sample has age 0)
-  // pointers to internal edges
-  vector<edge*> intedges;
+  vector<double> node_times;    // time start from 0 at root
+  vector<double> node_ages;    // count ages from present (recent sample has age 0), used to transform time constraints into ratios
+  vector<edge*> intedges;     // pointers to internal edges
   int root_node_id;
 
   // vector<vector<int>> chars;
@@ -425,7 +423,7 @@ public:
 
   double score = 0;     // likelihood of the tree
 
-  double mu = 0;
+  double mu = 0;   // a single mutation rate
   double dup_rate = 0;
   double del_rate = 0;
   double chr_gain_rate = 0;
@@ -435,7 +433,7 @@ public:
   double tree_height;
   double total_time;
   vector<double> top_tinvls;    // Top Ns+1 intervals for optimization with constaints on tip times
-  vector<int> top_tnodes;
+  vector<int> top_tnodes;     // nodes corresponding to top Ns+1 intervals
   double* ratios = NULL;
 
   // The chosen branch
@@ -499,7 +497,7 @@ public:
       node_ages.insert(node_ages.end(), _t2.node_ages.begin(), _t2.node_ages.end());
 
       // chars.clear();
-      // for(int i=0; i< _t2.chars.size(); ++i)  chars.push_back( _t2.chars[i] );
+      // for(int i = 0; i <  _t2.chars.size(); ++i)  chars.push_back( _t2.chars[i] );
 
       intedges.clear();
       generate_int_edges();
@@ -523,6 +521,7 @@ public:
   void   generate_int_edges();
   vector<int> get_internal_lengths();
 
+  // used for optimization with time constraints, deprecated
   double get_height2sample(const int& node_id);
   void get_ntime_interval(int k, int& sample1);
   double find_interval_len(int& _start, int _end, map<pair<int, int>, double>& slens);
@@ -577,7 +576,7 @@ public:
   vector<int> get_tips_below(int node_id){
       assert(node_id > nleaf-1);
       vector<int> tips;
-      for(int i=0; i< nleaf - 1; i++){
+      for(int i = 0; i <  nleaf - 1; i++){
           vector<int> anodes = get_ancestral_nodes(i);
           if(find(anodes.begin(), anodes.end(), node_id) != anodes.end()){
               tips.push_back(i);
@@ -627,7 +626,7 @@ public:
   // Find the number of mutations on each branch
   vector<int> get_nmuts(vector<double> mu){
       vector<int> nmuts;
-      for(int i=0; i< lengths.size(); i++){
+      for(int i = 0; i <  lengths.size(); i++){
           int mut = mu[i] * lengths[i];
           nmuts.push_back(mut);
       }
@@ -637,12 +636,12 @@ public:
   void print(){
     cout << "EDGES:" << endl;
     cout << "\tid\tstart\tend\tlength" << endl;
-    for(int i=0; i<nedge; ++i){
+    for(int i = 0; i < nedge; ++i){
       cout << "\t" << edges[i].id+1 << "\t" << edges[i].start+1 << "\t" << edges[i].end+1 << "\t" << edges[i].length << endl;
     }
     cout << "NODES:" << endl;
     cout << "\tid\tparent\td1\td2\tisLeaf\tisRoot\te_in\te_o1\te_o2\ttime\tage" << endl;
-    for(int i=0; i<nodes.size(); ++i){
+    for(int i = 0; i < nodes.size(); ++i){
       cout << "\t" << nodes[i].id+1 << "\t" <<  nodes[i].parent+1;
       if(nodes[i].daughters.size() == 2){
         cout << "\t" << nodes[i].daughters[0]+1 << "\t" << nodes[i].daughters[1]+1;
@@ -666,14 +665,14 @@ public:
 
   void write(ofstream& of){
     of << "start\tend\tlength" << endl;
-    for(int i=0; i<nedge; ++i){
+    for(int i = 0; i < nedge; ++i){
       of << edges[i].start+1 << "\t" << edges[i].end+1 << "\t" << edges[i].length << endl;
     }
   }
 
   void write_with_mut(ofstream& of, vector<int> nmuts){
     of << "start\tend\tlength\tnmut" << endl;
-    for(int i=0; i<nedge; ++i){
+    for(int i = 0; i < nedge; ++i){
       of << edges[i].start+1 << "\t" << edges[i].end+1 << "\t" << edges[i].length << "\t" << nmuts[i] << endl;
     }
   }
@@ -681,7 +680,7 @@ public:
   void print_ancestral_edges(const int& node_id) const{
     vector<int> aedges = get_ancestral_edges(node_id);
     reverse(aedges.begin(),aedges.end());
-    for(int j=0; j<aedges.size(); ++j) cout << "\t" << edges[aedges[j]].id+1
+    for(int j = 0; j < aedges.size(); ++j) cout << "\t" << edges[aedges[j]].id+1
 					    << " (" << edges[aedges[j]].start+1 << " -> " << edges[aedges[j]].end+1 << ") ";
     cout << endl;
   }
@@ -691,7 +690,7 @@ public:
     stream << "ANCESTRY    (" << node_id+1 << ")";
     vector<int> aedges = get_ancestral_edges(node_id);
     reverse(aedges.begin(),aedges.end());
-    for(int j=0; j<aedges.size(); ++j) stream << "\t" << edges[aedges[j]].id+1
+    for(int j = 0; j < aedges.size(); ++j) stream << "\t" << edges[aedges[j]].id+1
 					    << " (" << edges[aedges[j]].start+1 << " -> " << edges[aedges[j]].end+1 << ") ";
     stream << endl;
   }
@@ -854,7 +853,7 @@ evo_tree::evo_tree(const evo_tree& _t2) {
   node_ages.insert(node_ages.end(), _t2.node_ages.begin(), _t2.node_ages.end());
 
   // chars.clear();
-  // for(int i=0; i< _t2.chars.size(); ++i)  chars.push_back( _t2.chars[i] );
+  // for(int i = 0; i <  _t2.chars.size(); ++i)  chars.push_back( _t2.chars[i] );
 
   intedges.clear();
   generate_int_edges();
@@ -880,7 +879,7 @@ evo_tree::evo_tree(const int& _nleaf, const vector<int>& _edges, const vector<do
   // create list of edges
   int count = 0;
   lengths.clear();
-  for(int i=0; i<nedge; ++i){
+  for(int i = 0; i < nedge; ++i){
     edges.push_back( edge(i,_edges[count], _edges[count+1], _lengths[i]) );
     lengths.push_back(_lengths[i]);
     count = count + 2;
@@ -913,7 +912,7 @@ evo_tree::evo_tree(const int& _nleaf, const vector<edge>& _edges, int gen_node){
   edges.clear();
   edges.insert(edges.end(), _edges.begin(), _edges.end());
   lengths.clear();
-  for(int i=0; i<nedge; ++i){
+  for(int i = 0; i < nedge; ++i){
       lengths.push_back(_edges[i].length);
   }
 
@@ -952,20 +951,20 @@ evo_tree::evo_tree(const int& _nleaf, const vector<edge>& _edges, const double& 
   tobs = _tobs;
 
   // Fill external edge lengths by looping over nodes
-  for(int i=0; i<nleaf-1; ++i){
+  for(int i = 0; i < nleaf-1; ++i){
     vector<int> es = get_ancestral_edges( nodes[i].id );
     reverse(es.begin(),es.end());
 
     if(debug){
         cout << "node id / edges: \t" << nodes[i].id+1 << " : ";
-        for(int j=0; j<es.size(); ++j){
+        for(int j = 0; j < es.size(); ++j){
           cout << "\t" << edges[es[j]].id+1;
         }
         cout << endl;
         cout << "edge " << es.back() << "; tip " <<  nodes[i].id+1 <<  "; total time " << total_time << "; offset " << tobs[ nodes[i].id ] << endl;
     }
     edges[ es.back() ].length = total_time + tobs[ nodes[i].id ];
-    for(int j=0; j<es.size()-1; ++j){
+    for(int j = 0; j < es.size()-1; ++j){
       edges[ es.back() ].length -= edges[es[j]].length;
     }
   }
@@ -980,7 +979,7 @@ evo_tree::evo_tree(const int& _nleaf, const vector<edge>& _edges, const double& 
 
 void evo_tree::update_length() {
     lengths.clear();
-    for(int i=0; i<nedge; ++i){
+    for(int i = 0; i < nedge; ++i){
         lengths.push_back(edges[i].length);
     }
 }
@@ -989,7 +988,7 @@ void evo_tree::update_length() {
 void evo_tree::scale_time(double ratio) {
     // Scale the tree height and times so that it is less than the age of the patient
     // cout << "Current age of patient " << curr_age << endl;
-    for(int i=0; i < edges.size(); i++)
+    for(int i = 0; i < edges.size(); i++)
     {
         // cout << "Previous length: " << lengths[i] << endl;
         edges[i].length = edges[i].length * ratio;
@@ -1007,7 +1006,7 @@ void evo_tree::scale_time(double ratio) {
 void evo_tree::scale_time_internal(double ratio) {
     // Scale the tree height and times so that it is less than the age of the patient
     // cout << "Current age of patient " << curr_age << endl;
-    for(int i=0; i<nedge; ++i){
+    for(int i = 0; i < nedge; ++i){
       if( edges[i].end >= nleaf ){
           // cout << "Previous length: " << lengths[i] << endl;
           edges[i].length = edges[i].length * ratio;
@@ -1020,9 +1019,10 @@ void evo_tree::scale_time_internal(double ratio) {
     get_age_from_time();
 }
 
+
 void evo_tree::generate_int_edges(){
   //cout << "generate_int_edges" << endl;
-  for(int i=0; i<nedge; ++i){
+  for(int i = 0; i < nedge; ++i){
     if( edges[i].end >= nleaf ){
       intedges.push_back( &edges[i] );
       //cout << "internal edge: " << (intedges.back()->id)+1 << endl;
@@ -1030,24 +1030,25 @@ void evo_tree::generate_int_edges(){
   }
 }
 
+
 // Find the sum of internal lengths along the path to each tip to get more constrained optimisation
 vector<int> evo_tree::get_internal_lengths(){
     int debug = 0;
     vector<int> internal_lens;
     // Fill external edge lengths by looping over nodes
-    for(int i=0; i<nleaf-1; ++i){
+    for(int i = 0; i < nleaf-1; ++i){
       double len = 0;
       vector<int> es = get_ancestral_edges( nodes[i].id );
       // reverse(es.begin(),es.end());
 
       // Exclude the terminal edge (index 0)
-      for(int j=1; j<es.size(); ++j){
+      for(int j=1; j < es.size(); ++j){
         len += edges[es[j]].length;
       }
 
       if(debug){
           cout << "node id / edges: \t" << nodes[i].id+1 << " : " << len << endl;
-          for(int j=0; j<es.size(); ++j){
+          for(int j = 0; j < es.size(); ++j){
             cout << "\t" << edges[es[j]].id+1;
           }
           cout << endl;
@@ -1113,10 +1114,13 @@ void evo_tree::get_ntime_interval(int k, int& sample1){
 void evo_tree::get_age_from_time(){
     int debug = 0;
     if(debug) cout << "generate ages from node times" << endl;
+
     assert(node_times.size()>0);
+
     node_ages.clear();
+
     double max_time = *max_element(node_times.begin(), node_times.end());
-    for(int i=0; i < node_times.size();i++){
+    for(int i = 0; i < node_times.size();i++){
         double ti = max_time - node_times[i];
         node_ages.push_back(ti);
     }
@@ -1132,7 +1136,7 @@ void evo_tree::get_age_from_time(){
 
 // Check whether if an interval is in the tree. If yes, return the ID.
 pair<int, double> evo_tree::is_edge(int _start, int _end){
-  for(int i = 0; i<edges.size(); i++){
+  for(int i = 0; i < edges.size(); i++){
       int start = edges[i].start;
       int end = edges[i].end;
       if (start == _start && end == _end){
@@ -1194,7 +1198,7 @@ double evo_tree::find_interval_len(int& _start, int _end, map<pair<int, int>, do
 
 
 // Convert the time constraints among nodes into a set of ratios for bounded estimation
-// number of ratios:
+// number of ratios equal to #internal nodes
 void evo_tree::get_ratio_from_age(int eid){
     int debug = 0;
     if(debug){
@@ -1223,8 +1227,8 @@ void evo_tree::get_ratio_from_age(int eid){
                 if(nj < root_node_id) continue;
                 double max_tj = get_descendants_max_age(nj);
                 // cout << " maximum time below node " << nj+1 << " is " << max_tj << endl;
-                double t1 = (node_ages[ni] - max_tj);
-                double t2 = (node_ages[nj] - max_tj);
+                double t1 = (node_ages[ni] - max_tj);   // for parent node
+                double t2 = (node_ages[nj] - max_tj);   // for child node
                 // if(t2 > t1){     // age constraint may be violated when doing NNI
                 //     int tmp = t2;
                 //     t2 = t1;
@@ -1333,6 +1337,7 @@ void evo_tree::update_edges_from_ratios(){
 void evo_tree::update_edge_from_ratio(double ratio, int eid){
     int debug = 0;
     if(eid < 0 || ratio <= 0 || ratio >= 1) return;
+
     edge *e = &edges[eid];
     double max_tj = get_descendants_max_age(e->end);
     if(debug) cout << "updating edge " << eid+1 << " from ratio " << ratio << " with starting node at age " << node_ages[e->start] << " max tip time at " << max_tj << endl;
@@ -1367,7 +1372,7 @@ vector<double> evo_tree::get_edges_from_interval(const vector<double>& intervals
     bool is_below = true; // Whether or not the first sample is below all interval nodes. If yes, sample1 should be the last element in tnodes.
 
     // Find the lengths of all intervals
-    for(int i=0; i<intervals.size(); i++){
+    for(int i = 0; i < intervals.size(); i++){
         if(tnodes[i+1] < nleaf - 1){
             sample1 = tnodes[i+1];
         }
@@ -1387,7 +1392,7 @@ vector<double> evo_tree::get_edges_from_interval(const vector<double>& intervals
         }
     }
 
-    for(int i=0; i < tobs.size(); i++){
+    for(int i = 0; i < tobs.size(); i++){
         // cout << "\t" << tobs[i];
         if(i == sample1) { continue; }
         pair<int, int> invl(sample1, i);
@@ -1404,7 +1409,7 @@ vector<double> evo_tree::get_edges_from_interval(const vector<double>& intervals
     }
 
     // Find the branch length of each edge
-    for (int i=0; i< edges.size(); i++){
+    for (int i = 0; i <  edges.size(); i++){
         // Skip the edge from LUCA to normal genome
         if(edges[i].start==nleaf && edges[i].end==nleaf-1){
             pair<int, double> id_len(i, edges[i].length);
@@ -1474,17 +1479,17 @@ vector<double> evo_tree::get_edges_from_interval(const vector<double>& intervals
 
 void evo_tree::generate_nodes(){
   // create list of nodes
-  for(int i=0; i<ntotn; ++i){
+  for(int i = 0; i < ntotn; ++i){
     if(i < nleaf){
-      nodes.push_back( Node(i,0,1));
+      nodes.push_back( Node(i,0,1) );
     }
     else{
-      nodes.push_back( Node(i,0,0));
+      nodes.push_back( Node(i,0,0) );
     }
   }
 
   // fill in node details
-  for(int i=0; i<nedge; ++i){
+  for(int i = 0; i < nedge; ++i){
     nodes[ edges[i].end ].parent = edges[i].start;
     nodes[ edges[i].start ].daughters.push_back(edges[i].end);
 
@@ -1495,14 +1500,14 @@ void evo_tree::generate_nodes(){
   }
 
   // locate root node
-  for(int i=0; i<nodes.size(); ++i){
+  for(int i = 0; i < nodes.size(); ++i){
     if(nodes[i].parent == -1){
       nodes[i].isRoot = 1;
       root_node_id = nodes[i].id;
     }
   }
   //cout << "finished generating nodes " << endl;
-  //for(int i=0; i<ntotn; ++i){
+  //for(int i = 0; i < ntotn; ++i){
   //cout << "\t" << nodes[i].id << endl;
   //}
 }
@@ -1510,14 +1515,15 @@ void evo_tree::generate_nodes(){
 // assuming branch lengths are times then calculate the times of each node with MCRA at t=0
 void evo_tree::calculate_node_times(){
     node_times.clear();
-    for(int i=0; i<nodes.size(); ++i){
+
+    for(int i = 0; i < nodes.size(); ++i){
       node_times.push_back(0);
 
-      if( nodes[i].id != root_node_id){
+      if(nodes[i].id != root_node_id){
         vector<int> aedges = get_ancestral_edges(i);
         reverse(aedges.begin(),aedges.end());
         double time = 0;
-        for(int j=0; j<aedges.size(); ++j){
+        for(int j = 0; j < aedges.size(); ++j){
            time += edges[aedges[j]].length;
         }
         node_times[ nodes[i].id ] = time;
@@ -1533,7 +1539,7 @@ void evo_tree::calculate_node_times(){
 // Find the preorder of nodes in the tree
 void evo_tree::get_nodes_preorder(Node* root, vector<Node*>& nodes_preorder){
     nodes_preorder.push_back(root);
-    for(int j=0; j<root->daughters.size();j++){
+    for(int j = 0; j < root->daughters.size();j++){
             get_nodes_preorder(&nodes[root->daughters[j]], nodes_preorder);
     }
 }
@@ -1548,7 +1554,7 @@ string evo_tree::make_newick(int precision){
     vector<Node*> nodes_preorder;
     Node* root;
 
-    for(int i=0; i<nodes.size(); ++i){
+    for(int i = 0; i < nodes.size(); ++i){
       if(nodes[i].isRoot){
           root = &nodes[i];
           break;
@@ -1558,7 +1564,7 @@ string evo_tree::make_newick(int precision){
     get_nodes_preorder(root, nodes_preorder);
 
     // Traverse nodes in preorder
-    for (int i = 0; i<nodes_preorder.size(); i++)
+    for (int i = 0; i < nodes_preorder.size(); i++)
     {
         Node* nd = nodes_preorder[i];
         // cout << nd->id + 1 << endl;
@@ -1598,6 +1604,8 @@ string evo_tree::make_newick(int precision){
     return newick;
 }
 
+
+// branch length as number of mutations
 string evo_tree::make_newick_nmut(int precision, vector<int> nmuts){
     string newick;
     const boost::format tip_node_format(boost::str(boost::format("%%d:%%.%df") % precision));
@@ -1607,7 +1615,7 @@ string evo_tree::make_newick_nmut(int precision, vector<int> nmuts){
     vector<Node*> nodes_preorder;
     Node* root;
 
-    for(int i=0; i<nodes.size(); ++i){
+    for(int i = 0; i < nodes.size(); ++i){
       if(nodes[i].isRoot){
           root = &nodes[i];
           break;
@@ -1617,7 +1625,7 @@ string evo_tree::make_newick_nmut(int precision, vector<int> nmuts){
     get_nodes_preorder(root, nodes_preorder);
 
     // Traverse nodes in preorder
-    for (int i = 0; i<nodes_preorder.size(); i++)
+    for (int i = 0; i < nodes_preorder.size(); i++)
     {
         Node* nd = nodes_preorder[i];
         // cout << nd->id + 1 << endl;
@@ -1657,11 +1665,11 @@ string evo_tree::make_newick_nmut(int precision, vector<int> nmuts){
     return newick;
 }
 
+
 // Print the tree in nexus format to be used in other tools for downstream analysis
 void evo_tree::write_nexus(string newick, ofstream& fout){
     fout << "#nexus" << endl;
     fout << "begin trees;" << endl;
-    // string newick = make_newick(precision);
     fout << "tree 1 = " << newick << ";" << endl;
     fout << "end;" << endl;
 }
@@ -1670,7 +1678,7 @@ void evo_tree::write_nexus(string newick, ofstream& fout){
 // The string will be different for different labeled histories
 string create_tree_string( evo_tree tree ){
   stringstream sstm;
-  for(int i=0; i<tree.ntotn; ++i){
+  for(int i = 0; i < tree.ntotn; ++i){
     sstm << tree.nodes[i].id+1;
     if(tree.nodes[i].daughters.size() == 2){
       sstm << ";" << tree.nodes[i].daughters[0]+1 << ";" << tree.nodes[i].daughters[1]+1;
@@ -1681,14 +1689,14 @@ string create_tree_string( evo_tree tree ){
 }
 
 
-// The string will be unique for different topolies
+// The string will be unique for different topologies
 // The key is to name the internal node based on tips
 string create_tree_string_uniq(evo_tree tree){
   int debug = 0;
   stringstream sstm;
   // Use a dictory to store the names of internal nodes;
   map<int, string> names;
-  for(int i=0; i<tree.ntotn; ++i){
+  for(int i = 0; i < tree.ntotn; ++i){
     int nid = tree.nodes[i].id + 1;
     if(nid <= tree.nleaf){
         sstm << nid;
@@ -1752,18 +1760,18 @@ string create_tree_string_uniq(evo_tree tree){
   return sstm.str();
 }
 
-string order_tree_string( string tree ){
+string order_tree_string(string tree){
   stringstream sstm;
   vector<string> split1;
   boost::split(split1, tree, [](char c){return c == ':';});
 
-  for(int i=0; i<split1.size()-1; ++ i){     // split creates an empty string at the end
+  for(int i = 0; i < split1.size()-1; ++ i){     // split creates an empty string at the end
     //sstm << split1[i];
     //cout << "\t" << split1[i] << endl;
     vector<string> split2;
     boost::split(split2, split1[i], [](char c){return c == ';';});
 
-    if( split2.size() == 1){
+    if(split2.size() == 1){
       sstm << split1[i];
     }
     else{
@@ -1771,7 +1779,7 @@ string order_tree_string( string tree ){
       string s1 = split2[1];
       string s2 = split2[2];
       // if( atoi(split2[1].c_str() ) < atoi(split2[2].c_str() ) ){
-      if( s1.compare(s2) < 0 ){
+      if(s1.compare(s2) < 0){
 	         sstm << split2[1] << ";" << split2[2];
       }else{
 	         sstm << split2[2] << ";" << split2[1];
@@ -1782,20 +1790,21 @@ string order_tree_string( string tree ){
   return sstm.str();
 }
 
+
 // Sort the parent nodes at first
-string order_tree_string_uniq( string tree ){
+string order_tree_string_uniq(string tree){
   stringstream sstm;
   vector<string> split1;
   boost::split(split1, tree, [](char c){return c == ':';});
   // Sort split1
   sort(split1.begin(), split1.end());
-  for(int i=0; i<split1.size()-1; ++ i){     // split creates an empty string at the end
+  for(int i = 0; i < split1.size()-1; ++ i){     // split creates an empty string at the end
     //sstm << split1[i];
     //cout << "\t" << split1[i] << endl;
     vector<string> split2;
     boost::split(split2, split1[i], [](char c){return c == ';';});
 
-    if( split2.size() == 1){
+    if(split2.size() == 1){
       sstm << split1[i];
     }
     else{
@@ -1818,20 +1827,20 @@ string order_tree_string_uniq( string tree ){
 void test_evo_tree(const evo_tree& tree){
   // generate the list of ancestral nodes belonging to leaf nodes
   cout << "leaf ancestral nodes:" << endl;
-  for(int i=0; i<tree.nleaf-1; ++i){
+  for(int i = 0; i < tree.nleaf-1; ++i){
     vector<int> anodes = tree.get_ancestral_nodes( tree.nodes[i].id );
     cout << "\tnode " << tree.nodes[i].id+1;
-    for(int j=0; j<anodes.size(); ++j) cout << "\t" << tree.nodes[anodes[j]].id+1;
+    for(int j = 0; j < anodes.size(); ++j) cout << "\t" << tree.nodes[anodes[j]].id+1;
     cout << endl;
   }
 
   // generate the list of ancestral edges belonging to leaf nodes
   cout << "leaf ancestral edges:" << endl;
-  for(int i=0; i<tree.nleaf-1; ++i){
+  for(int i = 0; i < tree.nleaf-1; ++i){
     vector<int> aedges = tree.get_ancestral_edges( tree.nodes[i].id );
     reverse(aedges.begin(),aedges.end());
     cout << "\tnode " << tree.nodes[i].id+1;
-    for(int j=0; j<aedges.size(); ++j) cout << "\t" << tree.edges[aedges[j]].id+1
+    for(int j = 0; j < aedges.size(); ++j) cout << "\t" << tree.edges[aedges[j]].id+1
 					    << " (" << tree.edges[aedges[j]].start+1 << " -> " << tree.edges[aedges[j]].end+1 << ") ";
     cout << endl;
   }
