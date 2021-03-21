@@ -1,5 +1,3 @@
-#!/usr/bin/bash
-
 # This script is used to run program svtreemcmc.
 
 # Use MCMC to infer tree

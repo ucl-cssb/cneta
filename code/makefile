@@ -1,6 +1,6 @@
 # CCC = icc		# Using intel complier
 CCC = g++
-# CCC = /usr/local/opt/llvm/bin/clang
+# CCC = clang
 BOOST = /usr/local
 omp = -fopenmp
 # omp =

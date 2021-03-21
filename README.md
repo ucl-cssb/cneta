@@ -95,6 +95,11 @@ You may use the provided bash scripts to run the programs.
 > bash run-svtreemcmc.sh
 ```
 
+The most recent Mac switched to zsh. In that case, replace bash with zsh in the commands above.
+However, there may be issues running the commands on Mac with zsh.
+
+
+
 
 # Simulation with sveta
 SVETA simulates structural variations that alter copy numbers along a coalescence tree of multiple samples.
@@ -204,8 +209,8 @@ The last three modes can be used to validate the computation of likelihood.
 
 There are 3 tree searching method:
 * exhaustive search (feasible for trees with fewer than 7 samples)
-* hill climbing (only works for unconstrained case for now)
-* genetic algorithm (may be slow, need improvement, not recommend to use)
+* hill climbing (applicable for trees with at least 5 samples)
+* genetic algorithm (may be slow, need improvement, deprecated)
 
 Please see run-svtreeml.sh to learn how to set different parameters
 

@@ -95,6 +95,8 @@ int state_to_allele_cn(int state, int cn_max, int& cnA, int& cnB){
 
 
 // Read the samping time and patient age of each sample
+// Ns: number of samples
+// age: age at earliest sample
 vector<double> read_time_info(const string& filename, const int& Ns, int& age){
   if(debug) cout << "\tread_time_info" << endl;
   vector<double> t_info;
@@ -114,12 +116,12 @@ vector<double> read_time_info(const string& filename, const int& Ns, int& age){
       //cout << "read dt: " << dt << endl;
       t_info.push_back(dt);
 
-      if(split.size()>2){
+      if(split.size() > 2){
           int a = atoi(split[2].c_str());
           ages.push_back(a);
       }
     }
-    if(ages.size()>0){
+    if(ages.size() > 0){
         age = *min_element(ages.begin(), ages.end());
     }
   }else{

@@ -10,7 +10,7 @@ if(!require(optparse)){
     library(optparse)
 }
 
-# load("../../lpWGS phylogenies/bin_locations_4401.Rdata")
+
 #load("./bin_locations_4401.Rdata")
 
 # args = commandArgs(trailingOnly=TRUE)
@@ -40,7 +40,7 @@ out.file <- opt$out_file
 pattern <- opt$pattern
 
 plot_type <- "all"
-if(in.file!=""){
+if(in.file != ""){
   plot_type <- "single"
 }
 
@@ -114,7 +114,6 @@ if(0){  # test
 }
 
 if (plot_type == "all"){
-  #dir <- "../sim-data/"
   dir <- data.dir
   cat(paste0("Plotting all related files in directory ", dir, "\n"))
   if(pattern == ""){

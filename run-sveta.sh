@@ -1,14 +1,12 @@
-#!/usr/bin/bash
-
 # This script is used to run program sveta, which can generate a random colesence tree (of tumor samples from a single patient) and mutations along the tree branches.
 
-seed=1218794168  # used for reproducing the results
+seed=1  # used for reproducing the results
 verbose=0   # Whether or not to print debug information
 Nsim=1  # The number of simulations. Number of patients to simulate
 
 
 ####################### Parameters related to tree generation ##################
-Ns=3  # The number of tumor regions to sample. Output will be Ns+1 including germline normal region
+Ns=3 # The number of tumor regions to sample. Output will be Ns+1 including germline normal region
 tree_file=""  # The input tree file. If given, mutations will be generated along this tree
 Ne=9000000  # effective population size for the coalescence tree
 beta=1.563e-3  # exponential growth rate
@@ -52,7 +50,11 @@ fi
 prefix=""
 
 
-code/sveta --tree_file "$tree_file" -o $dir -r $Ns -n $Nsim --mode $mode --method $method --fix_seg $fix_seg --seg_max $seg_max --cn_max $cn_max --dup_rate $r1 --del_rate $r2 --chr_gain $r3 --chr_loss $r4 --wgd $r5 --dup_size $s1 --del_size $s2 -e $Ne -b $beta -t $dt --verbose $verbose --constrained $cons --model $model -p "$prefix" --age $age --seed $seed > $dir/std_sveta_cons"$cons"_model"$model"_method"$method"
+./code/sveta --tree_file "${tree_file}" -p "${prefix}"  -o $dir -r $Ns -n $Nsim --mode $mode --method $method --fix_seg $fix_seg --seg_max $seg_max --cn_max $cn_max --dup_rate $r1 --del_rate $r2 --chr_gain $r3 --chr_loss $r4 --wgd $r5 --dup_size $s1 --del_size $s2 -e $Ne -b $beta -t $dt --verbose $verbose --constrained $cons --model $model --age $age --seed $seed > $dir/std_sveta_cons${cons}_model${model}_method${method}
+
+wait
+
+echo "Finish running sveta"
 ################################################################################
 
 
@@ -62,6 +64,7 @@ Rscript ana/plot-trees-all.R -d $dir -b 0 -t "all" -l "xlim"  # >& /dev/null
 # Plot simulated tree with the number of mutations on the branch
 Rscript ana/plot-trees-all.R -d $dir -b 1 -t "all" # >& /dev/null
 Rscript ana/plot-cns.R -d $dir -b ana/bin_locations_4401.Rdata # >& /dev/null
+
 
 # Plot a single tree
 # prefix=sim-data-1

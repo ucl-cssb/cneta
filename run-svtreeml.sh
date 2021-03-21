@@ -1,8 +1,6 @@
-#!/usr/bin/bash
-
 # This script is used to run program svtreeml.
 
-seed=1097979355 # Setting seed for reproductive results
+seed=1 # Setting seed for reproductive results
 verbose=1  # Whether or not to print debug information
 
 # Running mode. 0: build maximum likelihood tree; 1: test; 2: compute likelihood; 3: compute maximum likelihood; 4: infer ancestral state
@@ -25,7 +23,7 @@ incl_all=0
 cn_max=4  # Maximum copy number allowed
 
 # The input parameters that should be consistent with the simulation or real data
-Ns=3  # The number of regions
+Ns=3 # The number of regions
 cons=1  # Whether or not the tree is constrained by patient age
 age=60  # age of patient at first sample
 
