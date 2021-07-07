@@ -1,19 +1,18 @@
 # library(tidyverse)
-library(ggtree)
-library(ape)
-library(tools)
-library(ggplot2)
+suppressMessages(library(ggtree))
+suppressMessages(library(ape))
+suppressMessages(library(tools))
+suppressMessages(library(ggplot2))
+suppressMessages(library(optparse))
 
-if(!require(optparse)){
-    install.packages("optparse")
-    library(optparse)
-}
 
 # This script is used to plot phylogenetic trees:
 # 1) plotting a single tree file with tips as 1 to n or with provided labels
 # 2) plotting a single tree file with bootstrapping support
 # 3) plotting all tree files in a directory
 
+# d is a data frame with 3 columns: start, end, branch length
+# Leaves must be encoded from 1 to nleaf
 make.tree <- function(d, labels = NA, digit = 2) {
   nedge <- nrow(d)
   nleaf <- (nedge + 2)/2

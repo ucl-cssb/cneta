@@ -18,16 +18,16 @@ This package is mostly written in C++. There are a few scripts written in R and 
 
 ## Dependencies
 
-* Required C/C++ libraries
+* Required C/C++ libraries for compiling the main programs
   * [CMake](https://cmake.org/install/) is required for BFGS optimization
   * C libaries: gsl, boost (version >= 1.42)
 
-* Required R libraries
+* Required R libraries for postprocessing
   * plot-cns.R: `copynumber`, `reshape`, `tools`, `tidyr`, `dplyr`, `purrr`
   * plot-trees-all.R: `ggtree`, `ape`, `tools`, `ggplot2`
   * tree_comparison.R: `phangorn`
 
-* Required Python libraries
+* Required Python libraries for postprocessing
   * newick2elist.py: networkx
 
 ### How to install CMake
@@ -59,11 +59,13 @@ make install
 if (!requireNamespace("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
 BiocManager::install()
+
 BiocManager::install("copynumber")
 BiocManager::install("ggtree")
 
 install.packages("reshape")
 install.packages("ape")
+install.packages("optparse")
 
 # Check installed packages
 installed.packages()[, c("Package", "LibPath")]
@@ -95,9 +97,7 @@ You may use the provided bash scripts to run the programs.
 > bash run-svtreemcmc.sh
 ```
 
-The most recent Mac switched to zsh. In that case, replace bash with zsh in the commands above.
-However, there may be issues running the commands on Mac with zsh.
-
+The most recent Mac switched to zsh. In that case, please replace bash with zsh in the commands above.
 
 
 

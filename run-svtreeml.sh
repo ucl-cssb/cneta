@@ -1,7 +1,7 @@
 # This script is used to run program svtreeml.
 
 seed=1 # Setting seed for reproductive results
-verbose=1  # Whether or not to print debug information
+verbose=0  # Whether or not to print debug information
 
 # Running mode. 0: build maximum likelihood tree; 1: test; 2: compute likelihood; 3: compute maximum likelihood; 4: infer ancestral state
 mode=0
@@ -69,8 +69,8 @@ gtime=0.002739726 # generation time in year
 
 
 # Specify the (initial) mutation rates when they are fixed
-r1=0.01
-r2=0.01
+r1=0.001
+r2=0.001
 r3=0
 r4=0
 r5=0
@@ -80,6 +80,8 @@ mu=0  # Used in model 0
 
 
 ####################### Set output directory and run the program ###############
+echo "Start running svtreeml"
+
 dir=$idir
 if [[ ! -d $dir ]]; then
   mkdir -p $dir
@@ -148,6 +150,7 @@ elif [[ $mode -eq 4 ]]; then
   code/svtreeml -c $input -t $times -o $mltree --is_bin $is_bin --incl_all $incl_all -s $Ns --tree_file "$tree_file" --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change -d $model --cn_max $cn_max --only_seg $only_seg --constrained $cons --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode  --seed $seed > $dir/std_svtreeml_"$suffix"
 fi
 
+echo "Finish running svtreeml"
 
 # Estimating mutation rates given the tree
 # mutree=$dir/results-mu-tree-"$suffix".txt

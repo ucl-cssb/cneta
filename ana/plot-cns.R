@@ -1,15 +1,10 @@
-library(copynumber)
-library(reshape)
-library(tools)
-library(tidyr)
-library(dplyr)
-library(purrr)
-
-if(!require(optparse)){
-    install.packages("optparse")
-    library(optparse)
-}
-
+suppressMessages(library(copynumber))
+suppressMessages(library(reshape))
+suppressMessages(library(tools))
+suppressMessages(library(tidyr))
+suppressMessages(library(dplyr))
+suppressMessages(library(purrr))
+suppressMessages(library(optparse))
 
 #load("./bin_locations_4401.Rdata")
 

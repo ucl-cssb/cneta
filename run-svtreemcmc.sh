@@ -36,6 +36,7 @@ if [[ ! -d $odir ]]; then
 fi
 suffix=$prefix
 
+echo "Start running svtreemcmc"
 
 # Run multiple chains
 for i in {1..2}
@@ -52,3 +53,5 @@ do
   # Summarize the sampled trees into a maximum credibility tree with median heights
   # treeannotator -burnin 10 -heights median $trace_tree_file $sum_tree_file
 done
+
+echo "Finish running svtreemcmc"

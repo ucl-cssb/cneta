@@ -14,7 +14,7 @@ fout = args[2]
 
 # tree_file = file.path(dir, "mcmc-sim-data-1_2.t")
 # log_file = file.path(dir, "mcmc-sim-data-1_2.p")
-# 
+#
 # # Load one chain
 # # chain1 <- load.trees(tree_file, type = "nexus", logfile = log_file, skip = 0, gens.per.tree = 1)
 # chain1 <- load.trees(tree_file, logfile = log_file, format = "mb")
@@ -24,7 +24,7 @@ fout = args[2]
 # names(chain1.rwty)
 # makeplot.all.params(chain1.rwty, burnin=0)
 # approx.ess <- topological.approx.ess(chain1, burnin = 0)
-# 
+#
 
 
 # Load multiple chains
@@ -38,4 +38,3 @@ names(multi.rwty)
 # approx.ess <- topological.approx.ess(multi.trees, burnin = 0)
 # multi.rwty$lnl.trace$trace.plot
 # multi.rwty$lnl.trace$density.plot
-

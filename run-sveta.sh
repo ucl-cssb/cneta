@@ -49,6 +49,7 @@ fi
 # prefix=sim-data-1
 prefix=""
 
+echo "Start running sveta"
 
 ./code/sveta --tree_file "${tree_file}" -p "${prefix}"  -o $dir -r $Ns -n $Nsim --mode $mode --method $method --fix_seg $fix_seg --seg_max $seg_max --cn_max $cn_max --dup_rate $r1 --del_rate $r2 --chr_gain $r3 --chr_loss $r4 --wgd $r5 --dup_size $s1 --del_size $s2 -e $Ne -b $beta -t $dt --verbose $verbose --constrained $cons --model $model --age $age --seed $seed > $dir/std_sveta_cons${cons}_model${model}_method${method}
 
