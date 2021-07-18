@@ -11,8 +11,8 @@ const double RATE_MAX = 1;
 const double RATE_MIN_LOG = -10;
 const double RATE_MAX_LOG = 0;
 // used to compare branch length
-const double SMALL_DIFF_BRANCH = 1.0e-20;
-
+const double SMALL_DIFF_BRANCH = 1.0e-10;
+const int NRATE = 6;  // type of mutation rates considered
 
 typedef vector<double> DoubleVector;
 
@@ -27,7 +27,7 @@ For convenience, the IDs of nodes follow a specified order
 leaf nodes: from 1 to Ns
 normal node: Ns + 1
 root node: Ns + 2
-internal node: Ns + 3 to 2 * Ns + 1
+internal node: Ns + 3 to 2 * Ns + 1, small to larger from bottom to up
 */
 
 
@@ -67,7 +67,7 @@ public:
         @param anode the other end of the branch
         @param alength length of branch
      */
-    Neighbor(Node *anode, double alength);
+    Neighbor(Node* anode, double alength);
 
     /**
         construct class with a node and length
@@ -75,13 +75,15 @@ public:
         @param alength length of branch
         @param id branch ID
      */
-    Neighbor(Node *anode, double alength, int aid);
+    Neighbor(Node* anode, double alength, int aid);
 
     /**
         construct class with another Neighbor
         @param nei another Neighbor
      */
-    Neighbor(Neighbor *nei);
+    Neighbor(Neighbor* nei);
+
+    // ~Neighbor();
 
     /**
      * true if this Neighbor is directed towards the root
@@ -98,7 +100,7 @@ public:
 
     void setLength(DoubleVector &vec, int start_pos);
 
-    void setLength(Neighbor *nei);
+    void setLength(Neighbor* nei);
 
 };
 
@@ -106,8 +108,8 @@ public:
 /**
     Neighbor vector
  */
+// typedef vector<shared_ptr<Neighbor>> NeighborVec;
 typedef vector<Neighbor*> NeighborVec;
-
 
 /*
     some macros to transverse neighbors of a node
@@ -128,7 +130,7 @@ typedef vector<Neighbor*> NeighborVec;
 
 struct NNIMove{
     // Two nodes representing the central branch
-    Node *node1, *node2;
+    Node* node1, *node2;
 
     // Roots of the two subtree that are swapped
     NeighborVec::iterator node1Nei_it, node2Nei_it;
@@ -156,10 +158,10 @@ public:
   int isRoot;
   int isLeaf;
 
-  int parent;
+  int parent;   // node id of its parent
   int e_in;
   vector<int> e_ot;
-  vector<int> daughters;
+  vector<int> daughters;  // node ids of its children
 
   double height;
   double time;
@@ -172,11 +174,14 @@ public:
   Node(const int& _id, const int& _isRoot, const int& _isLeaf);
   Node(const Node& _n2);
 
+  void deleteNeighbors();
+  // ~Node();
+
   bool is_leaf();
 
   int degree();
 
-  Neighbor *findNeighbor(Node *node);
+  Neighbor* findNeighbor(Node* node);
 
   bool isNeighbor(Node* node);
 
@@ -184,20 +189,17 @@ public:
       @param node the target node
       @return the iterator to the neighbor that has the node. If not found, return neighbors.end()
    */
-  NeighborVec::iterator findNeighborIt(Node *node);
+  NeighborVec::iterator findNeighborIt(Node* node);
 
-  void addNeighbor(Node *node, double length, int id);
-  void addNeighbor(Node *node, DoubleVector &length, int id);
+  void addNeighbor(Node* node, double length, int id);
+  void addNeighbor(Node* node, DoubleVector &length, int id);
 
-  void updateNeighbor(NeighborVec::iterator nei_it, Neighbor *newnei);
-  void updateNeighbor(NeighborVec::iterator nei_it, Neighbor *newnei, double newlen);
-  void updateNeighbor(Node *node, Neighbor *newnei);
-  void updateNeighbor(Node *node, Neighbor *newnei, double newlen);
-  void updateNeighbor(Node* node, Node *newnode, double newlen);
-  double updateNeighbor(Node* node, Node *newnode);
-
-  void deleteNode();
-  ~Node();
+  void updateNeighbor(NeighborVec::iterator nei_it, Neighbor* newnei);
+  void updateNeighbor(NeighborVec::iterator nei_it, Neighbor* newnei, double newlen);
+  void updateNeighbor(Node* node, Neighbor* newnei);
+  void updateNeighbor(Node* node, Neighbor* newnei, double newlen);
+  void updateNeighbor(Node* node, Node* newnode, double newlen);
+  double updateNeighbor(Node* node, Node* newnode);
 };
 
 
@@ -227,7 +229,7 @@ private:
   void get_nodes_preorder(Node* root, vector<Node*>& nodes_preorder);
 
   // used in generating node neighbors
-  void compute_branch_direction(Node *node = NULL, Node *dad = NULL);
+  void compute_branch_direction(Node* node = NULL, Node* dad = NULL);
 
   // used in ratio computing
   int get_node_depth(int node_id); // get node depth (start from root), not used
@@ -237,7 +239,9 @@ private:
 
 public:
   int nleaf;
+
   int root_node_id;   // initialized when generating all nodes
+  double score;     // likelihood of the tree
 
   // int nnode = nleaf - 1; // internal nodes
   // int nedge = 2 * nleaf - 2;
@@ -252,8 +256,6 @@ public:
   // vector<edge*> intedges;     // pointers to internal edges
   // double* ratios;  // branch ratios used for constrained optimization
 
-  double score;     // likelihood of the tree
-
   double mu;   // overall mutation rate
   double dup_rate;
   double del_rate;
@@ -265,20 +267,22 @@ public:
   int current_eid;
   Neighbor* current_it;
   Neighbor* current_it_back;
-  Node *node1, *node2;  // current branch involved in NNI
+  Node* node1, *node2;  // current branch involved in NNI
 
   evo_tree();
   evo_tree(const int& _nleaf, const vector<int>& _edges, const vector<double>& _lengths, int gen_node = 1);
   evo_tree(const int& _nleaf, const vector<edge>& _edges, int gen_node = 1);
   evo_tree(const int& _nleaf, const vector<edge>& _edges, const vector<double>& tobs, const double& total_time); // reparameterized tree: expects terminal edges to all have length 0, not used
   evo_tree(const evo_tree& _t2);
-  ~evo_tree();
+  // ~evo_tree();
   evo_tree& operator=(const evo_tree& _t2);
 
 
   // used in initialization
   void generate_nodes();
   void generate_neighbors();  // neighbor for one internal node: 1 incoming edges and 2 outgoing edges
+  void delete_neighbors();
+
   void calculate_node_times();
   void calculate_age_from_time();
 
@@ -295,8 +299,11 @@ public:
   void update_node_time(int node_id, double delta);
 
   // used in optimization branch by branch
-  void get_preorder_branches(NodeVector &nodes, NodeVector &nodes2, Node *node, Node *dad = NULL);
+  void get_preorder_branches(NodeVector &nodes, NodeVector &nodes2, Node* node, Node* dad = NULL);
+  // Get postorder of internal nodes for likelihood computation
+  void get_inodes_postorder(Node* node, vector<int>& inodes);
   int get_edge_id(int start, int end);   // used in NNI and optimization
+  edge* get_edge(int start, int end);
 
   // Functions related to convertion of branch length ratios and node age
   vector<double> get_ratio_from_age(int eid = -1);
@@ -306,19 +313,29 @@ public:
   vector<int> get_ancestral_nodes(const int& node_id) const;   // used in testing and internal calling
   vector<int> get_ancestral_edges(const int& node_id) const;   // used in testing and internal calling
 
-  void print() const;
+  inline bool is_blen_valid() const{
+    for(auto e : this->edges){
+      if(e.length < 0){
+        return false;
+      }
+    }
+    return true;
+  }
+
+  void print();
+  void print_neighbors() const;
   void print_ancestral_edges(const int& node_id) const;
   void print_ancestral_edges(const int& node_id, ostream& stream) const;
 
   void write(ofstream& of) const;
   void write_with_mut(ofstream& of, const vector<int>& nmuts) const;
 
-  string make_newick(int precision);
+  string make_newick(int precision = PRINT_PRECISION);
   string make_newick_nmut(int precision, const vector<int>& nmuts);
   void write_nexus(const string& newick, ofstream& fout) const;
 
   vector<int> get_nmuts(const vector<double>& mu);    // Find the number of mutations on each branch, used in ML tree building
-  Node* find_farthest_leaf(Node *node = NULL, Node *dad = NULL);   // used in optimization
+  Node* find_farthest_leaf(Node* node = NULL, Node* dad = NULL);   // used in optimization
 
   // functions used in constrained optimization (deprecated due to insufficiency)
   // pair<int, double> is_edge(int _start, int _end);     // Check whether if an interval is in the tree. If yes, return the ID. not used.

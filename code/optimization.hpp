@@ -61,7 +61,7 @@ inline void my_err_handler(const char * reason, const char * file, int line, int
 
 // given a tree, maximise the branch lengths (and optionally mu) assuming branch lengths are independent or constrained in time
 // use GSL simplex optimization
-evo_tree max_likelihood(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, LNL_TYPE& lnl_type, OPT_TYPE& opt_type, double& minL, const double& ssize);
+void max_likelihood(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, const vector<double>& tobs, LNL_TYPE& lnl_type, OPT_TYPE& opt_type, double& min_nlnl, const double& ssize);
 
 
 /*****************************************************
@@ -70,6 +70,7 @@ evo_tree max_likelihood(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, LN
 
 // Compute the likelihood of the tree with one parameter (one branch or one mutation rate)
 // Used in Brent optimization
+// return negative likelihood function for minimalization
 double computeFunction(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type, double value, int type = -1);
 
 
@@ -105,7 +106,7 @@ double optimize_mutation_rates(evo_tree& rtree, map<int, vector<vector<int>>>& v
 
 // Optimizing the branch length of (node1, node2) with Brent method
 // Optimize mutation rates if necessary
-void optimize_one_branch(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type, double tolerance, int maxj, Node *node1, Node *node2);
+void optimize_one_branch(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type, double tolerance, int maxj, Node* node1, Node* node2);
 
 
 // used in optimize_all_branches
@@ -193,14 +194,14 @@ void lbfgsb(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& ob
 */
 double L_BFGS_B(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type, OPT_TYPE& opt_type, int n, double* x, double* l, double* u);
 
-// Using BFGS method to get the maximum likelihood with lower and upper bounds
-// Note: the topology of rtree is fixed
-void max_likelihood_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type, OPT_TYPE& opt_type, double &minL);
+// Using BFGS method to get the maximum likelihood with lower and upper bounds (minimalize negative likelihood function)
+// Note: the topology of rtree is fixed, yet its branch lengths may be updated in the optimization process
+void max_likelihood_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type, OPT_TYPE& opt_type, double &min_nlnl);
 
 
 // Optimizing the branch length of (node1, node2) with BFGS to incorporate constraints imposed by patient age and tip timings.
 // Optimize mutation rates if necessary
-void optimize_one_branch_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type, OPT_TYPE& opt_type, Node *node1, Node *node2);
+void optimize_one_branch_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type, OPT_TYPE& opt_type, Node* node1, Node* node2);
 
 
 

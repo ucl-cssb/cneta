@@ -138,7 +138,7 @@ double my_f_cons_mu(const gsl_vector *v, void *params){
 
 // given a tree, maximise the branch lengths(and optionally mu) assuming branch lengths are independent or constrained in time
 // use GSL simplex optimization
-evo_tree max_likelihood(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, LNL_TYPE& lnl_type, OPT_TYPE& opt_type, double& minL, const double& ssize){
+void max_likelihood(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, const vector<double>& tobs, LNL_TYPE& lnl_type, OPT_TYPE& opt_type, double& min_nlnl, const double& ssize){
   int debug = 0;
 
   const gsl_multimin_fminimizer_type *T = gsl_multimin_fminimizer_nmsimplex2;
@@ -150,7 +150,6 @@ evo_tree max_likelihood(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, LN
   int model = lnl_type.model;
   int cn_max = lnl_type.cn_max;
   int only_seg = lnl_type.only_seg;
-  int correct_bias = lnl_type.correct_bias;
   int is_total = lnl_type.is_total;
 
   int cons = lnl_type.cons;
@@ -291,99 +290,76 @@ evo_tree max_likelihood(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, LN
     cout << "### WARNING: maximum likelihood did not converge" << endl;
   }
 
-  // create a new tree
-  vector<edge> enew;
-  for(int i = 0; i < nedge; ++i){
-    enew.push_back(rtree.edges[i]);
-  }
-
   if(!cons){
     for(int i = 0; i < npar_ne; ++i){
-      enew[i].length = exp(gsl_vector_get(s->x, i));
+      rtree.edges[i].length = exp(gsl_vector_get(s->x, i));
     }
-    evo_tree new_tree(rtree.nleaf, enew);
-    if(!maxj){
+    if(maxj){
         if(model == MK){
-            new_tree.mu = rtree.mu;
+            rtree.mu = exp(gsl_vector_get(s->x, npar_ne));
         }
         if(model == BOUNDT){
-            new_tree.dup_rate = rtree.dup_rate;
-            new_tree.del_rate = rtree.del_rate;
-            new_tree.chr_gain_rate = rtree.chr_gain_rate;
-            new_tree.chr_loss_rate = rtree.chr_loss_rate;
-            new_tree.wgd_rate = rtree.wgd_rate;
-            new_tree.mu = 0;
-        }
-    }else{
-        if(model == MK){
-            new_tree.mu = exp(gsl_vector_get(s->x, npar_ne));
-        }
-        if(model == BOUNDT){
-            new_tree.dup_rate = exp(gsl_vector_get(s->x, npar_ne));
-            new_tree.del_rate = exp(gsl_vector_get(s->x, npar_ne + 1));
-            new_tree.chr_gain_rate = exp(gsl_vector_get(s->x, npar_ne+2));
-            new_tree.chr_loss_rate = exp(gsl_vector_get(s->x, npar_ne+3));
-            new_tree.wgd_rate = exp(gsl_vector_get(s->x, npar_ne+4));
-            new_tree.mu = 0;
+            rtree.dup_rate = exp(gsl_vector_get(s->x, npar_ne));
+            rtree.del_rate = exp(gsl_vector_get(s->x, npar_ne + 1));
+            rtree.chr_gain_rate = exp(gsl_vector_get(s->x, npar_ne+2));
+            rtree.chr_loss_rate = exp(gsl_vector_get(s->x, npar_ne+3));
+            rtree.wgd_rate = exp(gsl_vector_get(s->x, npar_ne+4));
+            rtree.mu = 0;
         }
     }
 
-    minL = s->fval;
+    min_nlnl = s->fval;
     gsl_vector_free(x);
     gsl_vector_free(ss);
     gsl_multimin_fminimizer_free(s);
     /* restore original handler */
     gsl_set_error_handler(old_handler);
-
-    return new_tree;
 
   }else{
     int count = 0;
+    // update internal lengths
     for(int i = 0; i < nedge - 1 ; ++i){
-      if(enew[i].end > rtree.nleaf - 1){
-        	enew[i].length = exp(gsl_vector_get(s->x, count));
+      if(rtree.edges[i].end > rtree.nleaf - 1){
+        	rtree.edges[i].length = exp(gsl_vector_get(s->x, count));
         	count++;
       }else{
-	        enew[i].length = 0;
+	        rtree.edges[i].length = 0;
       }
     }
 
-    evo_tree new_tree(rtree.nleaf, enew, exp(gsl_vector_get(s->x, count)));
-    if(!maxj){
+    // Fill external edge lengths by looping over nodes
+    double total_time = exp(gsl_vector_get(s->x, count));
+    for(int i = 0; i < rtree.nleaf - 1; ++i){
+      vector<int> es = rtree.get_ancestral_edges(rtree.nodes[i].id);
+      reverse(es.begin(), es.end());
+
+      rtree.edges[es.back()].length = total_time + tobs[ rtree.nodes[i].id ];
+      for(int j = 0; j < es.size()-1; ++j){
+        rtree.edges[es.back()].length -= rtree.edges[es[j]].length;
+      }
+    }
+
+    if(maxj){
         if(model == MK){
-            new_tree.mu = rtree.mu;
+            rtree.mu = exp(gsl_vector_get(s->x, npar_ne));
         }
         if(model == BOUNDT){
-            new_tree.dup_rate = rtree.dup_rate;
-            new_tree.del_rate = rtree.del_rate;
-            new_tree.chr_gain_rate = rtree.chr_gain_rate;
-            new_tree.chr_loss_rate = rtree.chr_loss_rate;
-            new_tree.wgd_rate = rtree.wgd_rate;
-            new_tree.mu = 0;
-        }
-    }else{
-        if(model == MK){
-            new_tree.mu = exp(gsl_vector_get(s->x, npar_ne));
-        }
-        if(model == BOUNDT){
-            new_tree.dup_rate = exp(gsl_vector_get(s->x, npar_ne));
-            new_tree.del_rate = exp(gsl_vector_get(s->x, npar_ne + 1));
-            new_tree.chr_gain_rate = exp(gsl_vector_get(s->x, npar_ne+2));
-            new_tree.chr_loss_rate = exp(gsl_vector_get(s->x, npar_ne+3));
-            new_tree.wgd_rate = exp(gsl_vector_get(s->x, npar_ne+4));
-            new_tree.mu = 0;
+            rtree.dup_rate = exp(gsl_vector_get(s->x, npar_ne));
+            rtree.del_rate = exp(gsl_vector_get(s->x, npar_ne + 1));
+            rtree.chr_gain_rate = exp(gsl_vector_get(s->x, npar_ne+2));
+            rtree.chr_loss_rate = exp(gsl_vector_get(s->x, npar_ne+3));
+            rtree.wgd_rate = exp(gsl_vector_get(s->x, npar_ne+4));
+            rtree.mu = 0;
         }
     }
 
-    minL = s->fval;
+    min_nlnl = s->fval;
     gsl_vector_free(x);
     gsl_vector_free(ss);
     gsl_multimin_fminimizer_free(s);
     /* restore original handler */
     gsl_set_error_handler(old_handler);
 
-
-    return new_tree;
   }
 
 }
@@ -432,7 +408,7 @@ double computeFunction(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS
             break;
     }
 
-    double nlnl = 0;
+    double nlnl = 0.0;
     if(lnl_type.model == DECOMP){
         nlnl = -get_likelihood_decomp(rtree, vobs, obs_decomp, comps, lnl_type);
     }else{
@@ -662,12 +638,12 @@ double optimize_mutation_rates(evo_tree& rtree, map<int, vector<vector<int>>>& v
 
 
 
-void optimize_one_branch(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type, double tolerance, int maxj, Node *node1, Node *node2){
+void optimize_one_branch(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type, double tolerance, int maxj, Node* node1, Node* node2){
     int debug = 0;
     if(debug){
         cout << "\tOptimizing the branch " << node1->id + 1 << ", " << node2->id + 1 << endl;
-        // rtree.print();
     }
+
     if((node1->id == rtree.nleaf && node2->id == rtree.nleaf - 1) ||(node2->id == rtree.nleaf && node1->id == rtree.nleaf - 1))
         return; // does not optimize virtual branch from root
 
@@ -683,7 +659,7 @@ void optimize_one_branch(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, O
 
     double current_len = rtree.edges[eid].length;
     assert(current_len >= 0.0);
-    double negative_lh = 0;
+    double negative_lh = 0.0;
     double ferror, optx;
 
     // Brent method
@@ -696,7 +672,6 @@ void optimize_one_branch(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, O
     if(debug){
         cout << "\tUsing Brent method to optimize the likelihood of one branch length of edge " << eid + 1 << endl;
         cout << "\tmax Brent logl: " << -negative_lh << " optimized branch length " << optx << endl;
-        rtree.print();
     }
 
     if(maxj){
@@ -706,12 +681,10 @@ void optimize_one_branch(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, O
 
 
 void compute_best_traversal(evo_tree& rtree, NodeVector &nodes, NodeVector &nodes2){
-    Node *farleaf = rtree.find_farthest_leaf();
-//    Node *farleaf = root;
+    Node* farleaf = rtree.find_farthest_leaf();
 
     // double call to farthest leaf to find the longest path on the tree
     rtree.find_farthest_leaf(farleaf);
-    // cout << "Tree diameter: " << farleaf->height << endl;
 
     rtree.get_preorder_branches(nodes, nodes2, farleaf);
 }
@@ -754,7 +727,7 @@ double optimize_all_branches(evo_tree& rtree, map<int, vector<vector<int>>>& vob
     	  save_branch_lengths(rtree, lenvec, 0);
 
         for(int j = 0; j < nodes.size(); j++){
-            optimize_one_branch(rtree, vobs, obs_decomp, comps, lnl_type, tolerance, maxj, (Node *)nodes[j],(Node *)nodes2[j]);
+            optimize_one_branch(rtree, vobs, obs_decomp, comps, lnl_type, tolerance, maxj, (Node* )nodes[j],(Node* )nodes2[j]);
             if(debug){
                 cout << " optimizing branch " << nodes[j]->id << " " << nodes2[j]->id << endl;
             }
@@ -789,22 +762,27 @@ double optimize_all_branches(evo_tree& rtree, map<int, vector<vector<int>>>& vob
               new_tree_lh = get_likelihood_revised(rtree, vobs, lnl_type);
           }
 
-          if(fabs(new_tree_lh-tree_lh) > max_delta_lh){
+          if(fabs(new_tree_lh - tree_lh) > max_delta_lh){
               cout << endl;
               cout << "new_tree_lh: " << new_tree_lh << "   tree_lh: " << tree_lh << endl;
           }
-        	assert(fabs(new_tree_lh-tree_lh) < max_delta_lh);
+        	assert(fabs(new_tree_lh - tree_lh) < max_delta_lh);
+
         	return new_tree_lh;
         }
 
         // only return if the new_tree_lh >= tree_lh!(in rare case that likelihood decreases, continue the loop)
         if(tree_lh <= new_tree_lh && new_tree_lh <= tree_lh + tolerance){
-            if(debug) cout << "tree log-likelihood increases" << endl;
+          if(debug) cout << "tree log-likelihood increases" << endl;
         	return new_tree_lh;
         }
 
         tree_lh = new_tree_lh;
     }
+
+    // recompute node times and ages to be consistent with branch lengths
+    rtree.calculate_node_times();
+    rtree.calculate_age_from_time();
 
     if(debug) cout << "current score " << tree_lh << endl;
 
@@ -832,27 +810,14 @@ void update_variables(evo_tree& rtree, int model, int cons, int maxj, double *x)
           enew[i].length = x[i + 1];
       }
       evo_tree new_tree(rtree.nleaf, enew);
-      if(!maxj){
-          if(model == MK){
-              new_tree.mu = rtree.mu;
-          }
-          else{
-              new_tree.dup_rate = rtree.dup_rate;
-              new_tree.del_rate = rtree.del_rate;
-              new_tree.chr_gain_rate = rtree.chr_gain_rate;
-              new_tree.chr_loss_rate = rtree.chr_loss_rate;
-              new_tree.wgd_rate = rtree.wgd_rate;
-              new_tree.mu = 0;
-          }
-      }else{
+      if(maxj){
           if(model == MK){
               new_tree.mu = x[nedge];
               if(debug){
                   for(int i = 0; i < nedge + 1; i++){ cout << x[i] << '\n';}
                   cout << "mu value so far: " << new_tree.mu << endl;
               }
-          }
-          else{
+          }else{
               new_tree.dup_rate = x[nedge];
               new_tree.del_rate = x[nedge + 1];
               new_tree.chr_gain_rate = x[nedge+2];
@@ -884,36 +849,25 @@ void update_variables(evo_tree& rtree, int model, int cons, int maxj, double *x)
           cout << "total height so far: " << x[count + 1] << endl;
       }
       evo_tree new_tree(rtree.nleaf, enew, x[count + 1]);
-      if(!maxj){
-        if(model == MK){
-            new_tree.mu = rtree.mu;
-        }
-        else{
-            new_tree.dup_rate = rtree.dup_rate;
-            new_tree.del_rate = rtree.del_rate;
-            new_tree.chr_gain_rate = rtree.chr_gain_rate;
-            new_tree.chr_loss_rate = rtree.chr_loss_rate;
-            new_tree.wgd_rate = rtree.wgd_rate;
-            new_tree.mu = 0;
-        }
-      }else{
+      if(maxj){
         int nintedge = rtree.nleaf - 2;
+
         if(model == MK){
-            new_tree.mu = x[nintedge+2];
+            new_tree.mu = x[nintedge + 2];
             if(debug){
-                for(int i = 0; i <= nintedge+2; i++){ cout << x[i] << '\n';}
+                for(int i = 0; i <= nintedge + 2; i++){ cout << x[i] << '\n';}
                 cout << "mu value so far: " << new_tree.mu << endl;
             }
         }
         else{
-            new_tree.dup_rate = x[nintedge+2];
-            new_tree.del_rate = x[nintedge+3];
-            new_tree.chr_gain_rate = x[nintedge+4];
-            new_tree.chr_loss_rate = x[nintedge+5];
-            new_tree.wgd_rate = x[nintedge+6];
+            new_tree.dup_rate = x[nintedge + 2];
+            new_tree.del_rate = x[nintedge + 3];
+            new_tree.chr_gain_rate = x[nintedge + 4];
+            new_tree.chr_loss_rate = x[nintedge + 5];
+            new_tree.wgd_rate = x[nintedge + 6];
             new_tree.mu = 0;
             if(debug){
-                for(int i = 0; i <= nintedge+6; i++){ cout << x[i] << '\n';}
+                for(int i = 0; i <= nintedge + 6; i++){ cout << x[i] << '\n';}
                 cout << "dup_rate value so far: " << new_tree.dup_rate << endl;
                 cout << "del_rate value so far: " << new_tree.del_rate << endl;
                 cout << "chr_gain_rate value so far: " << new_tree.chr_gain_rate << endl;
@@ -932,18 +886,15 @@ void update_variables(evo_tree& rtree, int model, int cons, int maxj, double *x)
 // Sort node times in increasing order and take the first Ns intervals
 void update_variables_transformed(evo_tree& rtree, double *x, LNL_TYPE& lnl_type, OPT_TYPE& opt_type){
     int debug = 0;
-    int npar_ne;
-    // create a new tree from current value of parameters
     if(debug){
-        cout << "rtree before at address " << &rtree <<endl;
-        rtree.print();
+        cout << rtree.make_newick() << endl;
     }
 
     int cn_max = lnl_type.cn_max;
     int only_seg = lnl_type.only_seg;
-    // int correct_bias = lnl_type.correct_bias;
     int is_total = lnl_type.is_total;
 
+    int npar_ne = 0;
     if(opt_type.opt_one_branch){
         if(debug){ cout << "update only one branch " << rtree.current_eid + 1 << endl;    }
         if(!lnl_type.cons){
@@ -951,15 +902,6 @@ void update_variables_transformed(evo_tree& rtree, double *x, LNL_TYPE& lnl_type
             rtree.edges[rtree.current_eid].length = x[1];
         }else{
             npar_ne = 2;
-            if(debug){
-              cout << "estimated x: ";
-              for(int i = 0; i < npar_ne; i++){
-                  double val = x[i + 1];
-                  cout << "\t" << val;
-              }
-              cout << endl;
-            }
-            // rtree.update_edge_from_ratio(x[1], rtree.current_eid);
             vector<double> ratios = rtree.get_ratio_from_age();
             // need to update root edge
             ratios[0] = x[1];
@@ -967,9 +909,17 @@ void update_variables_transformed(evo_tree& rtree, double *x, LNL_TYPE& lnl_type
             assert(eend > rtree.nleaf);
             int nid = eend - rtree.root_node_id;
             ratios[nid] = x[2];
-            // cout << "\n\nupdate ratio " << nid << " for edge " << rtree.current_eid + 1 << ": " << rtree.edges[rtree.current_eid].start << ", " << rtree.edges[rtree.current_eid].end << endl;
             rtree.update_edges_from_ratios(ratios);
-            // rtree.print();
+
+            if(debug){
+              cout << "estimated x: ";
+              for(int i = 0; i < npar_ne; i++){
+                  double val = x[i + 1];
+                  cout << "\t" << val;
+              }
+              cout << endl;
+              cout << "tree after optimization " << rtree.make_newick() << endl;
+            }
         }
     }else{
         if(!lnl_type.cons){
@@ -989,7 +939,6 @@ void update_variables_transformed(evo_tree& rtree, double *x, LNL_TYPE& lnl_type
             double min_root = lnl_type.max_tobs + rtree.nleaf * BLEN_MIN;
 
             if(debug){
-                rtree.print();
                 int nratios = rtree.nleaf - 1;
                 cout << "There are " << nratios << " ratios" << endl;
                 cout << "Original values of estimated variables: " << endl;
@@ -1037,7 +986,7 @@ void update_variables_transformed(evo_tree& rtree, double *x, LNL_TYPE& lnl_type
         }
 
         if(debug){
-          cout << "New branch lengths: ";
+          cout << "New branch lengths: \n";
           for(int i = 0; i < rtree.edges.size(); i++){
               cout << i + 1 << "\t" << "\t" << rtree.edges[i].length << endl;
           }
@@ -1046,11 +995,10 @@ void update_variables_transformed(evo_tree& rtree, double *x, LNL_TYPE& lnl_type
 
     if(opt_type.maxj){
         if(lnl_type.model == MK){
-            // nedge
-            // nintedge+2 for constrained branches
+            // nintedge + 2 for constrained branches
             rtree.mu = x[npar_ne + 1];
             if(debug){
-                for(int i = 0; i <= npar_ne + 1; i++){ cout << x[i] << '\n';}
+                for(int i = 0; i <= npar_ne + 1; i++){ cout << x[i] << '\n'; }
                 cout << "mu value so far: " << rtree.mu << endl;
             }
         }else{
@@ -1074,11 +1022,6 @@ void update_variables_transformed(evo_tree& rtree, double *x, LNL_TYPE& lnl_type
             }
         }
     }
-
-    if(debug){
-        cout << "rtree after at address " << &rtree <<endl;
-        rtree.print();
-    }
 }
 
 
@@ -1094,7 +1037,6 @@ double targetFunk(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECO
 
     if(lnl_type.model == DECOMP){
         // cout << "Getting target function for optimization" << endl;
-        // cout << max_wgd << "\t" << max_chr_change << "\t" << max_site_change << "\t" << decomp_table.size() << endl;
         return -1.0 * get_likelihood_decomp(rtree, vobs, obs_decomp, comps, lnl_type);
     }else{
         return -1.0 * get_likelihood_revised(rtree, vobs, lnl_type);
@@ -1136,6 +1078,7 @@ double derivativeFunk(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_
     }
 
   delete [] h;
+
 	return fx;
 }
 
@@ -1145,7 +1088,7 @@ double optimFunc(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOM
 }
 
 double optimGradient(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type, OPT_TYPE& opt_type, int nvar, double *x, double *dfx){
-    return derivativeFunk(rtree, vobs, obs_decomp, comps, lnl_type, opt_type, nvar, x-1, dfx-1);
+    return derivativeFunk(rtree, vobs, obs_decomp, comps, lnl_type, opt_type, nvar, x - 1, dfx - 1);
 }
 
 
@@ -1153,8 +1096,7 @@ void lbfgsb(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& ob
 		double *Fmin, int *fail,
 		double factr, double pgtol,
 		int *fncount, int *grcount, int maxit, char *msg,
-		int trace, int nREPORT)
-{
+		int trace, int nREPORT){
 	char task[60];
 	double f, *g, dsave[29], *wa;
 	int tr = -1, iter = 0, *iwa, isave[44], lsave[4];
@@ -1322,19 +1264,12 @@ double L_BFGS_B(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP
 }
 
 
-// Using BFGS method to get the maximum likelihood with lower and upper bounds
-// Note: the topology of rtree is fixed
-void max_likelihood_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type, OPT_TYPE& opt_type, double &minL){
+void max_likelihood_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type, OPT_TYPE& opt_type, double &min_nlnl){
     int debug = 0;
-
-    int npar_ne = 0;    // number of parameters to estimate
-    int ndim = 0;
-    double *variables, *upper_bound, *lower_bound;
 
     int model = lnl_type.model;
     int cn_max = lnl_type.cn_max;
     int only_seg = lnl_type.only_seg;
-    int correct_bias = lnl_type.correct_bias;
     int is_total = lnl_type.is_total;
     int patient_age = lnl_type.patient_age;
 
@@ -1343,6 +1278,7 @@ void max_likelihood_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, O
     int opt_one_branch = opt_type.opt_one_branch;
 
     // Set variables
+    int npar_ne = 0;    // number of parameters to estimate
     if(opt_one_branch){
         if(!cons){
           npar_ne = 1;
@@ -1361,19 +1297,20 @@ void max_likelihood_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, O
       cout << "\nThere are " << npar_ne << " parameters to estimate " << endl;
     }
 
-    ndim = get_ndim(maxj, npar_ne, model, only_seg);
-    variables = new double[ndim + 1];
-    upper_bound = new double[ndim + 1];
-    lower_bound = new double[ndim + 1];
+    int ndim = get_ndim(maxj, npar_ne, model, only_seg);
+    double* variables = new double[ndim + 1];
+    memset(variables, 0.0, (ndim + 1) * sizeof(double));
+    double* upper_bound = new double[ndim + 1];
+    memset(upper_bound, 0.0, (ndim + 1) * sizeof(double));
+    double* lower_bound = new double[ndim + 1];
+    memset(lower_bound, 0.0, (ndim + 1) * sizeof(double));
 
     if(cons){    // edges converted to ratio to incorporate time constraints
         if(debug){
             cout << "\nInitializing variables related to branch length" << endl;
         }
-        // rtree.get_ratio_from_age(rtree.current_eid);
         vector<double> ratios = rtree.get_ratio_from_age();
         if(debug){
-            // cout << ratios.size() << "\t" << npar_ne << endl;
             cout << "time ratios obtained from node ages: ";
             for(int i = 0; i < rtree.nleaf - 1; i++){
                 cout << "\t" << ratios[i];
@@ -1382,26 +1319,22 @@ void max_likelihood_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, O
         }
         // assert(rtree.nleaf == npar_ne);
         if(opt_one_branch){   // only optimize one branch(root included to maintain age constraint)
-            int i = 0;
             // age of root
-            variables[i + 1] = ratios[0];
-            lower_bound[i + 1] = lnl_type.max_tobs + rtree.nleaf * BLEN_MIN;
+            variables[1] = ratios[0];
+            lower_bound[1] = lnl_type.max_tobs + rtree.nleaf * BLEN_MIN;
             // age at 1st sample, so need to add time until last sample
-            upper_bound[i + 1] = lnl_type.max_tobs + patient_age;
+            upper_bound[1] = lnl_type.max_tobs + patient_age;
 
-            i++;
             int nid = rtree.edges[rtree.current_eid].end - rtree.root_node_id;
-            variables[i + 1] = ratios[nid];
-            lower_bound[i + 1] = MIN_RATIO;
-            upper_bound[i + 1] = MAX_RATIO;
+            variables[2] = ratios[nid];
+            lower_bound[2] = MIN_RATIO;
+            upper_bound[2] = MAX_RATIO;
         }else{
-            int i = 0;
             // age of root
-            variables[i + 1] = ratios[i];
-
-            lower_bound[i + 1] = lnl_type.max_tobs + rtree.nleaf  * BLEN_MIN;
+            variables[1] = ratios[0];
+            lower_bound[1] = lnl_type.max_tobs + rtree.nleaf  * BLEN_MIN;
             // age at 1st sample, so need to add time until last sample
-            upper_bound[i + 1] = lnl_type.max_tobs + patient_age;
+            upper_bound[1] = lnl_type.max_tobs + patient_age;
 
             for(int i = 1; i < npar_ne; ++i){
               variables[i + 1] = ratios[i];
@@ -1411,10 +1344,9 @@ void max_likelihood_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, O
         }
     }else{
         if(opt_one_branch){
-            int i = 0;
-            variables[i + 1] = rtree.edges[rtree.current_eid].length;
-            lower_bound[i + 1] = BLEN_MIN;
-            upper_bound[i + 1] = patient_age;
+            variables[1] = rtree.edges[rtree.current_eid].length;
+            lower_bound[1] = BLEN_MIN;
+            upper_bound[1] = patient_age;
         }else{
             for(int i = 0; i < npar_ne; ++i){
               variables[i + 1] = rtree.edges[i].length;
@@ -1430,8 +1362,7 @@ void max_likelihood_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, O
             variables[i + 1] = rtree.mu;
             lower_bound[i + 1] = MIN_MRATE;
             upper_bound[i + 1] = MAX_MRATE;
-        }
-        else{
+        }else{
             int i = npar_ne;
             variables[i + 1] = rtree.dup_rate;
             lower_bound[i + 1] = MIN_MRATE;
@@ -1443,17 +1374,17 @@ void max_likelihood_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, O
             upper_bound[i + 1] = MAX_MRATE;
 
             if(!only_seg){
-                i = npar_ne+2;
+                i = npar_ne + 2;
                 variables[i + 1] = rtree.chr_gain_rate;
                 lower_bound[i + 1] = MIN_MRATE;
                 upper_bound[i + 1] = MAX_MRATE;
 
-                i = npar_ne+3;
+                i = npar_ne + 3;
                 variables[i + 1] = rtree.chr_loss_rate;
                 lower_bound[i + 1] = MIN_MRATE;
                 upper_bound[i + 1] = MAX_MRATE;
 
-                i = npar_ne+4;
+                i = npar_ne + 4;
                 variables[i + 1] = rtree.wgd_rate;
                 lower_bound[i + 1] = MIN_MRATE;
                 upper_bound[i + 1] = MAX_MRATE;
@@ -1472,54 +1403,35 @@ void max_likelihood_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, O
     }
 
     // variables contains the parameters to estimate(branch length, mutation rate)
-    minL = L_BFGS_B(rtree, vobs, obs_decomp, comps, lnl_type, opt_type, ndim, variables + 1, lower_bound + 1, upper_bound + 1);
+    min_nlnl = L_BFGS_B(rtree, vobs, obs_decomp, comps, lnl_type, opt_type, ndim, variables + 1, lower_bound + 1, upper_bound + 1);
 
     if(debug){
-        cout << "lnL of current ML tree: " << minL << endl;
-        rtree.print();
+        cout << "negative log likelihood of current ML tree: " << min_nlnl << endl;
     }
 
     delete [] lower_bound;
     delete [] upper_bound;
     delete [] variables;
-
-    // rtree has been updated in the optimization process
-    // return rtree;
 }
 
 
 
 // Optimizing the branch length of(node1, node2) with BFGS to incorporate constraints imposed by patient age and tip timings.
 // Optimize mutation rates if necessary
-void optimize_one_branch_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type, OPT_TYPE& opt_type, Node *node1, Node *node2){
+void optimize_one_branch_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type, OPT_TYPE& opt_type, Node* node1, Node* node2){
     int debug = 0;
     if(debug){
         cout << "\tOptimizing the branch " << node1->id + 1 << ", " << node2->id + 1 << endl;
-        // rtree.print();
     }
-    if((node1->id == rtree.nleaf && node2->id == rtree.nleaf - 1) ||(node2->id == rtree.nleaf && node1->id == rtree.nleaf - 1))
+    if((node1->id == rtree.nleaf && node2->id == rtree.nleaf - 1) || (node2->id == rtree.nleaf && node1->id == rtree.nleaf - 1))
         return; // does not optimize virtual branch from root
-
-    // rtree.current_it = (Neighbor*) node1->findNeighbor(node2);
-    // assert(rtree.current_it);
-    // rtree.current_it_back = (Neighbor*) node2->findNeighbor(node1);
-    // assert(rtree.current_it_back);
-    // assert(rtree.current_it->length == rtree.current_it_back->length);
 
     int eid = rtree.get_edge_id(node1->id, node2->id);
     assert(eid >= 0);
     rtree.current_eid = eid;  // used to track the branch to optimize
 
     if(debug){
-      string newick = rtree.make_newick(PRINT_PRECISION);
-      cout << "tree before optimization by BFGS " << newick << endl;
-
-      // compute ratios from node ages(must keep node_ages correct)
-      // rtree.get_ratio_from_age(eid);
-
-      // double current_len = rtree.edges[eid].length;
-      // assert(current_len >= 0.0);
-
+        cout << "tree before optimization by BFGS " << rtree.make_newick() << endl;
         cout << "\tUsing BFGS method to optimize the likelihood of one branch length of edge " << eid + 1 << endl;
         // cout << "\taddress of rtree before optimization " << &rtree << endl;
         // cout << "\taddress of node1 before optimization " << &(rtree.node1) << endl;
@@ -1527,31 +1439,17 @@ void optimize_one_branch_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& vo
     }
 
     opt_type.opt_one_branch = 1;
-    double negative_lh = 0;
+    double negative_lh = MAX_NLNL;
     // optimize ratio based on NNI branch(branch length, node times and ages have been updated during optimization)
     max_likelihood_BFGS(rtree, vobs, obs_decomp, comps, lnl_type, opt_type, negative_lh);
 
     // cout << "\taddress of rtree after optimization " << &rtree << endl;
     // cout << "\taddress of current_it after optimization " << rtree.current_it << endl;
 
-    // double optx = rtree.edges[eid].length;
-
-    // rtree.current_it->length = optx;
-    // rtree.current_it_back->length = optx;
-    // rtree.edges[eid].length = optx;
-
-    // update node times and ages for nodes above u
-    // double delta = optx - current_len;
-    // rtree.update_node_age(rtree.edges[eid].start, delta);
-    // rtree.update_node_time(rtree.edges[eid].end, delta);
-
     opt_type.opt_one_branch = 0;
 
     if(debug){
-        // cout << "\tUsing BFGS method to optimize the likelihood of one branch length of edge " << eid + 1 << endl;
         cout << "\tmax logl: " << -negative_lh << " optimized branch length " << rtree.edges[eid].length << endl;
-        rtree.print();
-        string newick = rtree.make_newick(PRINT_PRECISION);
-        cout << "tree after optimization by BFGS " << newick << endl;
+        cout << "tree after optimization by BFGS " << rtree.make_newick() << endl;
     }
 }

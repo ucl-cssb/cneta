@@ -37,6 +37,42 @@ bool is_age_time_consistent(const vector<double>& node_times, const vector<doubl
 }
 
 
+void check_node_age_ratio(evo_tree& tree){
+  // To confirm the conversion of edge to ratio is correct
+  vector<double> ratios = tree.get_ratio_from_age();
+  cout << "ratios of node times: ";
+  for(int i = 0; i < ratios.size(); i++){
+      cout << i + 1 << "\t" << "\t" << ratios[i] << endl;
+  }
+  tree.update_edges_from_ratios(ratios);
+  cout << "New branch lengths: " << endl;
+  for(int i = 0; i < tree.edges.size(); i++){
+      cout << i + 1 << "\t" << "\t" << tree.edges[i].length << endl;
+  }
+}
+
+void check_nodes_transverse(evo_tree& tree){
+  cout << "Postorder traversal of internal nodes in original tree";
+  vector<int> knodes;
+  for(int k = (tree.nleaf + 1); k < (2 * tree.nleaf - 1); ++k){
+    knodes.push_back(k);
+  }
+  knodes.push_back(tree.nleaf);
+  for(auto k: knodes){
+    cout << "\t" << k;
+  }
+  cout << endl;
+
+  vector<int> knodes2;
+  tree.get_inodes_postorder(&tree.nodes[tree.root_node_id], knodes2);
+  cout << "Postorder traversal of internal nodes";
+  for(auto k: knodes2){
+    cout << "\t" << k;
+  }
+  cout << endl;
+}
+
+
 // The string will be different for different labeled histories (topologies may be the same but timings are different)
 string create_tree_string(const evo_tree& tree){
   stringstream sstm;
@@ -119,7 +155,6 @@ string create_tree_string_uniq(const evo_tree& tree){
   }
 
   if(debug){
-      tree.print();
       for(auto it: names){
           cout << it.first << "\t" << it.second << endl;
       }
@@ -427,21 +462,21 @@ evo_tree generate_coal_tree(const int& nsample, gsl_rng* r, long unsigned (*fp_m
    // For compatibility with ape in R, root node must be labelled
    // 0 to nsample-1 are leaf, nsample is germline, nsample + 1 is root
    // all other nodes ids start from here
-   int node_count = nsample+2;
+   int node_count = nsample + 2;
 
    // create leaf nodes
    for(int i = 0; i < nsample; ++i) nodes.push_back(i);
 
    // create vector of event times
    // total nodes = 2*(nsample + 1) -1
-   for(int i = 0; i < (2*nsample + 1); ++i) times.push_back(0.0);
+   for(int i = 0; i < (2 * nsample + 1); ++i) times.push_back(0.0);
 
    double t_tot = 0;
    int nlin = nsample;
    while(nlin > 1){
      // sample a time from Exp( combinations(k,2) )
-     double lambda = fact(nlin)/( 2*fact(nlin-2) );
-     double tn = gsl_ran_exponential(r, 1/lambda) * Ne;
+     double lambda = fact(nlin) / ( 2 * fact(nlin - 2) );
+     double tn = gsl_ran_exponential(r, 1 / lambda) * Ne;
      // cout << "Normal coalescence time  " << tn << endl;
      double t = tn;
      if(beta > 0){  // simulate exponential growth
@@ -456,17 +491,17 @@ evo_tree generate_coal_tree(const int& nsample, gsl_rng* r, long unsigned (*fp_m
 
      // edge node_count -> node
      edges.push_back(node_count);
-     edges.push_back(nodes[nodes.size()-1]);
-     lengths.push_back(t_tot - times[ nodes[nodes.size()-1] ] );
+     edges.push_back(nodes[nodes.size() - 1]);
+     lengths.push_back(t_tot - times[nodes[nodes.size() - 1]]);
 
      edges.push_back(node_count);
      edges.push_back(nodes[nodes.size()-2]);
-     lengths.push_back(t_tot - times[ nodes[nodes.size()-2] ] );
+     lengths.push_back(t_tot - times[nodes[nodes.size() - 2]]);
 
      // update time for this node
      //cout << "\t" << node_count + 1 << "\t" << t_tot << endl;
      epoch_times.push_back(t_tot);
-     times[ node_count ] = t_tot;
+     times[node_count] = t_tot;
 
      nodes.pop_back();
      nodes.pop_back();
@@ -494,7 +529,7 @@ evo_tree generate_coal_tree(const int& nsample, gsl_rng* r, long unsigned (*fp_m
    times[nsample] = t_tot;
 
    edges.push_back(nsample + 1);
-   edges.push_back(node_count-1);
+   edges.push_back(node_count - 1);
    lengths.push_back(t);
 
    edges.push_back(nsample + 1);
@@ -520,6 +555,7 @@ evo_tree generate_coal_tree(const int& nsample, gsl_rng* r, long unsigned (*fp_m
    // }
 
    evo_tree ret(nsample + 1, edges, lengths);
+
    return ret;
  }
 
@@ -868,7 +904,6 @@ bool is_tip_valid(const evo_tree& rtree, const vector<double>& tobs, int sample1
                 cout << tobs[i] << endl;
                 cout << fabs(delta - tobs[i]) << endl;
                 cout << "tip " << i << " is not valid" << endl;
-                rtree.print();
             }
             return false;
         }
@@ -1005,7 +1040,7 @@ bool is_tree_valid(evo_tree& rtree, const double& max_tobs, int age, int cons){
 
 // Save all branch lengths in a vector for optimization
 // Assume lenvec is the size of all branches, using ID of end node to distinguish each edge
-void save_branch_lengths(evo_tree& rtree, DoubleVector &lenvec, int startid, Node *node, Node *dad) {
+void save_branch_lengths(evo_tree& rtree, DoubleVector &lenvec, int startid, Node* node, Node* dad) {
     int debug = 0;
 
     if(!node){
@@ -1033,7 +1068,7 @@ void save_branch_lengths(evo_tree& rtree, DoubleVector &lenvec, int startid, Nod
         // cout << " neighbor " <<  (*it)->id + 1 << " with length " <<  (*it)->length << endl;
     	(*it)->getLength(lenvec, (*it)->id);
         // cout  << " length of neighbor " << (*it)->id + 1 << " is " << lenvec[(*it)->id] << endl;
-    	save_branch_lengths(rtree, lenvec, startid, (Node *)(*it)->node, node);
+    	save_branch_lengths(rtree, lenvec, startid, (Node* )(*it)->node, node);
     }
 
     if(debug){
@@ -1047,7 +1082,7 @@ void save_branch_lengths(evo_tree& rtree, DoubleVector &lenvec, int startid, Nod
 
 
 // Restoring branch lengths from a vector
-void restore_branch_lengths(evo_tree& rtree, DoubleVector &lenvec, int startid, Node *node, Node *dad) {
+void restore_branch_lengths(evo_tree& rtree, DoubleVector &lenvec, int startid, Node* node, Node* dad) {
     int debug = 0;
     if(debug) cout << "\nrestoring branch lengths from a vector" << endl;
 
@@ -1065,12 +1100,12 @@ void restore_branch_lengths(evo_tree& rtree, DoubleVector &lenvec, int startid, 
 
         if(debug) cout << "size of branch " << (*it)->node->id + 1 << ", " << (*it)->node->findNeighbor(node)->id + 1 << " after restoring is " << lenvec[(*it)->id + startid] << endl;
 
-    	  restore_branch_lengths(rtree, lenvec, startid, (Node *)(*it)->node, node);
+    	  restore_branch_lengths(rtree, lenvec, startid, (Node* )(*it)->node, node);
     }
 }
 
 
-void save_mutation_rates(const evo_tree& rtree, DoubleVector &muvec){
+void save_mutation_rates(const evo_tree& rtree, DoubleVector& muvec){
     muvec.push_back(rtree.mu);
     muvec.push_back(rtree.dup_rate);
     muvec.push_back(rtree.del_rate);
@@ -1080,7 +1115,7 @@ void save_mutation_rates(const evo_tree& rtree, DoubleVector &muvec){
 }
 
 
-void restore_mutation_rates(evo_tree& rtree, DoubleVector &muvec){
+void restore_mutation_rates(evo_tree& rtree, const DoubleVector& muvec){
     rtree.mu = muvec[0];
     rtree.dup_rate = muvec[1];
     rtree.del_rate = muvec[2];
@@ -1107,8 +1142,8 @@ evo_tree read_tree_info(const string& filename, const int& Ns, int debug){
   vector<edge> edges;
   int id = 0;
 
-  ifstream infile (filename.c_str());
-  if (infile.is_open()){
+  ifstream infile(filename.c_str());
+  if(infile.is_open()){
     std::string line;
     while(!getline(infile, line).eof()){
       if(line.empty()) continue;
@@ -1116,16 +1151,16 @@ evo_tree read_tree_info(const string& filename, const int& Ns, int debug){
       std::vector<std::string> split;
       std::string buf;
       stringstream ss(line);
-      while (ss >> buf) split.push_back(buf);
+      while(ss >> buf) split.push_back(buf);
 
       if(id > 0){
       	int start = atoi(split[0].c_str());
-      	int end   = atoi(split[1].c_str());
+      	int end = atoi(split[1].c_str());
       	double length = atof(split[2].c_str());
         if(end == Ns + 1) length = 0;
-        if( !(length>0) && end != Ns + 1 ) length = 1;
+        if( !(length > 0) && end != Ns + 1 ) length = 1;
       	// cout << "t: " << id << "\t" << start << "\t" << end << "\t" << length << endl;
-      	edges.push_back(edge(id-1, start-1, end-1, length));
+      	edges.push_back(edge(id - 1, start - 1, end - 1, length));
       }
       id++;
     }
@@ -1159,26 +1194,6 @@ evo_tree read_tree_info(const string& filename, const int& Ns, int debug){
 //     return new_tree;
 // }
 
-
-// Read a known tree
-evo_tree init_tree_from_file(const string& tree_file, int Ns, int Nchar, int model, int only_seg, const vector<double>& rates){
-    evo_tree test_tree = read_tree_info(tree_file, Ns);
-    // test_tree.print();
-    if(model == MK){
-        test_tree.mu = 1.0 / Nchar;
-    }
-    else{
-        test_tree.dup_rate = rates[0];
-        test_tree.del_rate = rates[1];
-        if(!only_seg){
-            test_tree.chr_gain_rate = rates[2];
-            test_tree.chr_loss_rate = rates[3];
-            test_tree.wgd_rate = rates[4];
-        }
-    }
-
-    return test_tree;
-}
 
 
 // Read parsimony trees built by other tools as starting trees, assign timings to tip nodes and initialize mutation rates
@@ -1262,3 +1277,35 @@ evo_tree read_parsimony_tree(const string& tree_file, const int& Ns, const vecto
 //         cout << i + 1 << "\t" << "\t" << blens[i] << endl;
 //     }
 // }
+
+
+
+/*
+vector<edge> create_edges_from_nodes(const vector<node>& nodes, const vector<double>& node_times ){
+  vector<edge> enew;
+
+  // Add leaf and internal nodes
+  int root_id = 0;
+  int id = 0;
+  for(int i = 0; i < nodes.size(); ++i){
+    if(nodes[i].parent == -1) root_id = nodes[i].id;
+  }
+
+  for(int i = 0; i < nodes.size(); ++i){
+    if(nodes[i].id != root_id && nodes[i].id != root_id - 1 && nodes[i].parent != root_id){
+      enew.push_back( edge(id, nodes[i].parent, nodes[i].id, node_times[nodes[i].id] - node_times[nodes[i].parent]) );
+      id++;
+    }
+  }
+  // Add root nodes
+  for(int i = 0; i < nodes.size(); ++i){
+  if( nodes[i].parent == root_id && nodes[i].id != root_id - 1){
+    enew.push_back( edge(id, nodes[i].parent, nodes[i].id, node_times[nodes[i].id] - node_times[nodes[i].parent]) );
+    id++;
+  }
+  }
+  enew.push_back( edge(id, root_id, Ns, 0) );
+
+  return enew;
+}
+*/

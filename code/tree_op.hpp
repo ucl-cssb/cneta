@@ -74,6 +74,9 @@ bool is_tip_age_valid(const vector<double>& node_ages, const vector<double>& tob
 // check if node_ages and node_times are consistent
 bool is_age_time_consistent(const vector<double>& node_times, const vector<double>& node_ages);
 
+void check_node_age_ratio(evo_tree& tree);
+
+void check_nodes_transverse(evo_tree& tree);
 
 // The string will be different for different labeled histories (topologies may be the same but timings are different)
 string create_tree_string(const evo_tree& tree);
@@ -168,15 +171,15 @@ bool is_tree_valid(evo_tree& rtree, const double& max_tobs, int age, int cons);
 
 // Save all branch lengths in a vector for optimization
 // Assume lenvec is the size of all branches, using ID of end node to distinguish each edge
-void save_branch_lengths(evo_tree& rtree, DoubleVector &lenvec, int startid = 0, Node *node = NULL, Node *dad = NULL);
+void save_branch_lengths(evo_tree& rtree, DoubleVector &lenvec, int startid = 0, Node* node = NULL, Node* dad = NULL);
 
 // Restoring branch lengths from a vector
-void restore_branch_lengths(evo_tree& rtree, DoubleVector &lenvec, int startid = 0, Node *node = NULL, Node *dad = NULL);
+void restore_branch_lengths(evo_tree& rtree, DoubleVector &lenvec, int startid = 0, Node* node = NULL, Node* dad = NULL);
 
 
 void save_mutation_rates(const evo_tree& rtree, DoubleVector &muvec);
 
-void restore_mutation_rates(evo_tree& rtree, DoubleVector &muvec);
+void restore_mutation_rates(evo_tree& rtree, const DoubleVector &muvec);
 
 
 // TODO: Build parsimony tree from copy number changes (breakpoints)
@@ -203,10 +206,6 @@ evo_tree read_tree_info(const string& filename, const int& Ns, int debug = 0);
 //
 //     return new_tree;
 // }
-
-
-// Read a known tree
-evo_tree init_tree_from_file(const string& tree_file, int Ns, int Nchar, int model, int only_seg, const vector<double>& rates);
 
 // Read parsimony trees built by other tools as starting trees, assign timings to tip nodes and initialize mutation rates
 evo_tree read_parsimony_tree(const string& tree_file, const int& Ns, const vector<double>& rates, const vector<double>& tobs);

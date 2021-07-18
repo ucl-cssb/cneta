@@ -17,24 +17,32 @@ bool check_matrix_row_sum(double *mat, int nstate){
 }
 
 
-double get_transition_prob(const double& mu, const double& blength, const int& sk, const int& sj){
-  //if(debug) cout << "\tget_transition_prob" << endl;
+void check_pmats_blen2(int nstate, const vector<double>& blens, const vector<double*> pmat_per_blen){
+  cout << "check pmats" << endl;
+  // find index of bli and blj in blens
+  double bli = blens[1];
+  double blj = blens[2];
+  cout << bli << "\t" << blj << "\n";
 
-  // assume a basic Markov model here cf JC
-  // Qij = u/5 when i!=j
-  // we have five states 0, 1, 2, 3, 4
-  // Pij(t) = exp(-ut) k_ij + (1 - exp(-ut))*pi_j
-  // pi_0 = pi_1 = pi_2 = pi_3 = pi_4 = 1/5
+  auto pi = equal_range(blens.begin(), blens.end(), bli);
+  assert(distance(pi.first, pi.second) == 1);
+  int idx_bli = std::distance(blens.begin(), pi.first);
 
-  double prob = 0;
+  auto pj = std::equal_range(blens.begin(), blens.end(), blj);
+  assert(distance(pj.first, pj.second) == 1);
+  int idx_blj = std::distance(blens.begin(), pj.first);
 
-  if(sk == sj){
-    prob = exp(-mu*blength) + (1 - exp(-mu*blength))*0.2;
-  }else{
-    prob = (1 - exp(-mu*blength))*0.2;
-  }
+  cout << idx_bli << "\t" << blens[idx_bli] << "\t" << bli << "\n";
+  cout << idx_blj << "\t" << blens[idx_blj] << "\t" << blj << "\n";
 
-  return prob;
+  double* pbli = pmat_per_blen[idx_bli];
+  double* pblj = pmat_per_blen[idx_blj];
+
+  cout << "Get Pmatrix for branch length " << bli << "\t" << blens[idx_bli] << endl;
+  r8mat_print(nstate, nstate, pmat_per_blen[idx_bli], "  P matrix:");
+  cout << "Get Pmatrix for branch length " << blj << "\t" << blens[idx_blj] << endl;
+  r8mat_print(nstate, nstate, pmat_per_blen[idx_blj], "  P matrix:");
+
 }
 
 
@@ -273,7 +281,7 @@ void get_transition_matrix_bounded(double* q, double* p, const double& t, const 
     int debug = 0;
 
     double *tmp = new double[n*n];
-    memset(tmp, 0, n*n*sizeof(double));
+    memset(tmp, 0.0, n*n*sizeof(double));
     for(int i = 0; i < n*n; i++){
         tmp[i] = q[i] * t;
     }
@@ -281,9 +289,8 @@ void get_transition_matrix_bounded(double* q, double* p, const double& t, const 
     double* res = r8mat_expm1(n, tmp);
     for(int i = 0; i < n*n; i++){
         if(res[i] < 0){
-            p[i] = 0;
-        }
-        else{
+            p[i] = 0.0;
+        }else{
             p[i] = res[i];
         }
     }
@@ -295,7 +302,8 @@ void get_transition_matrix_bounded(double* q, double* p, const double& t, const 
         r8mat_print(n, n, p, "  P matrix:");
     }
 
-    free(tmp);
+    delete [] tmp;
+    delete [] res;
 }
 
 

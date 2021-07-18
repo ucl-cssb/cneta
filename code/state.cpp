@@ -105,7 +105,7 @@ map<int, vector<int>> extract_tree_ancestral_state(const evo_tree& rtree, const 
 
 // Create likelihood vectors and state vectors at the tip node for reconstructing joint ancestral state
 // L_sk_k (S_sk_k) has one row for each tree node and one column for each possible state
-void initialize_asr_table(const vector<int>& obs, const evo_tree& rtree, map<double, double*>& pmats, vector<vector<double>>& L_sk_k, vector<vector<int>>& S_sk_k, int model, int nstate, int is_total){
+void initialize_asr_table(const vector<int>& obs, const evo_tree& rtree, const vector<double>& blens, const vector<double*>& pmat_per_blen, vector<vector<double>>& L_sk_k, vector<vector<int>>& S_sk_k, int model, int nstate, int is_total){
     int debug = 0;
     if(debug) cout << "Initializing tables for reconstructing joint ancestral state" << endl;
 
@@ -117,7 +117,12 @@ void initialize_asr_table(const vector<int>& obs, const evo_tree& rtree, map<dou
         double blen = rtree.edges[rtree.nodes[i].e_in].length;
         // cout << "parent " << parent + 1 << endl;
         // cout << "blen " << blen << endl;
-        double* pblen = pmats[blen];
+
+        auto pi = equal_range(blens.begin(), blens.end(), blen);
+        assert(pi.first == pi.second);
+        int idx_blen = distance(pi.first, blens.begin());
+        double* pblen = pmat_per_blen[idx_blen];
+
         // Find the state(s) of current node
         vector<int> tip_states;
         if(model == BOUNDA){
@@ -479,7 +484,7 @@ double get_max_children_decomp2(const vector<vector<double>>& L_sk_k, vector<vec
 
 
 // Get the most likely state on one site of a chromosome (assuming higher level events on nodes)
-void get_ancestral_states_site(vector<vector<double>>& L_sk_k, vector<vector<int>>& S_sk_k, const evo_tree& rtree, const vector<int>& knodes, map<double, double*>& pmats, int nstate, int model){
+void get_ancestral_states_site(vector<vector<double>>& L_sk_k, vector<vector<int>>& S_sk_k, const evo_tree& rtree, const vector<int>& knodes, const vector<double>& blens, const vector<double*>& pmat_per_blen, int nstate, int model){
   int debug = 0;
   if(debug){
       cout << "Getting ancestral state for one site" << endl;
@@ -492,7 +497,11 @@ void get_ancestral_states_site(vector<vector<double>>& L_sk_k, vector<vector<int
         double blen = rtree.edges[rtree.nodes[k].e_in].length;
         int ni = rtree.edges[rtree.nodes[k].e_ot[0]].end;
         int nj = rtree.edges[rtree.nodes[k].e_ot[1]].end;
-        double* pblen = pmats[blen];
+
+        auto pi = equal_range(blens.begin(), blens.end(), blen);
+        assert(pi.first == pi.second);
+        int idx_blen = distance(pi.first, blens.begin());
+        double* pblen = pmat_per_blen[idx_blen];
 
         if(debug) cout << "node:" << np + 1 << " -> " << rtree.nodes[k].id + 1 << " -> " << ni + 1 << " , "  <<  nj + 1 << " , " << blen << endl;
 
@@ -787,13 +796,13 @@ double reconstruct_marginal_ancestral_state_decomp(const evo_tree& rtree, map<in
         }
     }
     if(max_wgd > 0){
-        free(qmat_wgd);
+        delete [] qmat_wgd;
     }
     if(max_chr_change > 0){
-        free(qmat_chr);
+        delete [] qmat_chr;
     }
     if(max_site_change > 0){
-        free(qmat_seg);
+        delete [] qmat_seg;
     }
     for(auto m : pmats_wgd){
         free(m.second);
@@ -808,42 +817,81 @@ double reconstruct_marginal_ancestral_state_decomp(const evo_tree& rtree, map<in
     return logL;
 }
 
+
+
+void set_pmat(const evo_tree& rtree, int Ns, int nstate, int model, int cn_max, const vector<int>& knodes, vector<double>& blens, vector<double*>& pmat_per_blen, ofstream& fout){
+  int debug = 0;
+
+  string header="node\tsite\tcn\tmax probability";
+  for(int i = 0; i < nstate; i++){
+      header += "\tprobablity " + to_string(i + 1);
+  }
+  fout << header << endl;
+
+  double *qmat = new double[(nstate)*(nstate)];
+  memset(qmat, 0, (nstate)*(nstate)*sizeof(double));
+
+  assert(model > 0);
+  if(debug){
+      cout << "Getting rate matrix" << endl;
+  }
+  if(model == BOUNDA){
+      get_rate_matrix_allele_specific(qmat, rtree.dup_rate, rtree.del_rate, cn_max);
+  }else{
+      get_rate_matrix_bounded(qmat, rtree.dup_rate, rtree.del_rate, cn_max);
+  }
+
+  for(int kn = 0; kn < knodes.size(); ++kn){
+    int k = knodes[kn];
+    double bli = rtree.edges[rtree.nodes[k].e_ot[0]].length;
+    double blj = rtree.edges[rtree.nodes[k].e_ot[1]].length;
+
+    if(find(blens.begin(), blens.end(), bli) == blens.end()){
+      double *pmati = new double[(nstate)*(nstate)];
+      memset(pmati, 0, (nstate)*(nstate)*sizeof(double));
+      get_transition_matrix_bounded(qmat, pmati, bli, nstate);
+      pmat_per_blen.push_back(pmati);
+      blens.push_back(bli);
+    }
+    if(find(blens.begin(), blens.end(), bli) == blens.end()){
+      double *pmatj = new double[(nstate)*(nstate)];
+      memset(pmatj, 0, (nstate)*(nstate)*sizeof(double));
+      get_transition_matrix_bounded(qmat, pmatj, blj, nstate);
+      pmat_per_blen.push_back(pmatj);
+      blens.push_back(blj);
+    }
+  }
+
+  auto p = sort_permutation(blens, [&](const double& a, const double& b){ return a < b; });
+  blens = apply_permutation(blens, p);
+  pmat_per_blen = apply_permutation(pmat_per_blen, p);
+
+  if(debug){
+      for(int i = 0; i < pmat_per_blen.size(); ++i){
+          double blen = blens[i];
+          cout << "Get Pmatrix for branch length " << blen << endl;
+          r8mat_print(nstate, nstate, pmat_per_blen[i], "  P matrix:");
+      }
+  }
+
+  delete [] qmat;
+}
+
+
 // Infer the copy number of the MRCA given a tree at a site, assuming only segment duplication/deletion
 double reconstruct_marginal_ancestral_state(const evo_tree& rtree, map<int, vector<vector<int>>>& vobs, int model, int cn_max, int use_repeat, int is_total, ofstream& fout, double min_asr){
     int debug = 0;
     // if(!is_tree_valid(rtree, tobs, age, cons)){
     //     return SMALL_LNL;
     // }
+    if(debug) cout << "\treconstruct marginal ancestral state" << endl;
 
     int Ns = rtree.nleaf - 1;
-
-    double logL = 0;    // for all chromosmes
     // For copy number instantaneous changes
     int nstate = cn_max + 1;
     if(model == BOUNDA) nstate = (cn_max + 1) * (cn_max + 2) / 2;
 
-    vector<int> cn_mrca; // CNs for MRCA
     int nid = 2 * (Ns + 1) - 2;
-    if(debug) cout << "\treconstruct marginal ancestral state" << endl;
-
-    string header="node\tsite\tcn\tmax probability";
-    for(int i = 0; i < nstate; i++){
-        header += "\tprobablity " + to_string(i + 1);
-    }
-    fout << header << endl;
-
-    double *qmat = new double[(nstate)*(nstate)];
-    memset(qmat, 0, (nstate)*(nstate)*sizeof(double));
-    if(model > 0){
-      if(debug){
-          cout << "Getting rate matrix" << endl;
-      }
-      if(model == BOUNDA){
-          get_rate_matrix_allele_specific(qmat, rtree.dup_rate, rtree.del_rate, cn_max);
-      }else{
-          get_rate_matrix_bounded(qmat, rtree.dup_rate, rtree.del_rate, cn_max);
-      }
-    }
 
     //create a list of nodes to loop over (only internal nodes), making sure the root is last
     vector<int> knodes;
@@ -852,37 +900,14 @@ double reconstruct_marginal_ancestral_state(const evo_tree& rtree, map<int, vect
     knodes.push_back(Ns + 1);
 
     // Find the transition probability matrix for each branch
-    map<double, double*> pmats;
-    for(int kn = 0; kn < knodes.size(); ++kn){
-    int k = knodes[kn];
-    double bli = rtree.edges[rtree.nodes[k].e_ot[0]].length;
-    double blj = rtree.edges[rtree.nodes[k].e_ot[1]].length;
-    if(model == 1 || model == BOUNDA){
-        double *pmati = new double[(nstate)*(nstate)];
-        double *pmatj = new double[(nstate)*(nstate)];
-        memset(pmati, 0, (nstate)*(nstate)*sizeof(double));
-        memset(pmatj, 0, (nstate)*(nstate)*sizeof(double));
+    // map<double, double*> pmats;
+    vector<double> blens;
+    vector<double*> pmat_per_blen;
 
-        if(pmats.count(bli) == 0){
-            get_transition_matrix_bounded(qmat, pmati, bli, nstate);
-            pmats[bli] = pmati;
-        }
-        if(pmats.count(blj) == 0){
-            get_transition_matrix_bounded(qmat, pmatj, blj, nstate);
-            pmats[blj] = pmatj;
-        }
-     }
-    }
+    set_pmat(rtree, Ns, nstate, model, cn_max, knodes, blens, pmat_per_blen, fout);
 
-    if(debug){
-      for(auto it = pmats.begin(); it != pmats.end(); ++it )
-      {
-          double key = it->first;
-          cout << "Get Pmatrix for branch length " << key << endl;
-          r8mat_print(nstate, nstate, it->second, "  P matrix:");
-      }
-    }
-
+    vector<int> cn_mrca; // CNs for MRCA
+    double logL = 0.0;    // for all chromosmes
     for(int nchr = 1; nchr <= vobs.size(); nchr++){     // for each chromosome
       if(debug) cout << "\tComputing likelihood on Chr " << nchr << endl;
       double site_logL = 0;   // log likelihood for all sites on a chromosome
@@ -892,18 +917,18 @@ double reconstruct_marginal_ancestral_state(const evo_tree& rtree, map<int, vect
           if(debug) cout << "Number of sites for this chr " << vobs[nchr].size() << endl;
           // for each site of the chromosome (may be repeated)
           vector<int> obs = vobs[nchr][nc];
-          vector<vector<double>> L_sk_k;
+          vector<vector<double>> L_sk_k(2 * rtree.nleaf - 1, vector<double>(nstate, 0.0));
           if(use_repeat){
               if(sites_lnl_map.find(obs) == sites_lnl_map.end()){
-                  L_sk_k = initialize_lnl_table(obs, rtree, model, nstate, is_total);
-                  get_likelihood_site(L_sk_k, rtree, knodes, pmats, 0, 0, model, nstate);
+                  initialize_lnl_table(L_sk_k, obs, rtree, model, nstate, is_total);
+                  get_likelihood_site(L_sk_k, rtree, knodes, blens, pmat_per_blen, 0, 0, model, nstate);
               }else{
                   // cout << "sites repeated" << end1;
                   L_sk_k = sites_lnl_map[obs];
               }
           }else{
-              L_sk_k = initialize_lnl_table(obs, rtree, model, nstate, is_total);
-              get_likelihood_site(L_sk_k, rtree, knodes, pmats, 0, 0, model, nstate);
+              initialize_lnl_table(L_sk_k, obs, rtree, model, nstate, is_total);
+              get_likelihood_site(L_sk_k, rtree, knodes, blens, pmat_per_blen, 0, 0, model, nstate);
           }
           double lnl = extract_tree_lnl(L_sk_k, Ns, model);
           site_logL += lnl;
@@ -938,10 +963,8 @@ double reconstruct_marginal_ancestral_state(const evo_tree& rtree, map<int, vect
         }
     }
 
-    free(qmat);
-    for(auto m : pmats){
-        free(m.second);
-    }
+
+    for_each(pmat_per_blen.begin(), pmat_per_blen.end(), DeleteObject());
 
     return logL;
 }
@@ -1139,13 +1162,13 @@ void reconstruct_joint_ancestral_state_decomp(const evo_tree& rtree, map<int, ve
     } // for each chromosome
 
     if(max_wgd > 0){
-        free(qmat_wgd);
+        delete [] qmat_wgd;
     }
     if(max_chr_change > 0){
-        free(qmat_chr);
+        delete [] qmat_chr;
     }
     if(max_site_change > 0){
-        free(qmat_seg);
+        delete [] qmat_seg;
     }
     for(auto m : pmats_wgd){
         free(m.second);
@@ -1165,76 +1188,29 @@ void reconstruct_joint_ancestral_state(const evo_tree& rtree, map<int, vector<ve
     int debug = 0;
     if(debug) cout << "\treconstruct joint ancestral state" << endl;
 
-    // if(!is_tree_valid(rtree, tobs, age, cons)){
-    //     return;
-    // }
-
     int Ns = rtree.nleaf - 1;
-
     // For copy number instantaneous changes
     int nstate = cn_max + 1;
     if(model == BOUNDA) nstate = (cn_max + 1) * (cn_max + 2) / 2;
-    int max_id = 2 * Ns;
 
-    string header="node\tsite\tcn\tstate\tmax probability";
-    for(int i = 0; i < nstate; i++){
-        header += "\tprobablity " + to_string(i + 1);
-    }
-    fout << header << endl;
+    int nid = 2 * (Ns + 1) - 2;
 
-    double *qmat = new double[(nstate)*(nstate)];
-    memset(qmat, 0, (nstate)*(nstate)*sizeof(double));
-    if(model > 0){
-        if(debug){
-            cout << "Getting rate matrix" << endl;
-        }
-        if(model == BOUNDA){
-            get_rate_matrix_allele_specific(qmat, rtree.dup_rate, rtree.del_rate, cn_max);
-        }else{
-            get_rate_matrix_bounded(qmat, rtree.dup_rate, rtree.del_rate, cn_max);
-        }
-    }
-
-    //create a list of nodes to loop over (only internal nodes)
+    //create a list of nodes to loop over (only internal nodes), making sure the root is last
     vector<int> knodes;
     int ntotn = 2 * rtree.nleaf - 1;
-    for(int k = Ns+2; k < ntotn; ++k) knodes.push_back(k);
-    knodes.push_back(Ns + 1);     // needed for computing P-matrix
+    for(int k= Ns+2; k < ntotn; ++k) knodes.push_back(k);
+    knodes.push_back(Ns + 1);
 
     // Find the transition probability matrix for each branch
-    map<double, double*> pmats;
-    for(int kn = 0; kn < knodes.size(); ++kn){
-      int k = knodes[kn];
-      double bli = rtree.edges[rtree.nodes[k].e_ot[0]].length;
-      double blj = rtree.edges[rtree.nodes[k].e_ot[1]].length;
-      if(model == 1 || model == BOUNDA){
-          double *pmati = new double[(nstate)*(nstate)];
-          double *pmatj = new double[(nstate)*(nstate)];
-          memset(pmati, 0, (nstate)*(nstate)*sizeof(double));
-          memset(pmatj, 0, (nstate)*(nstate)*sizeof(double));
+    // map<double, double*> pmats;
+    vector<double> blens;
+    vector<double*> pmat_per_blen;
 
-          if(pmats.count(bli) == 0){
-              get_transition_matrix_bounded(qmat, pmati, bli, nstate);
-              pmats[bli] = pmati;
-          }
-          if(pmats.count(blj) == 0){
-              get_transition_matrix_bounded(qmat, pmatj, blj, nstate);
-              pmats[blj] = pmatj;
-          }
-       }
-    }
-
-    if(debug){
-        for(auto it = pmats.begin(); it != pmats.end(); ++it )
-        {
-            double key = it->first;
-            cout << "Get Pmatrix for branch length " << key << endl;
-            r8mat_print(nstate, nstate, it->second, "  P matrix:");
-        }
-    }
+    set_pmat(rtree, Ns, nstate, model, cn_max, knodes, blens, pmat_per_blen, fout);
 
     knodes.pop_back();  // no need to reconstruct root which is always normal
-
+    int max_id = 2 * (rtree.nleaf - 1);
+    double logL = 0.0;    // for all chromosmes
     for(int nchr = 1; nchr <= vobs.size(); nchr++){     // for each chromosome
       if(debug) cout << "Computing likelihood on Chr " << nchr << " with " << vobs[nchr].size() << " sites " << endl;
       map<vector<int>, vector<vector<double>>> sites_lnl_map;
@@ -1246,15 +1222,15 @@ void reconstruct_joint_ancestral_state(const evo_tree& rtree, map<int, vector<ve
           vector<vector<int>> S_sk_k(ntotn, vector<int>(nstate,0));
           if(use_repeat){
               if(sites_lnl_map.find(obs) == sites_lnl_map.end()){
-                  initialize_asr_table(obs, rtree, pmats, L_sk_k, S_sk_k, model, nstate, is_total);
-                  get_ancestral_states_site(L_sk_k, S_sk_k, rtree, knodes, pmats, nstate, model);
+                  initialize_asr_table(obs, rtree, blens, pmat_per_blen, L_sk_k, S_sk_k, model, nstate, is_total);
+                  get_ancestral_states_site(L_sk_k, S_sk_k, rtree, knodes, blens, pmat_per_blen, nstate, model);
               }else{
                   if(debug) cout << "\t\tsites repeated" << endl;
                   L_sk_k = sites_lnl_map[obs];
               }
           }else{
-              initialize_asr_table(obs, rtree, pmats, L_sk_k, S_sk_k, model, nstate, is_total);
-              get_ancestral_states_site(L_sk_k, S_sk_k, rtree, knodes, pmats, nstate, model);
+              initialize_asr_table(obs, rtree, blens, pmat_per_blen, L_sk_k, S_sk_k, model, nstate, is_total);
+              get_ancestral_states_site(L_sk_k, S_sk_k, rtree, knodes, blens, pmat_per_blen, nstate, model);
           }
 
           map<int, int> asr_states;     // The state ID used in rate matrix
@@ -1278,9 +1254,6 @@ void reconstruct_joint_ancestral_state(const evo_tree& rtree, map<int, vector<ve
       }
     } // for each chromosome
 
-    free(qmat);
-    for(auto m : pmats){
-        free(m.second);
-    }
+    for_each(pmat_per_blen.begin(), pmat_per_blen.end(), DeleteObject());
 
 }

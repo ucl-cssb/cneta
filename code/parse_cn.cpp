@@ -4,20 +4,6 @@
 // collection of functions for reading/writing
 
 
-template <typename T>
-vector<size_t> sort_indexes(const vector<T> &v){
-  // initialize original index locations
-  vector<size_t> idx(v.size());
-  iota(idx.begin(), idx.end(), 0);
-
-  // sort indexes based on comparing values in v
-  sort(idx.begin(), idx.end(),
-       [&v](size_t i1, size_t i2){return v[i1] < v[i2];});
-
-  return idx;
-}
-
-
 // Convert the allele-specific state (ordered by 0/0	0/1	1/0	0/2	 1/1	2/0	0/3	 1/2 2/1	3/0	 0/4 1/3 2/2 3/1	4/0) to total copy number
 int state_to_total_cn(int state, int cn_max){
     int cn = 0;
@@ -165,18 +151,18 @@ vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int &num_tot
       }
 
       //cout << sample-1 << "\t" << counter << endl;
-      int chr = atoi( split[1].c_str() );  // chr
-      int sid = atoi( split[2].c_str() );  // segment ID
+      int chr = atoi( split[1].c_str());  // chr
+      int sid = atoi( split[2].c_str());  // segment ID
       int cn = -1;
       if(is_total){
-          cn = atoi( split[3].c_str() );  // copy number
+          cn = atoi( split[3].c_str());  // copy number
           if(cn > cn_max){
               cout << "copy number " << cn << " is decreased to " << cn_max << endl;
               cn = cn_max;
           }
       }else{
-          int cn1 = atoi( split[3].c_str() );  // copy number
-          int cn2 = atoi( split[4].c_str() );  // copy number
+          int cn1 = atoi( split[3].c_str());  // copy number
+          int cn2 = atoi( split[4].c_str());  // copy number
           cn = allele_cn_to_state(cn1, cn2);
           if(cn > cn_max){
               cout << "copy number " << cn << " is larger than " << cn_max << "! Please decrease the copy number or increase maximum copy number allowed!" << endl;
@@ -247,7 +233,7 @@ void get_change_chr(const vector<vector<vector<int>>>& s_info, vector<vector<int
         for(int j = 0; j < s_cn.size(); j++){
             vector<int> cp = s_cn[j];
             int cn = cp[2];
-            if(!is_total) cn=state_to_total_cn(cn, cn_max);
+            if(!is_total) cn = state_to_total_cn(cn, cn_max);
             chr_cn[cp[0]].push_back(cn);
             avg_cn += cn;
             num_seg++;
@@ -360,7 +346,7 @@ vector<vector<int>> get_invar_segs(const vector<vector<vector<int>>>& s_info, in
           // hold all the sites in a bin
           vector<int> prev_bin;
           for(int j = 0; j < Ns; ++j) prev_bin.push_back(s_info[j][k][2]);
-          //cout << "seg_start: " << chr << "\t" << seg_start << ", cn= " << seg_cn_tot << endl;
+          //cout << "seg_start: " << chr << "\t" << seg_start << ", cn =  " << seg_cn_tot << endl;
 
           // Check the subsequent bins
           bool const_cn = true;
@@ -381,12 +367,7 @@ vector<vector<int>> get_invar_segs(const vector<vector<vector<int>>>& s_info, in
           //cout << "seg_end:\t" << seg_end << "\t" << k << endl;
           //cout << endl;
 
-          vector<int> seg;
-          seg.push_back(chr);
-          seg.push_back(id_start);
-          seg.push_back(id_end);
-          seg.push_back(seg_start);
-          seg.push_back(seg_end);
+          vector<int> seg{chr, id_start, id_end, seg_start, seg_end};
           segs.push_back(seg);
 
           // rewind k by one to get the split segment start correct
@@ -444,12 +425,7 @@ vector<vector<int>> get_all_segs(const vector<vector<vector<int>>>& s_info, int 
               int id_end = k;
               //cout << "seg_end:\t" << seg_end << "\t" << k << endl;
               //cout << endl;
-              vector<int> seg;
-              seg.push_back(chr);
-              seg.push_back(id_start);
-              seg.push_back(id_end);
-              seg.push_back(seg_start);
-              seg.push_back(seg_end);
+              vector<int> seg{chr, id_start, id_end, seg_start, seg_end};
               segs.push_back(seg);
         }
     }
@@ -463,12 +439,7 @@ vector<vector<int>> get_all_segs(const vector<vector<vector<int>>>& s_info, int 
                 int id_end = k;
                 //cout << "seg_end:\t" << seg_end << "\t" << k << endl;
                 //cout << endl;
-                vector<int> seg;
-                seg.push_back(chr);
-                seg.push_back(id_start);
-                seg.push_back(id_end);
-                seg.push_back(seg_start);
-                seg.push_back(seg_end);
+                vector<int> seg{chr, id_start, id_end, seg_start, seg_end};
                 segs.push_back(seg);
             }
         }
@@ -492,7 +463,7 @@ map<int, vector<vector<int>>>  group_segs_by_chr(const vector<vector<int>>& segs
           for(int k=segs[i][1]; k < (segs[i][2]+1); ++k){
                  av_cn[j] += s_info[j][k][2];
           }
-          av_cn[j] = av_cn[j] / ( segs[i][2] - segs[i][1] + 1 );
+          av_cn[j] = av_cn[j] / ( segs[i][2] - segs[i][1] + 1);
           // The average should be the same as the value of each bin
           assert(av_cn[j] == s_info[j][segs[i][1]][2]);
           // check all cns across the segment are integer valued
@@ -507,15 +478,15 @@ map<int, vector<vector<int>>>  group_segs_by_chr(const vector<vector<int>>& segs
 
         if(valid){
           vector<int> vals;
-          vals.push_back( segs[i][0] ); // chr
-          vals.push_back( segs[i][1] ); // start
-          vals.push_back( segs[i][2] ); // end
+          vals.push_back(segs[i][0]); // chr
+          vals.push_back(segs[i][1]); // start
+          vals.push_back(segs[i][2]); // end
           for(int j = 0; j < Ns; ++j){
-        	int cn = (int) av_cn[j];
-        	if(cn <= cn_max ) vals.push_back( cn );
-        	else vals.push_back( cn_max );
+          	int cn = (int) av_cn[j];
+          	if(cn <= cn_max ) vals.push_back(cn);
+          	else vals.push_back(cn_max);
           }
-          ret[segs[i][0]].push_back( vals );
+          ret[segs[i][0]].push_back(vals);
           Nchar += 1;
         }
     }
@@ -548,7 +519,7 @@ vector<vector<int>> group_segs(const vector<vector<int>>& segs, const vector<vec
           for(int k=segs[i][1]; k < (segs[i][2]+1); ++k){
                  av_cn[j] += s_info[j][k][2];
           }
-          av_cn[j] = av_cn[j]/( segs[i][2] - segs[i][1] + 1 );
+          av_cn[j] = av_cn[j]/( segs[i][2] - segs[i][1] + 1);
 
           // check all cns across the segment are integer valued
           if(ceil(av_cn[j]) != floor(av_cn[j]) ) valid = false;
@@ -561,16 +532,14 @@ vector<vector<int>> group_segs(const vector<vector<int>>& segs, const vector<vec
         }
 
         if(valid){
-          vector<int> vals;
-          vals.push_back( segs[i][0] ); // chr
-          vals.push_back( segs[i][1] ); // start
-          vals.push_back( segs[i][2] ); // end
+          // chr, start, end
+          vector<int> vals{segs[i][0], segs[i][1], segs[i][2]};
           for(int j = 0; j < Ns; ++j){
-        	int cn = (int) av_cn[j];
-        	if(cn <= cn_max ) vals.push_back( cn );
-        	else vals.push_back( cn_max );
+          	int cn = (int) av_cn[j];
+          	if(cn <= cn_max ) vals.push_back(cn);
+          	else vals.push_back(cn_max);
           }
-          ret.push_back( vals );
+          ret.push_back(vals);
         }
     }
 
@@ -614,17 +583,20 @@ vector<vector<int>> read_data_var_regions(const string& filename, const int& Ns,
 map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filename, const int& Ns, const int& cn_max, int& num_invar_bins, int& num_total_bins, int &seg_size, vector<int>&  obs_num_wgd, vector<vector<int>>& obs_change_chr, vector<int>& sample_max_cn, int model, int is_total, int debug){
     cout << "reading data and calculating CNA regions by chromosome" << endl;
     vector<vector<vector<int>>> s_info = read_cn(filename, Ns, num_total_bins, cn_max, is_total, debug);
+
     if(model == DECOMP){
         get_num_wgd(s_info, cn_max, obs_num_wgd, is_total);
         get_change_chr(s_info, obs_change_chr, cn_max, is_total);
     }
     get_sample_mcn(s_info, sample_max_cn, cn_max, is_total, debug);
+
     vector<vector<int>> segs = get_invar_segs(s_info, Ns, num_total_bins, num_invar_bins, is_total, debug);
     seg_size = segs.size();
     int max_cn_val = cn_max;
     if(!is_total){
         max_cn_val = (cn_max + 1) * (cn_max + 2) / 2 - 1;
     }
+
     map<int, vector<vector<int>>> ret = group_segs_by_chr(segs, s_info, Ns, max_cn_val, debug);
 
     return ret;
@@ -635,11 +607,13 @@ map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filenam
 map<int, vector<vector<int>>> read_data_regions_by_chr(const string& filename, const int& Ns, const int& cn_max, int& num_invar_bins, int& num_total_bins, int& seg_size, vector<int>&  obs_num_wgd, vector<vector<int>>& obs_change_chr, vector<int>& sample_max_cn, int model, int incl_all, int is_total, int debug){
     cout << "reading data and calculating CNA regions by chromosome" << endl;
     vector<vector<vector<int>>> s_info = read_cn(filename, Ns, num_total_bins, cn_max, is_total, debug);
+
     if(model == DECOMP){
         get_num_wgd(s_info, cn_max, obs_num_wgd, is_total, debug);
         get_change_chr(s_info, obs_change_chr, cn_max, is_total, debug);
     }
     get_sample_mcn(s_info, sample_max_cn, cn_max, is_total, debug);
+
     // We now need to convert runs of variable bins into segments of constant cn values, grouped by chromosome
     vector<vector<int>> segs = get_all_segs(s_info, Ns, num_total_bins, num_invar_bins, incl_all, is_total, debug);
     seg_size = segs.size();
@@ -647,6 +621,7 @@ map<int, vector<vector<int>>> read_data_regions_by_chr(const string& filename, c
     if(!is_total){
         max_cn_val = (cn_max + 1) * (cn_max + 2) / 2 - 1;
     }
+
     map<int, vector<vector<int>>> ret = group_segs_by_chr(segs, s_info, Ns, max_cn_val, debug);
 
     return ret;

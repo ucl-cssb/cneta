@@ -6,6 +6,7 @@
 
 // using namespace std;
 
+void set_pmat(const evo_tree& rtree, int Ns, int nstate, int model, int cn_max, const vector<int>& knodes, vector<double>& blens, vector<double*>& pmat_per_blen, ofstream& fout);
 
 void print_tree_state(const evo_tree& rtree, const vector<vector<int>>& S_sk_k, int nstate);
 

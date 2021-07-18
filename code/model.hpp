@@ -12,14 +12,37 @@
 #include "matexp/r8lib.hpp"
 
 
+
+typedef vector<double>::iterator DBIter;  // convenience typedefs
+typedef pair<DBIter, DBIter> DBIterPair;
+
+
 // to validate the rate matrix (row sum should be 0)
 bool check_matrix_row_sum(double *mat, int nstate);
 
+void check_pmats_blen2(int nstate, const vector<double>& blens, const vector<double*> pmat_per_blen);
 
 /*************** MK model *****************/
 // Mk model based on JC model
-double get_transition_prob(const double& mu, const double& blength, const int& sk, const int& sj);
+inline double get_transition_prob(const double& mu, const double& blength, const int& sk, const int& sj){
+  //if(debug) cout << "\tget_transition_prob" << endl;
 
+  // assume a basic Markov model here cf JC
+  // Qij = u/5 when i!=j
+  // we have five states 0, 1, 2, 3, 4
+  // Pij(t) = exp(-ut) k_ij + (1 - exp(-ut))*pi_j
+  // pi_0 = pi_1 = pi_2 = pi_3 = pi_4 = 1/5
+
+  double prob = 0.0;
+
+  if(sk == sj){
+    prob = exp(-mu * blength) + (1 - exp(-mu * blength)) * 0.2;
+  }else{
+    prob = (1 - exp(-mu * blength)) * 0.2;
+  }
+
+  return prob;
+}
 
 /*************** BOUND model *****************/
 

@@ -66,6 +66,9 @@ set<vector<int>> comps;
 LNL_TYPE lnl_type;
 OBS_DECOMP obs_decomp;
 
+//create a list of nodes to loop over, making sure the root is last
+vector<int> knodes;
+
 // unary function and pointer to unary function
 // allows use of gsl rng for standard template algorithms
 inline long unsigned myrng(long unsigned n){
@@ -2067,23 +2070,6 @@ void run_with_reference_tree(string rtreefile, int Ns, int Nchar, int num_invar_
     cout << "\n\n### Running MCMC" << endl;
     run_mcmc(rtree, model, n_draws, n_burnin, n_gap, proposal_parameters, prior_parameters_blen, prior_parameters_height, alphas, prior_parameters_mut, lambda_topl, trace_param_file, trace_tree_file, sample_prior, fix_topology, cons, maxj, cn_max, only_seg, correct_bias, is_total, epop, beta, gtime);
     // cout << "\nMinimised tree likelihood by MCMC / mu : " << Lf << "\t" << min_tree.mu*Nchar <<  endl;
-
-    // cout << "\n\n### Running ML" << endl;
-    // // evo_tree min_tree_ml = max_likelihood(rtree, model, Lf, 0.01, 0.01, 2000, cons, maxj);
-    // evo_tree min_tree_ml = max_likelihood_BFGS(rtree, model, Lf, 0.01, 0.01, cons, maxj);
-    // if(model == MK){
-    //     cout << "\nMinimised tree likelihood by ML / mu : " << Lf << "\t" << min_tree_ml.mu <<  endl;
-    // }
-    // if(model == BOUNDT){
-    //     cout << "\nMinimised tree likelihood by ML / dup_rate / del_rate : " << Lf << "\t" << min_tree_ml.dup_rate << "\t" << min_tree_ml.del_rate <<  endl;
-    // }
-    //
-    // //min_tree.print();
-    // sstm << "./test1/sim-data-" << cons << maxj << "-ML-tree.txt";
-    // out_tree.open(sstm.str());
-    // min_tree_ml.write(out_tree);
-    // out_tree.close();
-    // sstm.str("");
 }
 
 
@@ -2291,6 +2277,10 @@ int main (int argc, char ** const argv) {
     }
     vobs = get_obs_vector_by_chr(data, Ns);
 
+    int nleaf = Ns + 1;
+    for(int k= (nleaf + 1); k < (2 * nleaf - 1); ++k) knodes.push_back(k);
+    knodes.push_back(nleaf);
+
     // tobs already defined globally
     tobs = read_time_info(timefile, Ns, age);
     if(cons){
@@ -2386,7 +2376,7 @@ int main (int argc, char ** const argv) {
     }
 
     max_tobs = *max_element(tobs.begin(), tobs.end());
-    lnl_type = {model, cn_max, is_total, cons, max_tobs, age, use_repeat, correct_bias, num_invar_bins, only_seg, infer_wgd, infer_chr};
+    lnl_type = {model, cn_max, is_total, cons, max_tobs, age, use_repeat, correct_bias, num_invar_bins, only_seg, infer_wgd, infer_chr, knodes};
 
     obs_decomp = {m_max, max_wgd, max_chr_change, max_site_change, obs_num_wgd, obs_change_chr};
 
