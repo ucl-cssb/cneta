@@ -1,6 +1,6 @@
 <html> <head>  
 <title>Gzstream Library Home Page</title>
-</head>  
+</head>
 <body BGCOLOR="FAF8E8" TEXT="#000000">
 
 <h1>Gzstream Library Home Page</h1>
@@ -25,14 +25,14 @@
 <a name="intro"><h2> Introduction </h2></a>
 
 <i>Gzstream</i> is a small C++ library, basically just a wrapper,
-that provides the functionality of the 
+that provides the functionality of the
 <a href="http://www.gzip.org/zlib/">zlib C-library</a> in a C++ iostream.
 It is freely available under the <a href="COPYING.LIB">LGPL license</a>.<P>
 
-Gzstream has been written by 
+Gzstream has been written by
 <a href="http://www.cs.unc.edu/~debug/">Deepak Bandyopadhyay</a> and
-<a href="http://www.cs.unc.edu/~kettner/">Lutz Kettner</a> at 
-the <a href="http://www.cs.unc.edu/Research/compgeom/">Computational 
+<a href="http://www.cs.unc.edu/~kettner/">Lutz Kettner</a> at
+the <a href="http://www.cs.unc.edu/Research/compgeom/">Computational
 Geometry Group at UNC Chapel Hill</a>.<P>
 
 
@@ -60,8 +60,8 @@ platforms.<P>
 
 Either compile <tt>gzstream.C</tt> by hand, place it in some library,
 and move <tt>gzstream.h</tt> into the include search path of your
-compiler. Or use the provided <tt>Makefile</tt>, adapt its 
-variables, and follow the remarks in the <tt>Makefile</tt>. Two 
+compiler. Or use the provided <tt>Makefile</tt>, adapt its
+variables, and follow the remarks in the <tt>Makefile</tt>. Two
 test programs are provided, <tt>test_gzip.C</tt> and <tt>test_gunzip.C</tt>.
 The <tt>Makefile</tt> contains a rule that performs a small test
 with these programs.<P>
@@ -74,10 +74,10 @@ The library provides two classes, <tt>igzstream</tt> and <tt>ogzstream</tt>,
 that can be used analogously to <tt>ifstream</tt> and <tt>ofstream</tt>
 respectively.<P>
 
-The classes are by default in the global name space. This can 
+The classes are by default in the global name space. This can
 be changed by setting the macro <tt>GZSTREAM_NAMESPACE</tt> to
-the desired name space, e.g., by setting the option 
-</tt>-DGZSTREAM_NAMESPACE=gz</tt> in the <tt>Makefile</tt>. 
+the desired name space, e.g., by setting the option
+</tt>-DGZSTREAM_NAMESPACE=gz</tt> in the <tt>Makefile</tt>.
 However, this needs to be consistent for both, the library compilation
 and the application that uses the library.<P>
 
@@ -88,7 +88,7 @@ and the application that uses the library.<P>
 <ul>
   <li> Seek. The zlib library provides the necessary functionality,
        but we have not realized that in the wrapper (yet? ;-).
-  <li> Both streams are based on the same streambuffer. So, they 
+  <li> Both streams are based on the same streambuffer. So, they
        cannot be used to derive an iogzstream class that would allow
        simultaneous reading and writing to the same file.
 </ul><P>
@@ -100,10 +100,10 @@ and the application that uses the library.<P>
 <ul>
   <li> Gzstream library 1.5 (08 Apr 2003):
          <a href="gzstream.tgz">gzstream.tgz</a><br>
-       Fixed bug that did not set the state correctly on failure to open or 
+       Fixed bug that did not set the state correctly on failure to open or
        close a file. <br>
        Fixed bug in the indexing of the write buffer that
-       caused the write buffer to shrink continously and finally caused 
+       caused the write buffer to shrink continously and finally caused
        wrong results when writing compressed files (only observed on some
        platforms). <P>
   <li> Gzstream library 1.4 (27 Apr 2002):<br>
@@ -137,8 +137,8 @@ Vincent Ricard, Peter Milley, Peter J. Torelli, and Ares Lagae.
 </ul>
 
 <hr><!-------------------------------------------------------------------->
-<address> 
-    The Computational Geometry Group at UNC Chapel Hill, Jan. 08, 2003. 
+<address>
+    The Computational Geometry Group at UNC Chapel Hill, Jan. 08, 2003.
 </address>
 </body>  </html>
 <!-------------------------------------------------------------------->

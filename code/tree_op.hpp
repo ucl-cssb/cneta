@@ -74,7 +74,7 @@ bool is_tip_age_valid(const vector<double>& node_ages, const vector<double>& tob
 // check if node_ages and node_times are consistent
 bool is_age_time_consistent(const vector<double>& node_times, const vector<double>& node_ages);
 
-void check_node_age_ratio(evo_tree& tree);
+void check_node_age_ratio(evo_tree& tree, const vector<int>& knodes);
 
 void check_nodes_transverse(evo_tree& tree);
 
@@ -121,7 +121,7 @@ evo_tree generate_random_tree(int Ns, gsl_rng* r, long unsigned (*fp_myrng)(long
 
 
 // Create a new tree with the same topology as input tree but different branch lengths
-evo_tree create_new_tree(gsl_vector* blens, evo_tree& rtree, const double& max_tobss, int cons);
+evo_tree create_new_tree(gsl_vector* blens, evo_tree& rtree, const double& max_tobs, int cons);
 
 
 

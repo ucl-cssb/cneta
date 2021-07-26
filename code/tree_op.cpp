@@ -37,14 +37,14 @@ bool is_age_time_consistent(const vector<double>& node_times, const vector<doubl
 }
 
 
-void check_node_age_ratio(evo_tree& tree){
+void check_node_age_ratio(evo_tree& tree, const vector<int>& knodes){
   // To confirm the conversion of edge to ratio is correct
   vector<double> ratios = tree.get_ratio_from_age();
   cout << "ratios of node times: ";
   for(int i = 0; i < ratios.size(); i++){
       cout << i + 1 << "\t" << "\t" << ratios[i] << endl;
   }
-  tree.update_edges_from_ratios(ratios);
+  tree.update_edges_from_ratios(ratios, knodes);
   cout << "New branch lengths: " << endl;
   for(int i = 0; i < tree.edges.size(); i++){
       cout << i + 1 << "\t" << "\t" << tree.edges[i].length << endl;
@@ -1046,7 +1046,7 @@ void save_branch_lengths(evo_tree& rtree, DoubleVector &lenvec, int startid, Nod
     if(!node){
         node = &(rtree.nodes[rtree.root_node_id]);   // root
         int branchNum = rtree.edges.size();
-        if (lenvec.empty()) lenvec.resize(branchNum);
+        if(lenvec.empty()) lenvec.resize(branchNum);
 
         if(debug){
             rtree.print();
@@ -1092,15 +1092,16 @@ void restore_branch_lengths(evo_tree& rtree, DoubleVector &lenvec, int startid, 
     }
 
     FOR_NEIGHBOR_IT(node, dad, it){
-        int idx = (*it)->id + startid;
-    	  (*it)->setLength(lenvec, idx);
+        int idx = (*it)->id + startid;   // edge id
+
+    	(*it)->setLength(lenvec, idx);
         (*it)->node->findNeighbor(node)->setLength(lenvec, idx);
-        int eid = rtree.get_edge_id((*it)->node->id, (*it)->node->findNeighbor(node)->id);
-        rtree.edges[eid].length = lenvec[idx];
+        
+        rtree.edges[idx].length = lenvec[idx];
 
         if(debug) cout << "size of branch " << (*it)->node->id + 1 << ", " << (*it)->node->findNeighbor(node)->id + 1 << " after restoring is " << lenvec[(*it)->id + startid] << endl;
 
-    	  restore_branch_lengths(rtree, lenvec, startid, (Node* )(*it)->node, node);
+    	restore_branch_lengths(rtree, lenvec, startid, (Node* )(*it)->node, node);
     }
 }
 

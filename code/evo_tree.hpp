@@ -98,6 +98,8 @@ public:
 
     void setLength(DoubleVector &vec);
 
+    void setLength(const double& blen);
+
     void setLength(DoubleVector &vec, int start_pos);
 
     void setLength(Neighbor* nei);
@@ -114,6 +116,7 @@ typedef vector<Neighbor*> NeighborVec;
 /*
     some macros to transverse neighbors of a node
  */
+// find neighbors of node which is not dad
 #define FOR_NEIGHBOR(mynode, mydad, it) \
 	for (it = (mynode)->neighbors.begin(); it != (mynode)->neighbors.end(); it++) \
 		if ((*it)->node != (mydad))
@@ -122,10 +125,10 @@ typedef vector<Neighbor*> NeighborVec;
 	for (NeighborVec::iterator it = (mynode)->neighbors.begin(); it != (mynode)->neighbors.end(); it++) \
 		if ((*it)->node != (mydad))
 
-#define FOR_NEIGHBOR_DECLARE(mynode, mydad, it) \
-	NeighborVec::iterator it; \
-	for (it = (mynode)->neighbors.begin(); it != (mynode)->neighbors.end(); it++) \
-		if ((*it)->node != (mydad))
+// #define FOR_NEIGHBOR_DECLARE(mynode, mydad, it) \
+// 	NeighborVec::iterator it; \
+// 	for (it = (mynode)->neighbors.begin(); it != (mynode)->neighbors.end(); it++) \
+// 		if ((*it)->node != (mydad))
 
 
 struct NNIMove{
@@ -163,7 +166,7 @@ public:
   vector<int> e_ot;
   vector<int> daughters;  // node ids of its children
 
-  double height;
+  double height;   // not used so far
   double time;
   double age;
 
@@ -175,7 +178,7 @@ public:
   Node(const Node& _n2);
 
   void deleteNeighbors();
-  // ~Node();
+  ~Node();
 
   bool is_leaf();
 
@@ -280,18 +283,19 @@ public:
 
   // used in initialization
   void generate_nodes();
-  void generate_neighbors();  // neighbor for one internal node: 1 incoming edges and 2 outgoing edges
+  void generate_neighbors();  // neighbor for one internal node: 1 incoming edges and 2 outgoing edges 
+  void update_neighbor_lengths(Node* node = NULL, Node* dad = NULL);   // Update neighbor lengths based on updated edge lengths
   void delete_neighbors();
 
   void calculate_node_times();
-  void calculate_age_from_time();
+  void calculate_age_from_time(bool keep_tip = false);
 
   vector<edge*> get_internal_edges();
   vector<double> get_node_times();
   vector<double> get_node_ages();
 
   void scale_time(double ratio);
-  void scale_time_internal(double ratio);   // used in sveta
+  void scale_time_internal(double ratio);   // used in svetagg
 
   // update node ages of a node and its ancestor (after the relevant edge is updated)
   void update_node_age(int node_id, double delta);
@@ -306,8 +310,8 @@ public:
   edge* get_edge(int start, int end);
 
   // Functions related to convertion of branch length ratios and node age
-  vector<double> get_ratio_from_age(int eid = -1);
-  void update_edges_from_ratios(const vector<double>& ratios);
+  vector<double> get_ratio_from_age();
+  void update_edges_from_ratios(const vector<double>& ratios, const vector<int>& knodes);
   void update_edge_from_ratio(double ratio, int eid);
 
   vector<int> get_ancestral_nodes(const int& node_id) const;   // used in testing and internal calling
@@ -326,6 +330,7 @@ public:
   void print_neighbors() const;
   void print_ancestral_edges(const int& node_id) const;
   void print_ancestral_edges(const int& node_id, ostream& stream) const;
+  void print_mutation_rates(int model, int only_seg) const;
 
   void write(ofstream& of) const;
   void write_with_mut(ofstream& of, const vector<int>& nmuts) const;

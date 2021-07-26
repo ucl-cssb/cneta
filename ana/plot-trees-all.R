@@ -57,20 +57,20 @@ plot.tree <- function(tree, title = "") {
   edge = data.frame(tree$edge, edge_num = 1:nrow(tree$edge), edge_len = tree$edge.length)
   colnames(edge) = c("parent", "node", "edge_num", "edge_len")
   p <- p %<+% edge + geom_text(aes(x = branch, label = edge_len), nudge_y = 0.1) + ggtitle(title)
-  print(p)
+  return(p)
 }
 
 # Plot tree with xlim specified to show full tip labels
-plot.tree.xlim <- function(tree, title = "") {
+plot.tree.xlim <- function(tree, title = "", extra_len = 20) {
   p <- ggtree(tree, size = 0.5, linetype = 1)  #+ geom_rootedge()
   # Add margin to show full name of labels  if (is.na(tree.max))
-  tree.max = max(node.depth.edgelength(tree)) + 20
+  tree.max = max(node.depth.edgelength(tree)) + extra_len
   p <- p + geom_tiplab(align = TRUE) + theme_tree2() + xlim(NA, tree.max)
   # p <- p + geom_text2(aes(subset=!isTip,label = node), hjust=-.3)
   edge = data.frame(tree$edge, edge_num = 1:nrow(tree$edge), edge_len = tree$edge.length)
   colnames(edge) = c("parent", "node", "edge_num", "edge_len")
   p <- p %<+% edge + geom_text(aes(x = branch, label = edge_len), nudge_y = 0.1) + ggtitle(title)
-  print(p)
+  return(p)
 }
 
 # Plot tree with xlim specified with age forwards
@@ -85,12 +85,12 @@ plot.tree.xlim.age <- function(tree, diff, age, title = "") {
   edge = data.frame(tree$edge, edge_num = 1:nrow(tree$edge), edge_len = tree$edge.length)
   colnames(edge) = c("parent", "node", "edge_num", "edge_len")
   p <- p %<+% edge + geom_text(aes(x = branch, label = edge_len), nudge_y = 0.1, nudge_x = diff) + ggtitle(title)
-  print(p)
+  return(p)
 }
 
 
-plot.tree.bootstrap <- function(tree, fout, title = ""){
-  pdf(fout)
+plot.tree.bootstrap <- function(tree, fout, title = "", extra_len = 20){
+  #pdf(fout)
 
   p <- ggtree(tree) #+ geom_rootedge()
   # support <- character(length(tree$node.label))
@@ -98,21 +98,22 @@ plot.tree.bootstrap <- function(tree, fout, title = ""){
   # support[tree$node.label >= 95] <- "red"
   # support[tree$node.label < 95 & tree$node.label >= 70] <- "pink"
   # support[tree$node.label < 70] <- "blue"
-  tree.max= max(node.depth.edgelength(tree)) + 20
+  tree.max= max(node.depth.edgelength(tree)) + extra_len
   p <- p + geom_tiplab(align = TRUE) + theme_tree2() + xlim(NA, tree.max)
   p <- p + geom_text2(aes(subset=!isTip, label=label, hjust=-.3, color="red"))
   edge = data.frame(tree$edge, edge_num = 1:nrow(tree$edge), edge_len = tree$edge.length)
   colnames(edge)=c("parent", "node", "edge_num", "edge_len")
   p <- p %<+% edge + geom_text(aes(x = branch, label = edge_len), nudge_y = 0.1) + ggtitle(title)
   print(p)
+  ggsave(fout, width = 9, height = 5)
 
-  dev.off()
+  #dev.off()
 }
 
 
 # Plot bootstrapped tree with x-axis being patient age
 plot.tree.bootstrap.age <- function(tree, fout, diff, age, title = ""){
-  pdf(fout)
+  #pdf(fout)
 
   p <- ggtree(tree) #+ geom_rootedge()
   # support <- character(length(tree$node.label))
@@ -131,8 +132,9 @@ plot.tree.bootstrap.age <- function(tree, fout, diff, age, title = ""){
   colnames(edge)=c("parent", "node", "edge_num", "edge_len")
   p <- p %<+% edge + geom_text(aes(x = branch, label = edge_len), nudge_y = 0.1, nudge_x = diff) + ggtitle(title)
   print(p)
+  ggsave(fout, width = 9, height = 5)
 
-  dev.off()
+  #dev.off()
 }
 
 
@@ -175,13 +177,13 @@ get.tree <- function(tree_file, out_file = "", branch_num = 0, labels = NA){
 }
 
 
-print.tree <- function(mytree, fout, tree_style, time_file="", title = "") {
-  pdf(fout)
+print.tree <- function(mytree, fout, tree_style, time_file="", title = "", extra_len = 20) {
+  pdf(fout, width = 9, height = 5)
 
   if(tree_style=="simple"){
-    plot.tree(mytree, title)
+    p = plot.tree(mytree, title)
   }else if(tree_style=="xlim"){
-    plot.tree.xlim(mytree, title)
+    p = plot.tree.xlim(mytree, title, extra_len)
   }else if(tree_style=="age"){
     # The lengths of tips are at the beginning
     elens=node.depth.edgelength(mytree)
@@ -190,9 +192,10 @@ print.tree <- function(mytree, fout, tree_style, time_file="", title = "") {
     s1_info = stime[stime$tdiff==0,]
     diff = s1_info$age- elens[s1_info$sample]
     age = max(stime$age)
-    plot.tree.xlim.age(mytree, diff, age, title)
+    p = plot.tree.xlim.age(mytree, diff, age, title)
   }
-
+  print(p)
+  #ggsave(fout, width = 9, height = 5)
   dev.off()
   # ggsave(file.out, width = 11.69, height = 8.27, units="in", limitsize = FALSE)
 }
@@ -270,6 +273,11 @@ if(with_title==1){
   title = get.plot.title(mut_rate, dup_rate, del_rate);
 }
 
+extra_len = 20
+if(branch_num == 1){
+  extra_len = 200
+}
+
 if (plot_type == "all"){
   # dir <- '../sim-data/'
   dir <- tree_dir
@@ -286,14 +294,14 @@ if (plot_type == "all"){
     cat("running on:", f, "\n")
     fname = file.path(dir, f)
     tree = get.tree(fname, out_file = out_file, branch_num = branch_num)
-    print.tree(tree$mytree, tree$fout, tree_style, time_file = time_file, title = title)
+    print.tree(tree$mytree, tree$fout, tree_style, time_file = time_file, title = title, extra_len = extra_len)
   }
 
 }else if (plot_type == "single"){
   cat(paste0("Plotting the tree in ", tree_file))
   labels = get.labels(annot_file)
   tree = get.tree(tree_file, out_file = out_file, branch_num = branch_num, labels = labels)
-  print.tree(tree$mytree, tree$fout, tree_style, time_file = time_file, title = title)
+  print.tree(tree$mytree, tree$fout, tree_style, time_file = time_file, title = title, extra_len = extra_len)
 
 } else if (plot_type == "bootstrap"){
   cat(paste0("Plotting bootstrap values for the tree in ", tree_file))
@@ -328,9 +336,9 @@ if (plot_type == "all"){
     age = max(stime$age)
     plot.tree.bootstrap.age(mytree, fout, diff, age, title)
   }else{
-    plot.tree.bootstrap(mytree, fout, title)
+    plot.tree.bootstrap(mytree, fout, title, extra_len)
   }
 
-} else{
+}else{
   message("plotting type not supported!")
 }

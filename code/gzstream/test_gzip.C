@@ -21,7 +21,7 @@
 // Revision      : $Revision: 1.3 $
 // Revision_date : $Date: 2001/10/04 15:09:28 $
 // Author(s)     : Deepak Bandyopadhyay, Lutz Kettner
-// 
+//
 // Short test program reading a file, compressing it, and writing it.
 // ============================================================================
 
