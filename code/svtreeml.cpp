@@ -182,7 +182,11 @@ vector<evo_tree> get_initial_trees(int init_tree, string dir_itrees, int Npop, c
               edge* e = &rtree.edges[i];
               // skip the normal branch which is always 0
               if(e->start == rtree.nleaf && e->end == rtree.nleaf - 1) continue;
-              if(isnan(e->length) || e->length < BLEN_MIN || e->length > BLEN_MAX){
+              if(std::isnan(e->length)){
+                  cout << "wrong branch lengths in the initial coalescence tree " << rtree.make_newick() << endl;
+                  exit(1);
+              }
+              if(e->length < BLEN_MIN || e->length > BLEN_MAX){
                 wrong_blen = true;
                 // cout << "branch lengths not in the range!" << endl;
                 // rtree.print();
