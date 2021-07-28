@@ -38,6 +38,7 @@ double loglh_epsilon = 0.001;
 double tolerance = 0.01;
 int miter = 2000;
 int speed_nni = 0;
+double scale_tobs = 2.0;
 
 int debug = 0;
 
@@ -181,7 +182,7 @@ vector<evo_tree> get_initial_trees(int init_tree, string dir_itrees, int Npop, c
               edge* e = &rtree.edges[i];
               // skip the normal branch which is always 0
               if(e->start == rtree.nleaf && e->end == rtree.nleaf - 1) continue;
-              if(e->length < BLEN_MIN || e->length > BLEN_MAX){
+              if(isnan(e->length) || e->length < BLEN_MIN || e->length > BLEN_MAX){
                 wrong_blen = true;
                 // cout << "branch lengths not in the range!" << endl;
                 // rtree.print();
@@ -196,6 +197,8 @@ vector<evo_tree> get_initial_trees(int init_tree, string dir_itrees, int Npop, c
 
             if(debug){
               cout << "tree " << num_tree << " is " << tstring << endl;
+              rtree.print();
+              cout << rtree.make_newick() << endl;
             }
 
             if(searched_trees.find(tstring) == searched_trees.end()){
@@ -366,14 +369,14 @@ void do_hill_climbing(evo_tree& min_nlnl_tree, int Npop, int Ngen, int init_tree
     vector<double> lnLs(num2init, 0.0);
     vector<int> index(num2init, 0);      // index of trees starting from 0
 
-    cout << "\tInitial number of trees " << num2init << endl;
+    cout << "\nInitial number of trees " << num2init << endl;
     // no topolgy change
     #ifdef _OPENMP
     #pragma omp parallel for
     #endif
     for(int i = 0; i < num2init; ++i){
         double nlnl = MAX_NLNL;
-        // if(debug)  cout << "optimize tree " << i + 1 << endl;
+        if(debug)  cout << "\noptimize tree " << i + 1 << ": " << trees[i].make_newick() << endl;
         if(optim == 0){  // use gsl libaries (deprecated)
             while(!(nlnl < MAX_NLNL)){
               nlnl = MAX_NLNL;
@@ -404,7 +407,7 @@ void do_hill_climbing(evo_tree& min_nlnl_tree, int Npop, int Ngen, int init_tree
     vector<double> lnLs2(num2perturb, 0.0);
     vector<int> index2(num2perturb, 0);
 
-    cout << "\tNumber of trees to perturb for hill climbing NNIs " << num2perturb << endl;
+    cout << "\nNumber of trees to perturb for hill climbing NNIs " << num2perturb << endl;
     if(debug){
       for(auto t: trees2){
         cout << t.make_newick() << endl;
@@ -437,7 +440,7 @@ void do_hill_climbing(evo_tree& min_nlnl_tree, int Npop, int Ngen, int init_tree
         lnLs3[i] = trees3[i].score;
     }
 
-    cout << "\tNumber of trees to refine with stochastic and hill climbing NNIs " << num2refine << endl;
+    cout << "\nNumber of trees to refine with stochastic and hill climbing NNIs " << num2refine << endl;
     if(debug){
       for(auto t: trees3){
         cout << t.make_newick() << endl;
@@ -1084,7 +1087,7 @@ int main(int argc, char** const argv){
     ("gtime", po::value<double>(&gtime)->default_value(1), "generation time in year")
     ("beta", po::value<double>(&beta)->default_value(0), "population growth rate")
 
-    // options related to tree searching
+    // options related to tree searching and optimization
     ("tree_search", po::value<int>(&tree_search)->default_value(1), "method of searching tree space (0: Genetic algorithm, 1: Random-restart hill climbing, 2: Exhaustive search)")
     ("speed_nni", po::value<int>(&speed_nni)->default_value(1), "whether or not to do reduced NNI while doing hill climbing NNIs")
     ("npop,p", po::value<int>(&Npop)->default_value(100), "number of population in genetic algorithm or maximum number of initial trees")
@@ -1094,6 +1097,7 @@ int main(int argc, char** const argv){
     ("miter,m", po::value<int>(&miter)->default_value(2000), "maximum number of iterations in maximization")
     ("loglh_epsilon", po::value<double>(&loglh_epsilon)->default_value(0.001), "tolerance value bewteen log likelihood values")
     ("ssize,z", po::value<double>(&ssize)->default_value(0.01), "initial step size used in GSL optimization")
+    ("scale_tobs", po::value<double>(&scale_tobs)->default_value(2.0), "scale factor to get lower limit of root age when doing constrained optimization (BFGS) based on maximimum sample time difference. The value has to be increased if branch length is smaller than BLEN_MIN during BFGS optimization")
 
     // mutation rates
     ("mu,x", po::value<double>(&mu)->default_value(0.02), "overall mutation rate")
@@ -1277,7 +1281,7 @@ int main(int argc, char** const argv){
     obs_decomp = {m_max, max_wgd, max_chr_change, max_site_change, obs_num_wgd, obs_change_chr};
 
     int opt_one_branch = 0; // optimize all branches by default
-    opt_type = {maxj, tolerance, miter, opt_one_branch, tobs};
+    opt_type = {maxj, tolerance, miter, opt_one_branch, tobs, scale_tobs};
 
     string real_tstring = "";   // used for comparison to searched trees
     if(tree_file != ""){

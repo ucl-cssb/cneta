@@ -35,6 +35,8 @@ struct OPT_TYPE{
   int opt_one_branch;
 
   vector<double> tobs;  // sample times, used to get constaints in optimization
+
+  double scale_tobs;   // scale factor to get lower limit of root age when doing constrained optimization (BFGS) based on maximimum sample time difference
 };
 
 struct GSL_PARAM{

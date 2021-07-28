@@ -951,6 +951,7 @@ void update_variables_transformed(evo_tree& rtree, double *x, LNL_TYPE& lnl_type
 
             // store original ratios
             vector<double> ratios = rtree.get_ratio_from_age();
+           
             double min_root = lnl_type.max_tobs + rtree.nleaf * BLEN_MIN;
 
             if(debug){
@@ -1080,7 +1081,7 @@ LNL_TYPE& lnl_type, OPT_TYPE& opt_type, int ndim, double x[], double dfx[]){
 
   double fx = targetFunk(rtree, vobs, obs_decomp, comps, lnl_type, opt_type, x);
 
-	for(dim = 1; dim <= ndim; dim++ ){
+	for(dim = 1; dim <= ndim; dim++){
 		temp = x[dim];
 		h[dim] = ERROR_X * fabs(temp);
 		if(h[dim] == 0.0) h[dim] = ERROR_X;
@@ -1091,7 +1092,7 @@ LNL_TYPE& lnl_type, OPT_TYPE& opt_type, int ndim, double x[], double dfx[]){
 		x[dim] = temp;
 	}
 
-	for(dim = 1; dim <= ndim; dim++ ){
+	for(dim = 1; dim <= ndim; dim++){
         dfx[dim] = (dfx[dim] - fx) / h[dim];
         if(debug){
             cout << "dfx[dim] " << dfx[dim] << endl;
@@ -1167,7 +1168,7 @@ void lbfgsb(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& ob
 				cerr << "L-BFGS-B needs finite values of 'fn'" << endl;
 				exit(1);
 			}
-		} else if(strncmp(task, "NEW_X", 5) == 0){
+		}else if(strncmp(task, "NEW_X", 5) == 0){
 			iter++;
 			if(trace == 1 &&(iter % nREPORT == 0)){
 				cout << "iter " << iter << " value " << f << endl;
@@ -1176,19 +1177,20 @@ void lbfgsb(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& ob
 				*fail = 1;
 				break;
 			}
-		} else if(strncmp(task, "WARN", 4) == 0){
+		}else if(strncmp(task, "WARN", 4) == 0){
 			*fail = 51;
 			break;
-		} else if(strncmp(task, "CONV", 4) == 0){
+		}else if(strncmp(task, "CONV", 4) == 0){
 			break;
-		} else if(strncmp(task, "ERROR", 5) == 0){
+		}else if(strncmp(task, "ERROR", 5) == 0){
 			*fail = 52;
 			break;
-		} else{ /* some other condition that is not supposed to happen */
+		}else{ /* some other condition that is not supposed to happen */
 			*fail = 52;
 			break;
 		}
 	}
+
 	*Fmin = f;
 	*fncount = *grcount = isave[33];
 	if(trace){
@@ -1287,8 +1289,6 @@ double L_BFGS_B(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP
 
 void max_likelihood_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, 
     LNL_TYPE& lnl_type, OPT_TYPE& opt_type, double &min_nlnl, int debug){
-    // int debug = 0;
-
     int model = lnl_type.model;
     int cn_max = lnl_type.cn_max;
     int only_seg = lnl_type.only_seg;
@@ -1329,9 +1329,9 @@ void max_likelihood_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, O
     if(cons){    // edges converted to ratio to incorporate time constraints
         // check tip validity
         if(!is_tip_age_valid(rtree.get_node_ages(), opt_type.tobs)){
-          rtree.print();
-          cout << rtree.make_newick() << endl;
           cout << "Tip timings inconsistent with observed data when doing BFGS!" << endl;
+          rtree.print();
+          cout << rtree.make_newick() << endl;         
           exit(1);
         }
 
@@ -1355,7 +1355,8 @@ void max_likelihood_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, O
         }else{
             // age of root
             variables[1] = ratios[0];
-            lower_bound[1] = lnl_type.max_tobs + rtree.nleaf  * BLEN_MIN;
+            // make minimal age of root much larger than maximum observed time to avoid very small branch lengths and failing in optimization
+            lower_bound[1] = lnl_type.max_tobs * opt_type.scale_tobs + rtree.nleaf * 2 * BLEN_MIN;
             // age at 1st sample, so need to add time until last sample
             upper_bound[1] = lnl_type.max_tobs + patient_age;
 
@@ -1430,7 +1431,7 @@ void max_likelihood_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, O
 
     // Check the validity of the tree
     if(cons && !is_tree_valid(rtree, lnl_type.max_tobs, patient_age, cons)){
-      cout << "The optimized tree after BFGS is not valid!" << endl;
+      cout << "The optimized tree after BFGS " << rtree.make_newick() << " is not valid!" << endl;
       exit(1);
     }
 

@@ -369,7 +369,8 @@ void generate_coal_tree(const int& nsample, gsl_rng* r, long unsigned (*fp_myrng
   int nlin = nsample;
   while(nlin > 1){
     // sample a time from Exp( combinations(k,2) )
-    double lambda = fact(nlin)/( 2*fact(nlin-2));
+    // double lambda = fact(nlin)/( 2*fact(nlin-2));
+    double lambda = nlin * (nlin - 1) / 2;
     double tn = gsl_ran_exponential(r, 1/lambda) * Ne;
     // cout << "Normal coalescence time  " << tn << endl;
     double t = tn;
@@ -452,7 +453,8 @@ void generate_coal_tree(const int& nsample, gsl_rng* r, long unsigned (*fp_myrng
 
 // Scale the total time by given time
 evo_tree generate_coal_tree(const int& nsample, gsl_rng* r, long unsigned (*fp_myrng)(long unsigned), int Ne, double beta, double gtime){
-   //cout << "GENERATING COAL TREE" << endl;
+   int debug = 0;
+   if(debug) cout << "GENERATING COALESCENCE TREE" << endl;
    vector<int> edges;
    vector<double> lengths;
    vector<double> epoch_times;
@@ -475,15 +477,16 @@ evo_tree generate_coal_tree(const int& nsample, gsl_rng* r, long unsigned (*fp_m
    int nlin = nsample;
    while(nlin > 1){
      // sample a time from Exp( combinations(k,2) )
-     double lambda = fact(nlin) / ( 2 * fact(nlin - 2) );
+     //  double lambda = fact(nlin) / ( 2 * fact(nlin - 2) );    // may become overflow using fact
+     double lambda = nlin * (nlin - 1) / 2;
      double tn = gsl_ran_exponential(r, 1 / lambda) * Ne;
-     // cout << "Normal coalescence time  " << tn << endl;
+     if(debug) cout << "Normal coalescence time  " << tn << endl;
      double t = tn;
      if(beta > 0){  // simulate exponential growth
          // t = (log(1 + beta * tn * exp(- beta * t_tot))) / beta;  // Formula in book "Gene Genealogies, Variation and Evolution", P99
          t = ((log(exp(beta*t_tot) + beta * tn)) / beta)- t_tot;    // Formula in CoalEvol7.3.5.c, equivalent to the one above
      }
-
+     if(debug) cout << "exponential coalescence time  " << t << endl;
      t_tot += t;
 
      // choose two random nodes from available list
@@ -515,12 +518,13 @@ evo_tree generate_coal_tree(const int& nsample, gsl_rng* r, long unsigned (*fp_m
    // double lambda = 1;
    double lambda = runiform(r, 0, 1);
    double tn = gsl_ran_exponential(r, 1/lambda) * Ne;
-   // cout << "Normal coalescence time  " << tn << endl;
+   if(debug) cout << "Normal coalescence time  " << tn << endl;
    double t = tn;
    if(beta > 0){  // simulate exponential growth
        // t = (log(1 + beta * tn * exp(- beta * t_tot))) / beta;  // Formula in book "Gene Genealogies, Variation and Evolution", P99
        t = ((log(exp(beta*t_tot) + beta * tn)) / beta)- t_tot;    // Formula in CoalEvol7.3.5.c, equivalent to the one above
    }
+   if(debug) cout << "exponential coalescence time  " << t << endl;
    t_tot += t;
    epoch_times.push_back(t_tot);
 

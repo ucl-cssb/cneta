@@ -32,7 +32,7 @@ make.tree <- function(d, labels = NA, digit = 2) {
   # control precision of branch length
   mytree$edge.length <- round(d[, 3], digit)
   class(mytree) <- "phylo"
-  checkValidPhylo(mytree)
+  # checkValidPhylo(mytree)
   return(mytree)
 }
 

@@ -1008,7 +1008,13 @@ void evo_tree::update_edges_from_ratios(const vector<double>& ratios, const vect
         cout << "new age for node " << nj + 1 << " is " << ntime << ", converted from ratio " << ratios[nnode - 1] << endl;
         cout << " parent node " << root_node_id + 1 << " child node " << nj + 1 << ", parent time after " << nodes[root_node_id].age << ", child time after " << nodes[nj].age << ", blen after " << blen << endl;
     }
-    assert(blen >= BLEN_MIN);
+    // assert(blen >= BLEN_MIN);
+    if(blen < BLEN_MIN){
+      cout << "\nBranch length (" << root_node_id + 1 << ", " << nj + 1 << ") " << blen << " smaller than " << BLEN_MIN << endl;
+      this->print();
+      cout << make_newick() << endl;
+      exit(1);
+    }   
     set_edge_length(root_node_id, nj, blen);
 
     // get preorder of internal nodes
@@ -1039,7 +1045,12 @@ void evo_tree::update_edges_from_ratios(const vector<double>& ratios, const vect
             if(debug){
                 cout << " parent node " << ni + 1 << " child node " << nj + 1 << ", parent age after " << nodei->age << ", child age after " << nodes[nj].age << ", blen after " << blen << endl;
             }
-            assert(blen >= BLEN_MIN);
+            if(blen < BLEN_MIN){
+              cout << "\nBranch length (" << ni + 1 << ", " << nj + 1 << ") " << blen << " smaller than " << BLEN_MIN << endl;
+              this->print();
+              cout << make_newick() << endl;
+              exit(1);
+            }
             set_edge_length(ni, nj, blen);
         }
     }

@@ -90,7 +90,7 @@ vector<double> read_time_info(const string& filename, const int& Ns, int& age, i
   }
 
   if(t_info.size() != Ns){
-    std::cerr << "Error: timing information does not contain Ns entries: " << filename << std::endl;
+    std::cerr << "Error: timing information does not contain " << Ns << " entries: " << filename << std::endl;
     exit(1);
   }
 
