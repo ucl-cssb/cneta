@@ -362,7 +362,7 @@ void do_exhaustive_search(evo_tree& min_nlnl_tree, string real_tstring, int Ngen
 // assume nni5 = true
 // have to update knodes when topolgy is changed
 void do_hill_climbing(evo_tree& min_nlnl_tree, int Npop, int Ngen, int init_tree, const string& dir_itrees, const vector<double>& rates, double ssize, int optim, int Ne = 1, double beta = 0.0, double gtime = 1.0){
-    int debug = 0;
+    // int debug = 1;
 
     int max_tree_num = INT_MAX;
     if(Ns <= LARGE_TREE)   max_tree_num = num_trees[Ns - 1];

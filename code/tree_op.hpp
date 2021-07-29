@@ -185,7 +185,7 @@ void restore_mutation_rates(evo_tree& rtree, const DoubleVector &muvec);
 // TODO: Build parsimony tree from copy number changes (breakpoints)
 evo_tree build_parsimony_tree(int Ns, vector<vector<int>>& data);
 
-
+// filename: a file with at least 3 columns: start, end, length
 evo_tree read_tree_info(const string& filename, const int& Ns, int debug = 0);
 
 

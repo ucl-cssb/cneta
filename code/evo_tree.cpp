@@ -620,7 +620,7 @@ void evo_tree::set_edge_length(int start, int end, double blen){
 }
 
 
-// get node depth, used in computing ratios
+// get node depth (leaf node has depth 0), used in computing ratios
 int evo_tree::get_node_depth(int node_id){
   if(node_id < this->nleaf){
     this->nodes[node_id].height = 0;
@@ -642,7 +642,7 @@ int evo_tree::get_node_depth(int node_id){
 
 
 // Find the maximum age of tips below a node
-double evo_tree::get_descendants_max_age(int node_id){
+double evo_tree::get_tips_max_age(int node_id, int incl_depth){
     if(node_id < this->nleaf){
         return nodes[node_id].age;
     }
@@ -651,16 +651,16 @@ double evo_tree::get_descendants_max_age(int node_id){
     assert(descendants.size() >= 1);
 
     double max_age = nodes[descendants[0]].age;
-    for(int j = 1; j < descendants.size(); j++){
+    if(incl_depth) max_age = max_age + get_node_depth(descendants[0]) * BLEN_MIN;
+    for(int j = 1; j < descendants.size(); j++){      
         double tj = nodes[descendants[j]].age;
+        if(incl_depth) tj = tj + get_node_depth(descendants[j]) * BLEN_MIN;
         // cout << "     tip " << descendants[j] + 1 << ", time " << tj << endl;
         if(tj > max_age) max_age = tj;
     }
 
     return max_age;
 }
-
-
 
 
 // update node ages of a node and its ancestor (after the relevant edge is updated)
@@ -942,11 +942,9 @@ vector<double> evo_tree::get_ratio_from_age(){
             int nj = nodei->daughters[j];
             if(nj < root_node_id) continue;
 
-            double max_tj = get_descendants_max_age(nj);
-            // find the depth of node to maintain minimal branch length
-            int dj = get_node_depth(nj) + 1;
-            double t1 = nodei->age - max_tj - dj * BLEN_MIN;   // for parent node
-            double t2 = this->nodes[nj].age - max_tj - (dj - 1) * BLEN_MIN;   // for child node
+            double max_tj = get_tips_max_age(nj);
+            double t1 = nodei->age - max_tj - BLEN_MIN;   // for parent node
+            double t2 = this->nodes[nj].age - max_tj;   // for child node
             double ratio =  t2 / t1;
             if(debug){
                 cout << " child node " << nj + 1 << ", node age " << this->nodes[nj].age << ", max age " << max_tj << ", ratio " << ratio  << endl;
@@ -954,7 +952,7 @@ vector<double> evo_tree::get_ratio_from_age(){
             // parent node always has larger node age
             // assert(ratio < 1 && ratio > 0);
             if(ratio >= 1 || ratio <= 0){
-                cout << "Invalid ratio " << ratio << " for node " << ni + 1 << "(" << t1 << ") and " << nj + 1 << "(" << t2 << ") " << "with " << max_tj  << " at depth " << dj << endl;
+                cout << "Invalid ratio " << ratio << " for node " << ni + 1 << "(" << t1 << ") and " << nj + 1 << "(" << t2 << ") " << "with max age of descendants being " << max_tj << endl;
                 cout << "all the ratios so far: ";
                 for(auto r : ratios){
                   cout << "\t" << r;
@@ -965,6 +963,8 @@ vector<double> evo_tree::get_ratio_from_age(){
                   cout << "\t" << n.age;
                 }
                 cout << endl;
+                print();
+                cout << make_newick() << endl;
                 exit(1);
             }
             ratios[nj - root_node_id] = ratio;
@@ -997,19 +997,18 @@ void evo_tree::update_edges_from_ratios(const vector<double>& ratios, const vect
     // another daughter of root (MRCA of tumor samples), fixed node ID
     int nj = nnode + root_node_id - 1;
     if(debug) cout << "root daughter node is " << nj + 1 << endl;
-    double max_tj = get_descendants_max_age(nj);
-    int dj = get_node_depth(nj) + 1;    // node depth may change after topology change
+    double max_tj = get_tips_max_age(nj);
     // If node age for root is the same as max_tj, all other nodes will be equal to max_tj
-    double ntime = (nodes[root_node_id].age - max_tj - dj * BLEN_MIN) * ratios[nnode - 1] + max_tj + (dj - 1) * BLEN_MIN;
+    double ntime = (nodes[root_node_id].age - max_tj -BLEN_MIN) * ratios[nnode - 1] + max_tj ;
     nodes[nj].age = ntime;
     double blen = nodes[root_node_id].age - nodes[nj].age;
     if(debug){
-        cout << "maximum time below root daughter node " << nj + 1 << " is " << max_tj << " with depth " << dj << endl;
+        cout << "maximum time below root daughter node " << nj + 1 << " is " << max_tj << endl;
         cout << "new age for node " << nj + 1 << " is " << ntime << ", converted from ratio " << ratios[nnode - 1] << endl;
         cout << " parent node " << root_node_id + 1 << " child node " << nj + 1 << ", parent time after " << nodes[root_node_id].age << ", child time after " << nodes[nj].age << ", blen after " << blen << endl;
     }
     // assert(blen >= BLEN_MIN);
-    if(blen < BLEN_MIN){
+    if(blen < BLEN_MIN){ 
       cout << "\nBranch length (" << root_node_id + 1 << ", " << nj + 1 << ") " << blen << " smaller than " << BLEN_MIN << endl;
       this->print();
       cout << make_newick() << endl;
@@ -1031,13 +1030,12 @@ void evo_tree::update_edges_from_ratios(const vector<double>& ratios, const vect
                 cout << " child node " << nj + 1 << " with age " << nodes[nj].age << endl;
             }
             if(nj > root_node_id){  // when child is not a leaf, update child age
-                double max_tj = get_descendants_max_age(nj);
-                int dj = get_node_depth(nj) + 1;
-                double ntime = (nodei->age - max_tj - dj * BLEN_MIN) * ratios[nj - root_node_id] + max_tj + (dj - 1) * BLEN_MIN;
+                double max_tj = get_tips_max_age(nj);
+                double ntime = (nodei->age - max_tj - BLEN_MIN) * ratios[nj - root_node_id] + max_tj;
                 nodes[nj].age = ntime;
 
                 if(debug){
-                  cout << " maximum time below node " << nj + 1 << " is " << max_tj << " with depth " << dj << endl;
+                  cout << " maximum time below node " << nj + 1 << " is " << max_tj << endl;
                   cout << " new age for node " << nj + 1 << " is " << ntime << ", converted from ratio " << ratios[nj - root_node_id] << endl;
                 }
             }
@@ -1049,6 +1047,11 @@ void evo_tree::update_edges_from_ratios(const vector<double>& ratios, const vect
               cout << "\nBranch length (" << ni + 1 << ", " << nj + 1 << ") " << blen << " smaller than " << BLEN_MIN << endl;
               this->print();
               cout << make_newick() << endl;
+              cout << "current set of ratios: ";
+              for(auto r : ratios){
+                  cout << "\t" << r;
+              }
+              cout << endl;              
               exit(1);
             }
             set_edge_length(ni, nj, blen);
@@ -1097,9 +1100,8 @@ void evo_tree::update_edge_from_ratio(double ratio, int eid){
     if(eid < 0 || ratio <= 0 || ratio >= 1) return;
 
     edge *e = &edges[eid];
-    double max_tj = get_descendants_max_age(e->end);
-    int dj = get_node_depth(e->end) + 1;
-    double ntime = ((nodes[e->start].age - max_tj - dj * BLEN_MIN) * ratio) + max_tj + (dj - 1) * BLEN_MIN;
+    double max_tj = get_tips_max_age(e->end);
+    double ntime = ((nodes[e->start].age - max_tj - BLEN_MIN) * ratio) + max_tj;
     nodes[e->end].age = ntime;
 
     // Compute branch lengths from time intervals

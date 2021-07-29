@@ -258,6 +258,7 @@ Mutation rates are implicit parameters in the computing tree likelihood, so the 
 * *-tree.txt: The reconstructed tree in tab-delimited format
 * *-tree.nex: The reconstructed tree in NEWICK format, with branch length representing calendar time
 
+NOTE: The program may exit when optimized branch length is smaller than 0.001. In that case, please rerun the program with a different seed.
 
 
 

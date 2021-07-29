@@ -24,6 +24,11 @@ import sys
 import re
 import argparse
 
+
+class NewickError(Exception):
+    pass
+
+
 '''
 build a tree from newick file without using other libraries
 '''
