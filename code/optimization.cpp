@@ -1356,7 +1356,7 @@ void max_likelihood_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, O
             // age of root
             variables[1] = ratios[0];
             // make minimal age of root much larger than maximum observed time to avoid very small branch lengths and failing in optimization
-            lower_bound[1] = lnl_type.max_tobs * opt_type.scale_tobs + rtree.nleaf * 2 * BLEN_MIN;
+            lower_bound[1] = lnl_type.max_tobs * opt_type.scale_tobs + rtree.nleaf * BLEN_MIN;
             // age at 1st sample, so need to add time until last sample
             upper_bound[1] = lnl_type.max_tobs + patient_age;
 

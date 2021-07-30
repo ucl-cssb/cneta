@@ -81,12 +81,12 @@ void Neighbor::setLength(Neighbor* nei){
 
 
 Node::Node(const int& _id):
-id(_id), isRoot(0), isLeaf(0), parent(-1), e_in(-1), height(0.0), time(0.0), age(0.0){
+id(_id), isRoot(0), isLeaf(0), parent(-1), e_in(-1), height(0), time(0.0), age(0.0){
 }
 
 
 Node::Node(const int& _id, const int& _isRoot, const int& _isLeaf):
-id(_id), isRoot(_isRoot), isLeaf(_isLeaf), parent(-1), e_in(-1), height(0.0), time(0.0), age(0.0){
+id(_id), isRoot(_isRoot), isLeaf(_isLeaf), parent(-1), e_in(-1), height(0), time(0.0), age(0.0){
 }
 
 
@@ -621,41 +621,59 @@ void evo_tree::set_edge_length(int start, int end, double blen){
 
 
 // get node depth (leaf node has depth 0), used in computing ratios
-int evo_tree::get_node_depth(int node_id){
+int evo_tree::get_node_height(int node_id){
   if(node_id < this->nleaf){
-    this->nodes[node_id].height = 0;
     return 0;
   }else{
     int max_d = 0;
     for(int i = 0; i < this->nodes[node_id].daughters.size(); i++){
       int nd = this->nodes[node_id].daughters[i];
-      int di = get_node_depth(nd);
+      int di = get_node_height(nd);
       if(di > max_d){
         max_d = di;
       }
     }
     max_d = max_d + 1;
-    this->nodes[node_id].height = max_d;
     return max_d;
   }
 }
 
 
+// assume ni is ancestor of nj, 
+// dist: number of branches between ni and nj
+int evo_tree::get_node_dist(int ni, int nj){ 
+  int dist = 1;
+  int njp = nodes[nj].parent;
+  while(njp != ni){
+    dist = dist + 1;
+    njp =  nodes[njp].parent;
+  }
+  return dist;
+}
+
+
+
 // Find the maximum age of tips below a node
 double evo_tree::get_tips_max_age(int node_id, int incl_depth){
     if(node_id < this->nleaf){
-        return nodes[node_id].age;
     }
 
-    vector<int> descendants = get_tips_below(node_id);
-    assert(descendants.size() >= 1);
+    vector<int> tips = get_tips_below(node_id);
+    assert(tips.size() >= 1);
 
-    double max_age = nodes[descendants[0]].age;
-    if(incl_depth) max_age = max_age + get_node_depth(descendants[0]) * BLEN_MIN;
-    for(int j = 1; j < descendants.size(); j++){      
-        double tj = nodes[descendants[j]].age;
-        if(incl_depth) tj = tj + get_node_depth(descendants[j]) * BLEN_MIN;
-        // cout << "     tip " << descendants[j] + 1 << ", time " << tj << endl;
+    double max_age = nodes[tips[0]].age;
+    if(incl_depth){     
+      int dist = get_node_dist(node_id, tips[0]);
+      max_age = max_age + dist * BLEN_MIN;
+      // cout << "tip " << tips[0] + 1 << ", distance from  " << node_id + 1 << " is " << dist << endl;
+    }
+    for(int j = 1; j < tips.size(); j++){      
+        double tj = nodes[tips[j]].age;      
+        if(incl_depth){
+          int dist = get_node_dist(node_id, tips[j]);           
+          tj = tj + dist * BLEN_MIN;
+          // cout << "tip " << tips[j] + 1 << ", distance from  " << node_id + 1 << " is " << dist << endl;
+        }
         if(tj > max_age) max_age = tj;
     }
 
@@ -743,11 +761,11 @@ Node* evo_tree::find_farthest_leaf(Node* node, Node* dad){
         node = &(nodes[root_node_id]);
 
     if(dad && node->is_leaf()){
-        node->height = 0.0;
+        node->height = 0;
         return node;
     }
     Node* res = NULL;
-    node->height = 0.0;
+    node->height = 0;
     FOR_NEIGHBOR_IT(node, dad, it){
         Node* leaf = find_farthest_leaf((*it)->node, node);
         if(node->height < (*it)->node->height + 1){
@@ -942,9 +960,9 @@ vector<double> evo_tree::get_ratio_from_age(){
             int nj = nodei->daughters[j];
             if(nj < root_node_id) continue;
 
-            double max_tj = get_tips_max_age(nj);
-            double t1 = nodei->age - max_tj - BLEN_MIN;   // for parent node
-            double t2 = this->nodes[nj].age - max_tj;   // for child node
+            double max_tj = get_tips_max_age(nj);    // node depths are considered
+            double t1 = nodei->age - max_tj - 2 * BLEN_MIN;   // for parent node, age > max_tj + 2 * BLEN_MIN
+            double t2 = this->nodes[nj].age - max_tj - BLEN_MIN;   // for child node, age > max_tj + BLEN_MIN
             double ratio =  t2 / t1;
             if(debug){
                 cout << " child node " << nj + 1 << ", node age " << this->nodes[nj].age << ", max age " << max_tj << ", ratio " << ratio  << endl;
@@ -999,7 +1017,7 @@ void evo_tree::update_edges_from_ratios(const vector<double>& ratios, const vect
     if(debug) cout << "root daughter node is " << nj + 1 << endl;
     double max_tj = get_tips_max_age(nj);
     // If node age for root is the same as max_tj, all other nodes will be equal to max_tj
-    double ntime = (nodes[root_node_id].age - max_tj -BLEN_MIN) * ratios[nnode - 1] + max_tj ;
+    double ntime = (nodes[root_node_id].age - max_tj - 2 * BLEN_MIN) * ratios[nnode - 1] + max_tj + BLEN_MIN;
     nodes[nj].age = ntime;
     double blen = nodes[root_node_id].age - nodes[nj].age;
     if(debug){
@@ -1031,7 +1049,7 @@ void evo_tree::update_edges_from_ratios(const vector<double>& ratios, const vect
             }
             if(nj > root_node_id){  // when child is not a leaf, update child age
                 double max_tj = get_tips_max_age(nj);
-                double ntime = (nodei->age - max_tj - BLEN_MIN) * ratios[nj - root_node_id] + max_tj;
+                double ntime = (nodei->age - max_tj - 2 * BLEN_MIN) * ratios[nj - root_node_id] + max_tj + BLEN_MIN;
                 nodes[nj].age = ntime;
 
                 if(debug){
@@ -1101,7 +1119,7 @@ void evo_tree::update_edge_from_ratio(double ratio, int eid){
 
     edge *e = &edges[eid];
     double max_tj = get_tips_max_age(e->end);
-    double ntime = ((nodes[e->start].age - max_tj - BLEN_MIN) * ratio) + max_tj;
+    double ntime = ((nodes[e->start].age - max_tj - 2 * BLEN_MIN) * ratio) + max_tj + BLEN_MIN;
     nodes[e->end].age = ntime;
 
     // Compute branch lengths from time intervals

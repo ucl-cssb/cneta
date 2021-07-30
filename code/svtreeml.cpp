@@ -38,7 +38,6 @@ double loglh_epsilon = 0.001;
 double tolerance = 0.01;
 int miter = 2000;
 int speed_nni = 0;
-double scale_tobs = 2.0;
 
 int debug = 0;
 
@@ -77,6 +76,8 @@ int infer_wgd; // whether or not to infer WGD status of a sample, called in init
 int infer_chr; // whether or not to infer chromosome gain/loss status of a sample, called in initialize_lnl_table_decomp
 
 int nstate;
+
+double scale_tobs;
 
 /********* derived from input ***********/
 map<int, vector<vector<int>>> vobs;   // CNP for each site, grouped by chr
@@ -186,7 +187,8 @@ vector<evo_tree> get_initial_trees(int init_tree, string dir_itrees, int Npop, c
                   cout << "wrong branch lengths in the initial coalescence tree " << rtree.make_newick() << endl;
                   exit(1);
               }
-              if(e->length < BLEN_MIN || e->length > BLEN_MAX){
+              // twice BLEN_MIN to avoid very small branch length
+              if(e->length < 2 * BLEN_MIN || e->length > BLEN_MAX){
                 wrong_blen = true;
                 // cout << "branch lengths not in the range!" << endl;
                 // rtree.print();
@@ -1051,7 +1053,7 @@ int main(int argc, char** const argv){
 
     ("tree_file", po::value<string>(&tree_file)->default_value(""), "input tree file")
 
-    ("mode", po::value<int>(&mode)->default_value(1), "running mode of the program (0: Compute maximum likelihood tree from copy number profile; 1: Test on example data; 2: Compute the likelihood of a given tree with branch length; 3: Compute the maximum likelihood of a given tree)")
+    ("mode", po::value<int>(&mode)->default_value(1), "running mode of the program (0: Compute maximum likelihood tree from copy number profile; 1: Test on example data; 2: Compute the likelihood of a given tree with branch length; 3: Compute the maximum likelihood of a given tree; 4: Infer ancestral states of a given tree from copy number profile)")
     ("bootstrap,b", po::value<int>(&bootstrap)->default_value(0), "doing bootstrap or not")
 
     ("model,d", po::value<int>(&model)->default_value(2), "model of evolution (0: Mk, 1: one-step bounded (total), 2: one-step bounded (allele-specific, 3: independent Markov chains)")
@@ -1101,7 +1103,7 @@ int main(int argc, char** const argv){
     ("miter,m", po::value<int>(&miter)->default_value(2000), "maximum number of iterations in maximization")
     ("loglh_epsilon", po::value<double>(&loglh_epsilon)->default_value(0.001), "tolerance value bewteen log likelihood values")
     ("ssize,z", po::value<double>(&ssize)->default_value(0.01), "initial step size used in GSL optimization")
-    ("scale_tobs", po::value<double>(&scale_tobs)->default_value(2.0), "scale factor to get lower limit of root age when doing constrained optimization (BFGS) based on maximimum sample time difference. The value has to be increased if branch length is smaller than BLEN_MIN during BFGS optimization")
+    ("scale_tobs", po::value<double>(&scale_tobs)->default_value(1.0), "scale factor to get lower limit of root age when doing constrained optimization (BFGS) based on maximimum sample time difference.")
 
     // mutation rates
     ("mu,x", po::value<double>(&mu)->default_value(0.02), "overall mutation rate")

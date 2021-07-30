@@ -195,15 +195,16 @@ For whole genome doubling, chr is assigned to 0 and seg_ID is assigned to -1.
 <!-- ## How to prepare MP trees -->
 ## Input
 The initial trees for tree searching can be obtained by maximum parsimony methods.
-* (Required) A file containing copy numbers for all the samples, including the normal sample (*-cn.txt.gz or *-allele-cn.txt.gz)
-* (Optional) A file containing the timing information of tip nodes (*-rel-times.txt)
+* (Required) A file containing copy numbers for all the tumor samples and the normal sample (*-cn.txt.gz or *-allele-cn.txt.gz)
+* (Optional) A file containing the timing information of tumor samples (*-rel-times.txt)
 
 
 There are 4 running modes in svtreeml.
-* mode 0 (default): building maximum likelihood tree from input copy numbers
+* mode 0 (default): building maximum likelihood tree from input copy numbers, using -b 1 for bootstrapping
 * mode 1: a simple comprehensive test on a simulated tree
 * mode 2: computing likelihood given a tree and its parameters (branch length and mutation rates)
-* mode 3: computing maximum likelihood tree given a tree topology
+* mode 3: computing maximum likelihood tree given a tree topology, using -b 1 for bootstrapping
+* mode 4: inferring ancestral states of a given tree from copy number profile (TO IMPROVE)
 
 The last three modes can be used to validate the computation of likelihood.
 
@@ -257,8 +258,7 @@ Mutation rates are implicit parameters in the computing tree likelihood, so the 
 ## Output
 * *-tree.txt: The reconstructed tree in tab-delimited format
 * *-tree.nex: The reconstructed tree in NEWICK format, with branch length representing calendar time
-
-NOTE: The program may exit when optimized branch length is smaller than 0.001. In that case, please rerun the program with a different seed.
+* *-tree.nmut.nex: The reconstructed tree in NEWICK format, with branch length representing number of mutations.
 
 
 

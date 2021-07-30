@@ -166,7 +166,7 @@ public:
   vector<int> e_ot;
   vector<int> daughters;  // node ids of its children
 
-  double height;   // not used so far
+  int height;  // used in preorder traverse
   double time;
   double age;
 
@@ -235,8 +235,9 @@ private:
   void compute_branch_direction(Node* node = NULL, Node* dad = NULL);
 
   // used in ratio computing
-  int get_node_depth(int node_id); // get node depth (start from root)
+  int get_node_height(int node_id); // get node depth (start from root)
   vector<int> get_tips_below(int node_id);  // Find the tip nodes below one node
+  int get_node_dist(int ni, int nj);
   double get_tips_max_age(int node_id, int incl_depth = 1);  // Find the maximum age of tips below a node
   void set_edge_length(int start, int end, double blen);
 

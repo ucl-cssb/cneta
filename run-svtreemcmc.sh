@@ -18,6 +18,9 @@ input=$dir/"$prefix"-cn.txt.gz
 
 # The input file of sample timings (optional, required for estimating mutation rates)
 times=$dir/"$prefix"-rel-times.txt
+if [[ ! -f $times ]]; then
+  times=""
+fi
 
 # Optional reference real tree
 # rtree=$dir/"$prefix"-tree.txt
@@ -48,7 +51,7 @@ do
   trace_tree_file=$odir/mcmc_"$suffix"_${i}.t
   sum_tree_file=$odir/sum-mcmc_"$suffix"_${i}.txt
 
-  code/svtreemcmc -s $Ns --is_total $is_total -c $input -t $times --rtree "$rtree" --trace_param_file $trace_param_file --trace_tree_file $trace_tree_file --config_file $config_file --init_tree $init_tree --file_itree $file_itree > $odir/std_mcmc_"$suffix"_${i}
+  code/svtreemcmc -s $Ns --is_total $is_total -c $input -t "$times" --rtree "$rtree" --trace_param_file $trace_param_file --trace_tree_file $trace_tree_file --config_file $config_file --init_tree $init_tree --file_itree $file_itree > $odir/std_mcmc_"$suffix"_${i}
 
   # Summarize the sampled trees into a maximum credibility tree with median heights
   # treeannotator -burnin 10 -heights median $trace_tree_file $sum_tree_file
