@@ -313,7 +313,7 @@ public:
   // Functions related to convertion of branch length ratios and node age
   vector<double> get_ratio_from_age();
   void update_edges_from_ratios(const vector<double>& ratios, const vector<int>& knodes);
-  void update_edge_from_ratio(double ratio, int eid);
+  void update_edge_from_ratio(double ratio, int eid);    // not used for now, issues remain on updating dependent edges
 
   vector<int> get_ancestral_nodes(const int& node_id) const;   // used in testing and internal calling
   vector<int> get_ancestral_edges(const int& node_id) const;   // used in testing and internal calling
