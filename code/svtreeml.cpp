@@ -429,7 +429,8 @@ void do_hill_climbing(evo_tree& min_nlnl_tree, int Npop, int Ngen, int init_tree
         trees2[i].generate_neighbors();
         if(debug){
             cout << "Run hill climbing NNI on tree " << i + 1 << endl;
-            trees2[i].print();
+            // trees2[i].print();
+            cout << trees2[i].make_newick() << endl;
         }
         do_hill_climbing_NNI(trees2[i], vobs, obs_decomp, comps, lnl_type, opt_type, loglh_epsilon, speed_nni);
         trees2[i].delete_neighbors();

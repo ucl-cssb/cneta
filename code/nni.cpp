@@ -14,11 +14,11 @@ void get_compatible_NNIs(vector<NNIMove>& nniMoves, vector<NNIMove>& compatibleN
   					|| (*it1).node2 == (*(it2)).node2){
   		        select = false;
               break;
+            }
         }
-      }
-  		if(select){
-        compatibleNNIs.push_back(*it1);
-      }
+  	    if(select){
+            compatibleNNIs.push_back(*it1);
+        }
     }
 
     if(debug){
@@ -98,25 +98,25 @@ void get_neighbor_inner_branches(const evo_tree& rtree, Node* node, Node* dad, i
     if(depth == 0)
       return;
 
-      FOR_NEIGHBOR_IT(node, dad, it){
-          if(!(*it)->node->is_leaf() && is_inner_branch((*it)->node, node)){
-              Branch curBranch(node, (*it)->node);
+    FOR_NEIGHBOR_IT(node, dad, it){
+        if(!(*it)->node->is_leaf() && is_inner_branch((*it)->node, node)){
+            Branch curBranch(node, (*it)->node);
 
-              if((*it)->direction == TOWARD_ROOT){
-                Node* tmp = curBranch.first;
-                curBranch.first = curBranch.second;
-                curBranch.second = tmp;
-              }
+            if((*it)->direction == TOWARD_ROOT){
+            Node* tmp = curBranch.first;
+            curBranch.first = curBranch.second;
+            curBranch.second = tmp;
+            }
 
-              bool is_valid = is_valid_NNI(rtree, curBranch);
+            bool is_valid = is_valid_NNI(rtree, curBranch);
 
-              int branchID = pairInteger(node->id, (*it)->node->id);
-              if(is_valid && surrBranches.find(branchID) == surrBranches.end())
-                  surrBranches.insert(pair<int, Branch>(branchID, curBranch));
+            int branchID = pairInteger(node->id, (*it)->node->id);
+            if(is_valid && surrBranches.find(branchID) == surrBranches.end())
+                surrBranches.insert(pair<int, Branch>(branchID, curBranch));
 
-              get_neighbor_inner_branches(rtree, (*it)->node, node, depth - 1, surrBranches);
-          }
-      }
+            get_neighbor_inner_branches(rtree, (*it)->node, node, depth - 1, surrBranches);
+        }
+    }
 }
 
 
@@ -212,7 +212,7 @@ void do_one_NNI(evo_tree& rtree, NNIMove& move, int cons){
     rtree.nodes[node2->id].daughters.push_back(node1Nei->node->id);
     rtree.nodes[node1Nei->node->id].parent = node2->id;
 
-    // node times and ages do not change, change length accordingly
+    // node times and ages do not change, change branch length accordingly
     // branch length should be positive if NNI is valid
     if(cons){
         int eid_uv = rtree.get_edge_id(node1->id, node2->id);
@@ -250,7 +250,11 @@ void do_one_NNI(evo_tree& rtree, NNIMove& move, int cons){
         // rtree.print_neighbors();
     }
 
-    assert(rtree.is_blen_valid());
+    if(!rtree.is_blen_valid()){
+        cout << "Branch length not valid after NNI!" << endl;
+        cout << rtree.make_newick() << endl;
+        exit(1);
+    }
 }
 
 
@@ -456,6 +460,7 @@ void do_random_NNIs(evo_tree& rtree, gsl_rng* r, int cons){
 
         cntNNI++;
     }
+
     if(debug)
 	    cout << "Tree perturbation: number of random NNI performed = " << cntNNI << endl;
 
@@ -993,7 +998,7 @@ void do_hill_climbing_NNI(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, 
             // tree cannot be worse if only 1 NNI is applied
             if(appliedNNIs.size() > 1){
                 // revert all applied NNIs (topolgy will be restored but not branch lengths or mutation rates)
-                do_all_NNIs(rtree, appliedNNIs, false, nni5, cons);
+                do_all_NNIs(rtree, appliedNNIs, false, nni5, 0);
 
                 if(debug){
                     cout << "tree after reverting all applied NNIs " << rtree.make_newick() << endl;
@@ -1050,46 +1055,86 @@ void do_hill_climbing_NNI(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, 
                     cout << "Newick String for current tree after applying best NNI is " << rtree.make_newick() << endl;
                 }
 
-
-                if(cons){
-                    if(debug) cout << "2nd global optimization" << endl;
-                    double min_nlnl = MAX_NLNL;
-                    opt_type.maxj = 0;
-                    while(-min_nlnl < appliedNNIs.at(0).newloglh){
-                        min_nlnl = MAX_NLNL;
-                        max_likelihood_BFGS(rtree, vobs, obs_decomp, comps, lnl_type, opt_type, min_nlnl);
+                bool isbetter = (curScore > appliedNNIs.at(0).newloglh - 0.1);
+                
+                while(!isbetter){
+                    if(cons){
+                        if(debug) cout << "global optimization after reduced NNI of size 1" << endl;
+                        double min_nlnl = MAX_NLNL;
+                        opt_type.maxj = 0;
+                        while(-min_nlnl < appliedNNIs.at(0).newloglh){
+                            min_nlnl = MAX_NLNL;
+                            max_likelihood_BFGS(rtree, vobs, obs_decomp, comps, lnl_type, opt_type, min_nlnl);
+                        }
+                        opt_type.maxj = 1;
+                        curScore = -min_nlnl;
+                        // if(debug){
+                        //     cout << "current tree " << rtree.make_newick() << endl;
+                        //     cout << "neighbors before updating lengths" << endl;
+                        //     rtree.print_neighbors();       
+                        // }           
+                        rtree.update_neighbor_lengths();
+                        // if(debug){
+                        //     cout << "neighbors after updating lengths" << endl;
+                        //     rtree.print_neighbors();       
+                        // }  
+                    }else{
+                        curScore = optimize_all_branches(rtree, vobs, obs_decomp, comps, lnl_type, 2, loglh_epsilon);
                     }
-                    opt_type.maxj = 1;
-                    curScore = -min_nlnl;
-                    // if(debug){
-                    //     cout << "current tree " << rtree.make_newick() << endl;
-                    //     cout << "neighbors before updating lengths" << endl;
-                    //     rtree.print_neighbors();       
-                    // }           
-                    rtree.update_neighbor_lengths();
-                    // if(debug){
-                    //     cout << "neighbors after updating lengths" << endl;
-                    //     rtree.print_neighbors();       
-                    // }  
-                }else{
-                    curScore = optimize_all_branches(rtree, vobs, obs_decomp, comps, lnl_type, 2, loglh_epsilon);
-                }
 
-                if(maxj){
-                    curScore = optimize_mutation_rates(rtree, vobs, obs_decomp, comps, lnl_type, tolerance);
-                }                
+                    if(maxj){
+                        curScore = optimize_mutation_rates(rtree, vobs, obs_decomp, comps, lnl_type, tolerance);
+                    }                
 
-                if(debug){
-                    cout << "current score " << curScore << ", best NNI score " << appliedNNIs.at(0).newloglh << endl;
-                    cout << "Current estimation of mutation rates are: " << endl;
-                    rtree.print_mutation_rates(lnl_type.model, lnl_type.only_seg);                    
+                    isbetter = (curScore > appliedNNIs.at(0).newloglh - 0.1);
+
+                    if(debug){
+                        cout << "current score " << curScore << ", best NNI score " << appliedNNIs.at(0).newloglh << endl;
+                        cout << "Current estimation of mutation rates are: " << endl;
+                        rtree.print_mutation_rates(lnl_type.model, lnl_type.only_seg);                    
+                    }
                 }
-                assert(curScore > appliedNNIs.at(0).newloglh - 0.1);
+                // assert(curScore > appliedNNIs.at(0).newloglh - 0.1);
             }else{
-                if(debug) cout << "Applied all NNIs successfully " << endl;
-                // failed sometimes
-                if(debug) cout << "current score " << curScore << ", best NNI score " << appliedNNIs.at(0).newloglh << endl;
-                assert(curScore > appliedNNIs.at(0).newloglh - 0.1 && "Using one NNI reduces LogL");
+                if(debug){
+                    cout << "Applied all NNIs successfully " << endl;
+                    // failed sometimes
+                    cout << "current score " << curScore << ", best NNI score " << appliedNNIs.at(0).newloglh << endl;
+                }
+                bool isbetter = (curScore > appliedNNIs.at(0).newloglh - 0.1);
+                
+                while(!isbetter){
+                    if(cons){
+                        if(debug) cout << "global optimization after original NNI of size 1" << endl;
+                        double min_nlnl = MAX_NLNL;
+                        opt_type.maxj = 0;
+                        while(-min_nlnl < appliedNNIs.at(0).newloglh){
+                            min_nlnl = MAX_NLNL;
+                            max_likelihood_BFGS(rtree, vobs, obs_decomp, comps, lnl_type, opt_type, min_nlnl);
+                        }
+                        opt_type.maxj = 1;
+                        curScore = -min_nlnl;
+                        // if(debug){
+                        //     cout << "current tree " << rtree.make_newick() << endl;
+                        //     cout << "neighbors before updating lengths" << endl;
+                        //     rtree.print_neighbors();       
+                        // }           
+                        rtree.update_neighbor_lengths();
+                        // if(debug){
+                        //     cout << "neighbors after updating lengths" << endl;
+                        //     rtree.print_neighbors();       
+                        // }  
+                    }else{
+                        curScore = optimize_all_branches(rtree, vobs, obs_decomp, comps, lnl_type, 2, loglh_epsilon);
+                    }
+
+                    if(maxj){
+                        curScore = optimize_mutation_rates(rtree, vobs, obs_decomp, comps, lnl_type, tolerance);
+                    } 
+
+                    isbetter = (curScore > appliedNNIs.at(0).newloglh - 0.1);
+                }
+
             }
             totalNNIApplied++;
 

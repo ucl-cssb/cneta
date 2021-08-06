@@ -20,9 +20,6 @@ const double ERROR_X = 1.0e-4;
 const double MIN_MRATE = 1.0e-20;
 // The maximum mutation rates allowed
 const double MAX_MRATE = 1;
-// The minimum age ratio allowed
-const double MIN_RATIO = 1e-2;
-const double MAX_RATIO = 0.99;
 
 
 // bundle of variables used in optimization (values from input)

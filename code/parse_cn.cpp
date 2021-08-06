@@ -151,18 +151,26 @@ vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int &num_tot
       }
 
       //cout << sample-1 << "\t" << counter << endl;
-      int chr = atoi( split[1].c_str());  // chr
-      int sid = atoi( split[2].c_str());  // segment ID
+      int chr = atoi(split[1].c_str());  // chr
+      int sid = atoi(split[2].c_str());  // segment ID
       int cn = -1;
       if(is_total){
-          cn = atoi( split[3].c_str());  // copy number
+          cn = atoi(split[3].c_str());  // copy number
+          if(cn < 0){
+              cout << "Negative copy numbers in line " << line << "!" << endl;
+              exit(1);
+          }
           if(cn > cn_max){
               cout << "copy number " << cn << " is decreased to " << cn_max << endl;
               cn = cn_max;
           }
       }else{
-          int cn1 = atoi( split[3].c_str());  // copy number
-          int cn2 = atoi( split[4].c_str());  // copy number
+          int cn1 = atoi(split[3].c_str());  // copy number
+          int cn2 = atoi(split[4].c_str());  // copy number
+          if(cn1 < 0 || cn2 < 0){
+              cout << "Negative copy numbers in line " << line << "!" << endl;
+              exit(1);
+          }          
           cn = allele_cn_to_state(cn1, cn2);
           if(cn > cn_max){
               cout << "copy number " << cn << " is larger than " << cn_max << "! Please decrease the copy number or increase maximum copy number allowed!" << endl;

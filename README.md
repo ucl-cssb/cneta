@@ -195,8 +195,14 @@ For whole genome doubling, chr is assigned to 0 and seg_ID is assigned to -1.
 <!-- ## How to prepare MP trees -->
 ## Input
 The initial trees for tree searching can be obtained by maximum parsimony methods.
-* (Required) A file containing copy numbers for all the tumor samples and the normal sample (*-cn.txt.gz or *-allele-cn.txt.gz)
-* (Optional) A file containing the timing information of tumor samples (*-rel-times.txt)
+* (Required) A file containing integer absolute copy numbers for all the tumor samples and the normal sample (*-cn.txt.gz or *-allele-cn.txt.gz).
+
+   There need to be four colomns, separtate by space, in this file: sample_ID, chr_ID, bin_ID, CN. Each column is an integer.
+   Either compressed file or uncompressed file is fine.
+
+* (Optional) A file containing the timing information of tumor samples (*-rel-times.txt).
+
+  There need to be three colomns, separtate by space, in this file: sample_ID, time relative to 1st sample in year (float number), patient age at the time of sampling (integer). 
 
 
 There are 4 running modes in svtreeml.
