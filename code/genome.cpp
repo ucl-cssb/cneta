@@ -1,8 +1,8 @@
 #include "genome.hpp"
 
-// using namespace std;
 
 
+/****************** mutation *********************/
 mutation::mutation(const int& _eid, const int& _type, const double& _btime, const double& _gtime, int _chr, int _seg):
 type(_type), btime(_btime), gtime(_gtime), edge_id(_eid), chr(_chr), seg(_seg){
 }
@@ -13,6 +13,8 @@ void mutation::print() const{
 }
 
 
+/****************** segment *********************/
+segment::segment(){};
 
 segment::segment(const int& _chr, const int& _seg_id):
 chr(_chr), seg_id(_seg_id){
@@ -26,13 +28,13 @@ segment::segment(const segment& _s2){
 }
 
 
-
+/****************** genome *********************/
 genome::genome(){};
 
 genome::genome(const genome& _g2) {
   chrs.assign(_g2.chrs.begin(), _g2.chrs.end() );
 
-  chr_lengths.assign(_g2.chr_lengths.begin(), _g2.chr_lengths.end() );
+  // chr_lengths.assign(_g2.chr_lengths.begin(), _g2.chr_lengths.end() );
   node_id = _g2.node_id;
 
   cn_profile.clear();
@@ -47,21 +49,18 @@ genome::genome(const genome& _g2) {
   }
 
   nmuts.assign(_g2.nmuts.begin(), _g2.nmuts.end());
-
   mutations.assign(_g2.mutations.begin(), _g2.mutations.end());
-
-  mean_dup_size = _g2.mean_dup_size;
-  mean_del_size = _g2.mean_del_size;
 }
 
 // create a genome with nchr x nseg
 genome::genome(const int& _nchr, const int& _nseg){
   for(int i = 0; i < _nchr; ++i){
-    chr_lengths.push_back(_nseg);
+    // chr_lengths.push_back(_nseg);
 
     vector<segment> chr;
+    chr.resize(_nseg);
     for(int j = 0; j < _nseg; ++j){
-      chr.push_back( segment(i,j) );
+      chr.push_back(segment(i,j));
       cn_profile[i][j] = 0;
       allele_cn_profile[i][j] = 0;
     }
@@ -75,9 +74,9 @@ genome::genome(const int& _nchr, const int& _nseg){
 // create a genome with nchr x nseg_i, allowing different germline ploidy
 // allow different number of segs on different chromosmes
 genome::genome(const int& _nchr, const vector<int>& _nsegs, const int& ploidy){
-  for(int p=0; p<ploidy; ++p){
+  for(int p = 0; p < ploidy; ++p){
       for(int i = 0; i < _nchr; ++i){
-        chr_lengths.push_back(_nsegs[i]);
+        // chr_lengths.push_back(_nsegs[i]);
 
         vector<segment> chr;
         for(int j = 0; j < _nsegs[i]; ++j){
@@ -97,7 +96,7 @@ genome::genome(const int& _nchr, const vector<int>& _nsegs, const int& ploidy){
 // create a genome with varying chromosome sizes
 genome::genome(const vector<int>& _chr_lens){
   for(int i = 0; i < _chr_lens.size(); ++i){
-    chr_lengths.push_back(_chr_lens[i]);
+    // chr_lengths.push_back(_chr_lens[i]);
 
     vector<segment> chr;
     for(int j = 0; j < _chr_lens[i]; ++j){
@@ -115,7 +114,7 @@ genome::genome(const vector<int>& _chr_lens){
 genome::genome(const vector<int>& _chr_lens, const int& ploidy){
   for(int p=0; p<ploidy; ++p){
     for(int i = 0; i < _chr_lens.size(); ++i){
-      chr_lengths.push_back(_chr_lens[i]);
+      // chr_lengths.push_back(_chr_lens[i]);
 
       vector<segment> chr;
       for(int j = 0; j < _chr_lens[i]; ++j){
@@ -133,10 +132,8 @@ genome::genome(const vector<int>& _chr_lens, const int& ploidy){
 
 // Compute total copy number
 void genome::calculate_cn(){
-  map<int, map<int,int> >::iterator nit1;
-  map<int,int>::iterator nit2;
-  for(nit1 = cn_profile.begin(); nit1 != cn_profile.end(); ++nit1){
-    for(nit2 = nit1->second.begin(); nit2 != nit1->second.end(); ++nit2){
+  for(map<int, map<int,int>>::iterator nit1 = cn_profile.begin(); nit1 != cn_profile.end(); ++nit1){
+    for(map<int,int>::iterator nit2 = nit1->second.begin(); nit2 != nit1->second.end(); ++nit2){
         nit2->second = 0;
     }
   }
@@ -171,10 +168,8 @@ void genome::calculate_cn(){
 
 // Compute allele-specific copy number
 void genome::calculate_allele_cn(){
-  map<int, map<int,int> >::iterator nit1;
-  map<int,int>::iterator nit2;
-  for(nit1 = allele_cn_profile.begin(); nit1 != allele_cn_profile.end(); ++nit1){
-      for(nit2 = nit1->second.begin(); nit2 != nit1->second.end(); ++nit2){
+  for(map<int, map<int,int> >::iterator nit1 = allele_cn_profile.begin(); nit1 != allele_cn_profile.end(); ++nit1){
+      for(map<int,int>::iterator nit2 = nit1->second.begin(); nit2 != nit1->second.end(); ++nit2){
           nit2->second = 0;
       }
   }
@@ -187,29 +182,25 @@ void genome::calculate_allele_cn(){
     for(int j = 0; j < chrs[i].size(); ++j){
       segment s = chrs[i][j];
       // cout << "#####:" << "\t" << i%44 << "\t" << s.seg_id << endl;
-      allele_cn_profile[i%44][s.seg_id]++;
+      allele_cn_profile[i % (NUM_CHR * NORM_PLOIDY)][s.seg_id]++;
     }
   }
 }
 
 void genome::print_muts() const{
-  cout << "\tMUTATIONS   (" << node_id+1 << ")  dup, del, crg, crl, wgd:";
-  for(int i = 0; i <  nmuts.size(); ++i) cout << "\t" << nmuts[i];
+  cout << "\tMUTATIONS   (" << node_id+1 << ") duplication, deletion, gain, loss, WGD:";
+  for(int i = 0; i < nmuts.size(); ++i) cout << "\t" << nmuts[i];
   cout << endl;
   //cout << "\t";
   //for(int i = 0; i <  mutations.size(); ++i) cout << "\t" << mutations[i].edge_id+1 << "," << mutations[i].type << "," << mutations[i].btime << "," << mutations[i].gtime;
   //cout << endl;
 }
 
-void genome::print_muts(ostream& stream) const{
-  vector<string> stype;
-  stype.push_back("dup");
-  stype.push_back("del");
-  stype.push_back("crg");
-  stype.push_back("crl");
-  stype.push_back("wgd");
 
-  stream << "MUTATIONS   (" << node_id+1 << ")  dup, del, crg, crl, wgd:";
+void genome::print_muts(ostream& stream) const{
+  vector<string> stype{"duplication", "deletion", "gain", "loss", "WGD"};
+
+  stream << "MUTATIONS   (" << node_id+1 << ") duplication, deletion, gain, loss, WGD:";
   for(int i = 0; i <  nmuts.size(); ++i) stream << "\t" << nmuts[i];
   stream << endl;
   stream << "\teid\ttype\ttime" << endl;
@@ -223,10 +214,9 @@ void genome::print_cn(){
   calculate_cn();
 
   // cn is stored as [chr][seg_id][count]
-  map<int, map<int,int> >::const_iterator it1;
   map<int,int>::const_iterator it2;
   cout << "\tCOPY NUMBER (" << node_id+1 << "):" << endl;
-  for(it1 = cn_profile.begin(); it1 != cn_profile.end(); ++it1){
+  for(map<int, map<int,int> >::const_iterator it1 = cn_profile.begin(); it1 != cn_profile.end(); ++it1){
     for(it2 = it1->second.begin(); it2 != it1->second.end(); ++it2){
       cout << "\t" << it1->first+1 << "_" << it2->first;
     }
@@ -254,24 +244,22 @@ void genome::print() const{
 void genome::write(ogzstream& of){
   calculate_cn();
 
-  map<int, map<int,int> >::const_iterator it1;
-  map<int,int>::const_iterator it2;
-  for(it1 = cn_profile.begin(); it1 != cn_profile.end(); ++it1){
-    for(it2 = it1->second.begin(); it2 != it1->second.end(); ++it2){
+  for(map<int, map<int,int> >::const_iterator it1 = cn_profile.begin(); it1 != cn_profile.end(); ++it1){
+    for(map<int,int>::const_iterator it2 = it1->second.begin(); it2 != it1->second.end(); ++it2){
       // sample and chr starts with 1; segment starts with 0
       of << node_id+1 << "\t" << it1->first+1 << "\t" << it2->first << "\t" << it2->second << endl;
     }
   }
 }
 
-void genome::write_allele_cn(ogzstream& of){
+void genome::write_allele_cn(ogzstream& of, const vector<int>& chr_lengths){
   int debug = 0;
   calculate_allele_cn();
 
   // cout << "Writing allele-specific copy number " << endl;
   for(int i = 0; i < allele_cn_profile.size()/2; i++){
      map<int,int> segs1 = allele_cn_profile[i];
-     map<int,int> segs2 = allele_cn_profile[i+NUM_CHR];
+     map<int,int> segs2 = allele_cn_profile[i + NUM_CHR];
      // cout << i << "\t" << segs1.size() << "\t" << segs2.size() << endl;
      // Find the id of the last segment since some segment may get lost
      int max_size = chr_lengths[i];
@@ -280,29 +268,25 @@ void genome::write_allele_cn(ogzstream& of){
          int cn1, cn2;
          if (segs1.find(j) == segs1.end()) {
              cn1 = 0;
-         }
-         else{
+         }else{
              cn1 = segs1[j];
          }
          if (segs2.find(j) == segs2.end()) {
              cn2 = 0;
-         }
-         else{
+         }else{
              cn2 = segs2[j];
          }
-        of << node_id+1 << "\t" << i+1 << "\t" << j << "\t" << cn1 << "\t" << cn2 << endl;
+         of << node_id+1 << "\t" << i+1 << "\t" << j << "\t" << cn1 << "\t" << cn2 << endl;
     }
   }
 }
 
 vector<int> genome::get_cn_vector(){
   calculate_cn();
-  vector<int> cns;
 
-  map<int, map<int,int> >::const_iterator it1;
-  map<int,int>::const_iterator it2;
-  for(it1 = cn_profile.begin(); it1 != cn_profile.end(); ++it1){
-    for(it2 = it1->second.begin(); it2 != it1->second.end(); ++it2){
+  vector<int> cns;
+  for(map<int, map<int,int> >::const_iterator it1 = cn_profile.begin(); it1 != cn_profile.end(); ++it1){
+    for(map<int,int>::const_iterator it2 = it1->second.begin(); it2 != it1->second.end(); ++it2){
       cns.push_back(it2->second);
     }
   }
@@ -310,17 +294,17 @@ vector<int> genome::get_cn_vector(){
 }
 
 
-
 // Find the number of a specific chromosome
 int get_ploidy_at_chr(const genome& g, int c){
     int ploidy_at_c = 0;
     for(int i = 0; i < g.chrs.size(); i++){
-        if(i%NUM_CHR == c){
+        if(i % NUM_CHR == c){
             ploidy_at_c += 1;
         }
     }
     return ploidy_at_c;
 }
+
 
 // Find the current maximum copy number for one chromosome
 int get_max_cn_chr(genome& g, int c){
@@ -442,7 +426,7 @@ int get_max_cn_genome(genome& g){
 int get_num_chr(const genome& g){
     int n = 0;
     for(int i = 0; i < g.chrs.size(); i++){
-        if(g.chrs[i].size()>0){
+        if(g.chrs[i].size() > 0){
             n++;
         }
     }
@@ -454,7 +438,7 @@ void get_available_chr(const genome& g, vector<int>& available_chrs){
     available_chrs.clear();
     for(int i = 0; i < g.chrs.size(); i++){
         // cout << "size of chr " << i << " is " << g.chrs[i].size() << endl;
-        if(g.chrs[i].size()>0){
+        if(g.chrs[i].size() > 0){
             available_chrs.push_back(i);
         }
     }

@@ -8,6 +8,8 @@
 
 void set_pmat(const evo_tree& rtree, int Ns, int nstate, int model, int cn_max, const vector<int>& knodes, vector<double>& blens, vector<double*>& pmat_per_blen, ofstream& fout);
 
+void set_pmat_decomp(const evo_tree& rtree, MAX_DECOMP& max_decomp, int nstate, const vector<int>& knodes, DIM_DECOMP& dim_decomp, PMAT_DECOMP& pmat_decomp, ofstream& fout);
+
 void print_tree_state(const evo_tree& rtree, const vector<vector<int>>& S_sk_k, int nstate);
 
 // Get the states of the tree from likelihood table at one site, starting from MRCA

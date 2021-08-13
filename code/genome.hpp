@@ -8,7 +8,7 @@
 const int N_MUT_TYPE = 5;
 
 
-class mutation {
+class mutation{
 public:
   int type;
   double btime;
@@ -28,6 +28,7 @@ public:
   int chr;
   int seg_id;
 
+  segment();
   segment(const int& _chr, const int& _seg_id);
 
   segment(const segment& _s2);
@@ -35,9 +36,9 @@ public:
 
 
 
-class genome {
+class genome{
 public:
-  vector<int> chr_lengths;
+  // vector<int> chr_lengths;
   vector<vector<segment>> chrs;
   int node_id;
 
@@ -49,10 +50,6 @@ public:
   vector<int> nmuts;
   // store mutations
   vector<mutation> mutations;
-
-  // mean of exp size distributions
-  double mean_dup_size;
-  double mean_del_size;
 
   genome();
   genome(const genome& _g2);
@@ -77,7 +74,7 @@ public:
 
   void print_cn();
   void write(ogzstream& of);
-  void write_allele_cn(ogzstream& of);
+  void write_allele_cn(ogzstream& of, const vector<int>& chr_lengths);
 
   vector<int> get_cn_vector();
 };

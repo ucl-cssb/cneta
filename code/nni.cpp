@@ -253,7 +253,7 @@ void do_one_NNI(evo_tree& rtree, NNIMove& move, int cons){
     if(!rtree.is_blen_valid()){
         cout << "Branch length not valid after NNI!" << endl;
         cout << rtree.make_newick() << endl;
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 }
 
@@ -419,7 +419,7 @@ NNIMove get_random_NNI(Branch& branch, gsl_rng* r){
             cnt++;
         }
     }
-	  assert(*nni.node1Nei_it != NULL && *nni.node2Nei_it != NULL);
+	assert(*nni.node1Nei_it != NULL && *nni.node2Nei_it != NULL);
     assert(((Neighbor*)*nni.node1Nei_it)->direction != TOWARD_ROOT && ((Neighbor*)*nni.node2Nei_it)->direction != TOWARD_ROOT);
     nni.newloglh = 0.0;
 
@@ -438,11 +438,11 @@ void do_random_NNIs(evo_tree& rtree, gsl_rng* r, int cons){
     // half the number of internal branches in a rooted tree
     numRandomNNI = floor((rtree.nleaf - 2) * 0.5);
 
-    while (cntNNI < numRandomNNI){
+    while(cntNNI < numRandomNNI){
         nniBranches.clear();
         get_NNI_branches(rtree, nniBranches, &rtree.nodes[rtree.nleaf], NULL);
 
-        if(nniBranches.size() == 0) break;
+        if(nniBranches.empty()) break;
 
         // Convert the map data structure Branches to vector of Branch
         vector<Branch> vectorNNIBranches;
@@ -695,7 +695,7 @@ NNIMove get_best_NNI_for_bran(evo_tree& rtree, map<int, vector<vector<int>>>& vo
                     //   trees[cnt]->print();
                     //   cout << trees[cnt]->make_newick() << endl;
                     //   cout << "Tip timings incorrect after optimizing neighbor of " << node1->id + 1 << endl;
-                    //   exit(1);
+                    //   exit(EXIT_FAILURE);
                     // }
                     if(debug){
                         cout << "tree after " << trees[cnt]->make_newick() << endl;
@@ -719,7 +719,7 @@ NNIMove get_best_NNI_for_bran(evo_tree& rtree, map<int, vector<vector<int>>>& vo
             //   trees[cnt]->print();
             //   cout << trees[cnt]->make_newick() << endl;
             //   cout << "Tip timings incorrect after optimizing neighbor of " << node1->id + 1 << ", " << node2->id + 1 << endl;
-            //   exit(1);
+            //   exit(EXIT_FAILURE);
             // }
 
             node1->findNeighbor(node2)->getLength(nniMoves2[cnt].newLen[0]);
@@ -740,7 +740,7 @@ NNIMove get_best_NNI_for_bran(evo_tree& rtree, map<int, vector<vector<int>>>& vo
                     //   trees[cnt]->print();
                     //   cout << trees[cnt]->make_newick() << endl;
                     //   cout << "Tip timings incorrect after optimizing neighbor of " << node2->id + 1 << endl;
-                    //   exit(1);
+                    //   exit(EXIT_FAILURE);
                     // }
 
                     node2->findNeighbor((*it)->node)->getLength(nniMoves2[cnt].newLen[i]);
@@ -826,7 +826,7 @@ void do_hill_climbing_NNI(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, 
     int numSteps = 0;
     int max_steps = rtree.nleaf - 1;
     int cons = lnl_type.cons;
-    int maxj = opt_type.maxj;
+    int maxj = opt_type.maxj;  // original maxj
     int miter = opt_type.miter;
     double tolerance = opt_type.tolerance;
 
@@ -963,7 +963,7 @@ void do_hill_climbing_NNI(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, 
                 min_nlnl = MAX_NLNL;
                 max_likelihood_BFGS(rtree, vobs, obs_decomp, comps, lnl_type, opt_type, min_nlnl);
             } 
-            opt_type.maxj = 1;           
+            opt_type.maxj = maxj;           
             curScore = -min_nlnl;
 
             // need to keep neighbours updated in NNI after updating lengths of all edges, which will be used in NNIs
@@ -1024,7 +1024,7 @@ void do_hill_climbing_NNI(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, 
                     cout << "Wrong node age or time after reverting NNIs" << endl;
                     rtree.print();
                     cout << rtree.make_newick() << endl;
-                    exit(1);
+                    exit(EXIT_FAILURE);
                 }
          
                 if(maxj) restore_mutation_rates(rtree, muvec);
@@ -1066,7 +1066,7 @@ void do_hill_climbing_NNI(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, 
                             min_nlnl = MAX_NLNL;
                             max_likelihood_BFGS(rtree, vobs, obs_decomp, comps, lnl_type, opt_type, min_nlnl);
                         }
-                        opt_type.maxj = 1;
+                        opt_type.maxj = maxj;
                         curScore = -min_nlnl;
                         // if(debug){
                         //     cout << "current tree " << rtree.make_newick() << endl;
@@ -1112,7 +1112,7 @@ void do_hill_climbing_NNI(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, 
                             min_nlnl = MAX_NLNL;
                             max_likelihood_BFGS(rtree, vobs, obs_decomp, comps, lnl_type, opt_type, min_nlnl);
                         }
-                        opt_type.maxj = 1;
+                        opt_type.maxj = maxj;
                         curScore = -min_nlnl;
                         // if(debug){
                         //     cout << "current tree " << rtree.make_newick() << endl;

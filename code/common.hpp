@@ -32,7 +32,7 @@
 using namespace std;
 
 
-enum MODEL {MK, BOUNDT, BOUNDA, DECOMP};
+enum MODEL {MK, BOUNDT, BOUNDA, DECOMP, INFINITE = 3};
 
 const int MAX_AGE = 100;
 

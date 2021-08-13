@@ -566,35 +566,34 @@ evo_tree generate_coal_tree(const int& nsample, gsl_rng* r, long unsigned (*fp_m
 
 
 // randomly assign leaf edges to time points t0, t1, t2, t3, ...
+// adjust terminal branch lengths accordingly
 void assign_tip_times(double delta_t, int Ns, gsl_rng* r, vector<double>& tobs, const vector<int>& edges, vector<double>& lengths){
-    if(delta_t > 0){
-      tobs.clear(); // clear the sample time differences if there are some
+    tobs.clear(); // clear the sample time differences if there are some
 
-      cout << "assigning temporal structure" << endl;
+    cout << "assigning temporal structure" << endl;
 
-      bool assign0 = false;
-      int bcount = 0;
-      int num_diff = Ns; // maximum of tips with different times
+    bool assign0 = false;
+    int bcount = 0;
+    int num_diff = Ns; // maximum of tips with different times
 
-      for(int l = 1; l < edges.size(); l=l+2){
+    for(int l = 1; l < edges.size(); l = l + 2){
         if(edges[l] < Ns){
-          int ind = 0;
+            int ind = 0;
 
-          if(!assign0){
+            if(!assign0){
             ind = 0;
             assign0 = true;
-          }else{
+            }else{
             ind = gsl_rng_uniform_int(r, num_diff);
-          }
+            }
 
-          double stime = ind * delta_t;
-          cout << "\t sample / sampling time point :" << edges[l] + 1 << "\t" << stime << endl;
-          lengths[bcount] = lengths[bcount] + stime;
-          // Store the sampling time for time scaling by the age of a patient
-          tobs.push_back(stime);
+            double stime = ind * delta_t;
+            cout << "\t sample / sampling time point :" << edges[l] + 1 << "\t" << stime << endl;
+            lengths[bcount] = lengths[bcount] + stime;
+            // Store the sampling time for time scaling by the age of a patient
+            tobs.push_back(stime);
         }
         bcount++;
-      }
     }
 }
 
@@ -619,11 +618,10 @@ evo_tree generate_random_tree(int Ns, gsl_rng* r, long unsigned (*fp_myrng)(long
       test_tree0.print();
     }
 
-    vector<double> tobs = vector<double>(Ns, 0);
-    if(!cons){
-        age = MAX_AGE;
+    vector<double> tobs(Ns, 0.0);
+    if(delta_t > 0){
+        assign_tip_times(delta_t, Ns, r, tobs, edges, lengths);
     }
-    assign_tip_times(delta_t, Ns, r, tobs, edges, lengths);
 
     evo_tree test_tree(Ns + 1, edges, lengths);
     if(debug){
@@ -638,10 +636,14 @@ evo_tree generate_random_tree(int Ns, gsl_rng* r, long unsigned (*fp_myrng)(long
       double tree_height = runiform(r, min_height, max_height);
       double old_tree_height = get_tree_height(test_tree.get_node_times());
       double ratio = tree_height / old_tree_height;
-      // test_tree.scale_time(ratio);
-      // Only scaling internal nodes to allow large differences at the tip
-      test_tree.scale_time_internal(ratio);
-
+          
+      if(delta_t > 0){
+        // Only scaling internal nodes to allow large differences at the tip
+        test_tree.scale_time_internal(ratio);
+      }else{
+        test_tree.scale_time(ratio);
+      }
+      
       if(debug){
           cout << "Tree height before scaling " << old_tree_height << endl;
           cout << "Scaling ratio " << ratio << endl;
@@ -1171,7 +1173,7 @@ evo_tree read_tree_info(const string& filename, const int& Ns, int debug){
     }
   }else{
     std::cerr << "Error: open of tree data unsuccessful: " <<  filename << std::endl;
-    exit(1);
+    exit(EXIT_FAILURE);
   }
 
   evo_tree new_tree(Ns + 1, edges);
@@ -1190,7 +1192,7 @@ evo_tree read_tree_info(const string& filename, const int& Ns, int debug){
 //     }
 //     else{
 //         std::cerr << "Error: open of tree data unsuccessful: " <<  filename << std::endl;
-//         exit(1);
+//         exit(EXIT_FAILURE);
 //     }
 //
 //     evo_tree new_tree(Ns + 1, edges);

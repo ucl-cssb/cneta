@@ -722,7 +722,7 @@ void evo_tree::update_node_time(int node_id, double delta){
 }
 
 
-// Find the number of mutations on each branch
+// mu: overall mutation rates for all branches
 vector<int> evo_tree::get_nmuts(const vector<double>& mu){
     vector<int> nmuts;
     for(int i = 0; i < this->edges.size(); i++){
@@ -731,6 +731,7 @@ vector<int> evo_tree::get_nmuts(const vector<double>& mu){
     }
     return nmuts;
 }
+
 
 void evo_tree::compute_branch_direction(Node* node, Node* dad){
   if(!node){
@@ -995,7 +996,7 @@ vector<double> evo_tree::get_ratio_from_age(){
                 cout << endl;
                 print();
                 cout << make_newick() << endl;
-                exit(1);
+                exit(EXIT_FAILURE);
             }
             ratios[nj - root_node_id] = ratio;
         }
@@ -1043,7 +1044,7 @@ void evo_tree::update_edges_from_ratios(const vector<double>& ratios, const vect
         cout << "\nBranch length (" << root_node_id + 1 << ", " << nj + 1 << ") " << blen << " smaller than " << BLEN_MIN << endl;
         this->print();
         cout << make_newick() << endl;
-        exit(1);  
+        exit(EXIT_FAILURE);  
     }
 
     set_edge_length(root_node_id, nj, blen);
@@ -1085,7 +1086,7 @@ void evo_tree::update_edges_from_ratios(const vector<double>& ratios, const vect
                   cout << "\t" << r;
               }
               cout << endl;              
-              exit(1);
+              exit(EXIT_FAILURE);
             }
             set_edge_length(ni, nj, blen);
         }

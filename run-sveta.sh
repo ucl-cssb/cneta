@@ -1,4 +1,4 @@
-# This script is used to run program sveta, which can generate a random colesence tree (of tumor samples from a single patient) and mutations along the tree branches.
+# This script is used to run program sveta, which can generate a random colesence tree (of tumor samples from a single patient) and structual variations along the tree branches.
 
 seed=1  # used for reproducing the results
 verbose=0   # Whether or not to print debug information
@@ -13,7 +13,7 @@ beta=1.563e-3  # exponential growth rate
 gtime=0.002739726 # generation time in year
 age=60  # Age of the patient at first sample
 cons=1  # Whether the tree height is constrained by age or not
-dt=2  # time step for simulating different sampling times (must be > 0 when cons=1)
+dt=2  # time step for simulating different sampling times
 ################################################################################
 
 
@@ -21,8 +21,8 @@ dt=2  # time step for simulating different sampling times (must be > 0 when cons
 model=2 # Model of evolution. 0: Mk, 1: one-step bounded (total), 2: one-step bounded (allele-specific), 3: Poisson
 mode=1  # 0: Simuting genome in fix-sized bins, 1: Simulating genome in segments of random size
 seg_max=1000  # Maximum number of segments on the genome
-fix_seg=1  # Whether or not to fix the number of segments to be seg_max
-method=1  # Simulating method. 0: waiting time, 1: direct sequences
+fix_nseg=1  # Whether or not to fix the number of segments to be seg_max
+method=1  # Simulating method. 0: waiting times, 1: sequences
 
 cn_max=4  # Maximum copy number allowed (program failed due to memory issue when > 13)
 # rates of duplication, deletion, chromosome gain, chromosome loss, wgd
@@ -51,7 +51,8 @@ prefix=""
 
 echo "Start running sveta"
 
-./code/sveta --tree_file "${tree_file}" -p "${prefix}"  -o $dir -r $Ns -n $Nsim --mode $mode --method $method --fix_seg $fix_seg --seg_max $seg_max --cn_max $cn_max --dup_rate $r1 --del_rate $r2 --chr_gain $r3 --chr_loss $r4 --wgd $r5 --dup_size $s1 --del_size $s2 -e $Ne -b $beta -t $dt --verbose $verbose --constrained $cons --model $model --age $age --seed $seed > $dir/std_sveta_cons${cons}_model${model}_method${method}
+# valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all --track-origins=yes -v 
+/usr/bin/time ./code/sveta --tree_file "${tree_file}" -p "${prefix}" -o $dir -r $Ns -n $Nsim --mode $mode --method $method --fix_nseg $fix_nseg --seg_max $seg_max --cn_max $cn_max --dup_rate $r1 --del_rate $r2 --chr_gain $r3 --chr_loss $r4 --wgd $r5 --dup_size $s1 --del_size $s2 -e $Ne -b $beta --gtime $gtime -t $dt --verbose $verbose --constrained $cons --model $model --age $age --seed $seed > $dir/std_sveta_cons${cons}_model${model}_method${method}
 
 wait
 

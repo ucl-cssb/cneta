@@ -1012,7 +1012,7 @@ void update_variables_transformed(evo_tree& rtree, double *x, LNL_TYPE& lnl_type
       rtree.print();
       cout << rtree.make_newick() << endl;
       cout << "Tip timings inconsistent with observed data after updating the optimized tree!" << endl;
-      exit(1);
+      exit(EXIT_FAILURE);
     }
 
     if(opt_type.maxj){
@@ -1139,7 +1139,7 @@ void lbfgsb(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& ob
 
 	if(nREPORT <= 0){
 		cerr << "REPORT must be > 0(method = \"L-BFGS-B\")" << endl;
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
 	switch(trace){
@@ -1166,7 +1166,7 @@ void lbfgsb(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& ob
             f = optimGradient(rtree, vobs, obs_decomp, comps, lnl_type, opt_type, n, x, g);
 			if(!isfinite(f)){
 				cerr << "L-BFGS-B needs finite values of 'fn'" << endl;
-				exit(1);
+				exit(EXIT_FAILURE);
 			}
 		}else if(strncmp(task, "NEW_X", 5) == 0){
 			iter++;
@@ -1332,7 +1332,7 @@ void max_likelihood_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, O
           cout << "Tip timings inconsistent with observed data when doing BFGS!" << endl;
           rtree.print();
           cout << rtree.make_newick() << endl;         
-          exit(1);
+          exit(EXIT_FAILURE);
         }
 
         vector<double> ratios = rtree.get_ratio_from_age();
@@ -1432,7 +1432,7 @@ void max_likelihood_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, O
     // Check the validity of the tree
     if(cons && !is_tree_valid(rtree, lnl_type.max_tobs, patient_age, cons)){
       cout << "The optimized tree after BFGS " << rtree.make_newick() << " is not valid!" << endl;
-      exit(1);
+      exit(EXIT_FAILURE);
     }
 
     if(debug){
@@ -1454,10 +1454,12 @@ double optimize_one_branch_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& 
     if(debug){
         cout << "\tOptimizing the branch " << node1->id + 1 << ", " << node2->id + 1 << endl;
     }
-
+ 
     // does not optimize virtual branch from root
     assert(!((node1->id == rtree.nleaf && node2->id == rtree.nleaf - 1) || (node2->id == rtree.nleaf && node1->id == rtree.nleaf - 1)));
         
+    int maxj = opt_type.maxj;    // record orignal maxj
+
     rtree.current_it = (Neighbor*) node1->findNeighbor(node2);
     assert(rtree.current_it);
     rtree.current_it_back = (Neighbor*) node2->findNeighbor(node1);
@@ -1487,7 +1489,7 @@ double optimize_one_branch_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& 
     // cout << "\taddress of current_it after optimization " << rtree.current_it << endl;
 
     opt_type.opt_one_branch = 0;
-    opt_type.maxj = 1;
+    opt_type.maxj = maxj;
     
     if(debug){
         cout << "\tmax logl: " << -negative_lh << " optimized branch length " << rtree.edges[eid].length << endl;

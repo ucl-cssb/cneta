@@ -198,7 +198,7 @@ evo_tree read_tree_info(const string& filename, const int& Ns, int debug = 0);
 //     }
 //     else{
 //         std::cerr << "Error: open of tree data unsuccessful: " <<  filename << std::endl;
-//         exit(1);
+//         exit(EXIT_FAILURE);
 //     }
 //
 //     evo_tree new_tree(Ns+1, edges);

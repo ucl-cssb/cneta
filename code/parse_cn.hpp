@@ -92,12 +92,8 @@ vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int &num_tot
 vector<vector<int>> read_data_var_regions(const string& filename, const int& Ns, const int& cn_max, int& num_invar_bins, int& num_total_bins, int& seg_size, vector<int>&  obs_num_wgd, vector<vector<int>>& obs_change_chr, vector<int>& sample_max_cn, int model, int is_total = 1, int debug = 0);
 
 
-// Read the input copy numbers while converting runs of variable bins into segments of constant cn values and group them by chromosome
-map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filename, const int& Ns, const int& cn_max, int& num_invar_bins, int& num_total_bins, int &seg_size, vector<int>&  obs_num_wgd, vector<vector<int>>& obs_change_chr, vector<int>& sample_max_cn, int model, int is_total = 1, int debug = 0);
-
-
-// Read the input copy numbers as they are and group them by chromosome
-map<int, vector<vector<int>>> read_data_regions_by_chr(const string& filename, const int& Ns, const int& cn_max, int& num_invar_bins, int& num_total_bins, int& seg_size, vector<int>&  obs_num_wgd, vector<vector<int>>& obs_change_chr, vector<int>& sample_max_cn, int model, int incl_all = 1, int is_total = 1, int debug = 0);
+// Read the input copy numbers and group them by chromosome
+map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filename, const int& Ns, const int& cn_max, int& num_invar_bins, int& num_total_bins, int &seg_size, vector<int>&  obs_num_wgd, vector<vector<int>>& obs_change_chr, vector<int>& sample_max_cn, int model, int is_total = 1, int is_bin = 1, int incl_all = 1, int debug = 0);
 
 
 

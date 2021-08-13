@@ -185,7 +185,7 @@ vector<evo_tree> get_initial_trees(int init_tree, string dir_itrees, int Npop, c
               if(e->start == rtree.nleaf && e->end == rtree.nleaf - 1) continue;
               if(std::isnan(e->length)){
                   cout << "wrong branch lengths in the initial coalescence tree " << rtree.make_newick() << endl;
-                  exit(1);
+                  exit(EXIT_FAILURE);
               }
               // twice BLEN_MIN to avoid very small branch length
               if(e->length < 2 * BLEN_MIN || e->length > BLEN_MAX){
@@ -953,7 +953,10 @@ void find_ML_tree(string real_tstring, int total_chr, int num_total_bins, string
         do_evolutionary_algorithm(min_nlnl_tree, Npop, Ngen, init_tree, dir_itrees, max_static, rates, ssize, tolerance, miter, optim, Ne, beta, gtime);
     }else if(tree_search == 1){
         cout << "\nSearching tree space with hill climbing algorithm" << endl;
-        assert(Ns > 4);
+        if(Ns <= 4){
+            cout << "Hill climbing only support trees with at least 5 samples!" << endl;
+            exit(EXIT_FAILURE);
+        }
         do_hill_climbing(min_nlnl_tree, Npop, Ngen, init_tree, dir_itrees, rates, ssize, optim, Ne, beta, gtime);
     }else{
         cout << "\nSearching tree space exhaustively (only feasible for small trees)" << endl;
@@ -1057,7 +1060,7 @@ int main(int argc, char** const argv){
     ("mode", po::value<int>(&mode)->default_value(1), "running mode of the program (0: Compute maximum likelihood tree from copy number profile; 1: Test on example data; 2: Compute the likelihood of a given tree with branch length; 3: Compute the maximum likelihood of a given tree; 4: Infer ancestral states of a given tree from copy number profile)")
     ("bootstrap,b", po::value<int>(&bootstrap)->default_value(0), "doing bootstrap or not")
 
-    ("model,d", po::value<int>(&model)->default_value(2), "model of evolution (0: Mk, 1: one-step bounded (total), 2: one-step bounded (allele-specific, 3: independent Markov chains)")
+    ("model,d", po::value<int>(&model)->default_value(2), "model of evolution (0: Mk, 1: one-step bounded (total), 2: one-step bounded (allele-specific), 3: independent Markov chains)")
     ("constrained", po::value<int>(&cons)->default_value(1), "constraints on branch length (0: none, 1: fixed total time)")
     ("estmu,u", po::value<int>(&maxj)->default_value(0), "estimation of mutation rate (0: mutation rate fixed to be the given value, 1: estimating mutation rate)")
     ("optim", po::value<int>(&optim)->default_value(1), "method of optimization (0: Simplex, 1: L-BFGS-B)")
@@ -1215,7 +1218,7 @@ int main(int argc, char** const argv){
             cout << "\nAssuming independent Markov chains" << endl;
             if(!is_total){
                 cout << "This model only supports total copy number for now!" << endl;
-                exit(1);
+                exit(EXIT_FAILURE);
             }
             break;
         }
@@ -1233,7 +1236,6 @@ int main(int argc, char** const argv){
     map<int, vector<vector<int>>> data;
     cout << "\nReading input copy numbers" << endl;
     if(is_bin){
-        data = read_data_var_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins, Nchar, obs_num_wgd, obs_change_chr, sample_max_cn, model, is_total, debug);
         cout << "   Merging consecutive bins in the input" << endl;
     }else{
         if(incl_all){
@@ -1241,13 +1243,13 @@ int main(int argc, char** const argv){
             correct_bias = 0;
         }else{
             cout << "   Using variable input segments " << endl;
-        }
-        data = read_data_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins, Nchar, obs_num_wgd, obs_change_chr, sample_max_cn, model, incl_all, is_total);
+        }     
     }
+    data = read_data_var_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins, Nchar, obs_num_wgd, obs_change_chr, sample_max_cn, model, is_total, is_bin, incl_all, debug);
     // cout << "Number of invariant bins " << num_invar_bins << endl;
     if(num_total_bins == num_invar_bins){
         cout << "There are no variant segments in the input data!" << endl;
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     if(use_repeat){
         cout << "   Using site repeats to speed up likelihood computation " << endl;

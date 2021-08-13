@@ -932,48 +932,48 @@ double get_likelihood_decomp(evo_tree& rtree, map<int, vector<vector<int>>>& vob
          double blj = rtree.edges[rtree.nodes[k].e_ot[1]].length;
 
          // For WGD
-         if(max_wgd > 0){
-             pmati_wgd = new double[(dim_wgd)*(dim_wgd)];
-             pmatj_wgd = new double[(dim_wgd)*(dim_wgd)];
-             memset(pmati_wgd, 0.0, (dim_wgd)*(dim_wgd)*sizeof(double));
-             memset(pmatj_wgd, 0.0, (dim_wgd)*(dim_wgd)*sizeof(double));
-             if(pmats_wgd.count(bli) == 0){
-                 get_transition_matrix_bounded(qmat_wgd, pmati_wgd, bli, dim_wgd);
-                 pmats_wgd[bli] = pmati_wgd;
+         if(max_wgd > 0){           
+             if(pmats_wgd.find(bli) == pmats_wgd.end()){
+                pmati_wgd = new double[(dim_wgd)*(dim_wgd)];
+                memset(pmati_wgd, 0.0, (dim_wgd)*(dim_wgd)*sizeof(double));
+                get_transition_matrix_bounded(qmat_wgd, pmati_wgd, bli, dim_wgd);
+                pmats_wgd[bli] = pmati_wgd;
              }
-             if(pmats_wgd.count(blj) == 0){
-                 get_transition_matrix_bounded(qmat_wgd, pmatj_wgd, blj, dim_wgd);
-                 pmats_wgd[blj] = pmatj_wgd;
+             if(pmats_wgd.find(blj) == pmats_wgd.end()){
+                pmatj_wgd = new double[(dim_wgd)*(dim_wgd)];           
+                memset(pmatj_wgd, 0.0, (dim_wgd)*(dim_wgd)*sizeof(double));                 
+                get_transition_matrix_bounded(qmat_wgd, pmatj_wgd, blj, dim_wgd);
+                pmats_wgd[blj] = pmatj_wgd;
              }
          }
 
          // For chr gain/loss
-         if(max_chr_change > 0){
-             pmati_chr = new double[(dim_chr)*(dim_chr)];
-             pmatj_chr = new double[(dim_chr)*(dim_chr)];
-             memset(pmati_chr, 0.0, (dim_chr)*(dim_chr)*sizeof(double));
-             memset(pmatj_chr, 0.0, (dim_chr)*(dim_chr)*sizeof(double));
-             if(pmats_chr.count(bli) == 0){
+         if(max_chr_change > 0){       
+             if(pmats_chr.find(bli) == pmats_chr.end()){
+                 pmati_chr = new double[(dim_chr)*(dim_chr)];
+                 memset(pmati_chr, 0.0, (dim_chr)*(dim_chr)*sizeof(double));
                  get_transition_matrix_bounded(qmat_chr, pmati_chr, bli, dim_chr);
                  pmats_chr[bli] = pmati_chr;
              }
-             if(pmats_chr.count(blj) == 0){
+             if(pmats_chr.find(blj) == pmats_chr.end()){
+                 pmatj_chr = new double[(dim_chr)*(dim_chr)];
+                 memset(pmatj_chr, 0.0, (dim_chr)*(dim_chr)*sizeof(double));
                  get_transition_matrix_bounded(qmat_chr, pmatj_chr, blj, dim_chr);
                  pmats_chr[blj] = pmatj_chr;
              }
          }
 
          // For segment duplication/deletion
-         if(max_site_change > 0){
-             pmati_seg = new double[(dim_seg)*(dim_seg)];
-             pmatj_seg = new double[(dim_seg)*(dim_seg)];
-             memset(pmati_seg, 0.0, (dim_seg)*(dim_seg)*sizeof(double));
-             memset(pmatj_seg, 0.0, (dim_seg)*(dim_seg)*sizeof(double));
-             if(pmats_seg.count(bli) == 0){
+         if(max_site_change > 0){      
+             if(pmats_seg.find(bli) == pmats_seg.end()){
+                 pmati_seg = new double[(dim_seg)*(dim_seg)];
+                 memset(pmati_seg, 0.0, (dim_seg)*(dim_seg)*sizeof(double));
                  get_transition_matrix_bounded(qmat_seg, pmati_seg, bli, dim_seg);
                  pmats_seg[bli] = pmati_seg;
              }
-             if(pmats_seg.count(blj) == 0){
+             if(pmats_seg.find(blj) == pmats_seg.end()){
+                 pmatj_seg = new double[(dim_seg)*(dim_seg)];
+                 memset(pmatj_seg, 0.0, (dim_seg)*(dim_seg)*sizeof(double));
                  get_transition_matrix_bounded(qmat_seg, pmatj_seg, blj, dim_seg);
                  pmats_seg[blj] = pmatj_seg;
             }
@@ -1034,19 +1034,19 @@ double get_likelihood_decomp(evo_tree& rtree, map<int, vector<vector<int>>>& vob
   if(max_wgd > 0){
       delete [] qmat_wgd;
       for(auto m : pmats_wgd){
-          free(m.second);
+          delete [] m.second;
       }
   }
   if(max_chr_change > 0){
       delete [] qmat_chr;
       for(auto m : pmats_chr){
-          free(m.second);
+          delete [] m.second;
       }
   }
   if(max_site_change > 0){
       delete [] qmat_seg;
       for(auto m : pmats_seg){
-          free(m.second);
+          delete [] m.second;
       }
   }
 

@@ -14,6 +14,11 @@ prefix=sim-data-1   # The prefix of input files
 
 # The input parameters related to copy numbers
 input=$idir/"$prefix"-cn.txt.gz
+if [[ ! -f $input ]]; then
+  echo "Input file $input does not exit!"
+  exit 0
+fi
+
 is_total=1    # If yes, the input is total copy number
 # input=$idir/"$prefix"-allele-cn.txt.gz
 # whether or not the input copy number is for each bin. If not, the input copy number is read as it is. Or else, consecutive bins will be merged
@@ -25,7 +30,6 @@ cn_max=4  # Maximum copy number allowed
 # The input parameters that should be consistent with the simulation or real data
 Ns=3 # The number of regions
 cons=1  # Whether or not the tree is constrained by patient age
-age=60  # age of patient at first sample
 
 # The input file of sample timings (optional, required for estimating mutation rates)
 times=$idir/"$prefix"-rel-times.txt
@@ -94,8 +98,8 @@ if [[ $mode -eq 0 ]]; then
   suffix=m$model-o"$opt"-s"$tree_search"-cons${cons}-estmu${estmu}-"$prefix"
   mltree=$dir/MaxL-"$suffix".txt
 
-  # valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all --track-origins=yes -v
-  /usr/bin/time code/svtreeml -c $input -t "$times" --tree_file "$tree_file" --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change --is_bin $is_bin --incl_all $incl_all -s $Ns -p $Npop -g $Ngen -e $Nstop -r $tolerance -o $mltree -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $estmu --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode --speed_nni $speed_nni --seed $seed 2>&1  > $dir/std_svtreeml_"$suffix"
+  # valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all --track-origins=yes -v 
+  /usr/bin/time ./code/svtreeml -c $input -t "$times" --tree_file "$tree_file" --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change --is_bin $is_bin --incl_all $incl_all -s $Ns -p $Npop -g $Ngen -e $Nstop -r $tolerance -o $mltree -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $estmu --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode --speed_nni $speed_nni --seed $seed 2>&1  > $dir/std_svtreeml_"$suffix"
   # #
   #
   echo "Finish running svtreeml"
