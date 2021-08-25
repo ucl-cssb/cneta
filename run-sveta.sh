@@ -1,6 +1,6 @@
 # This script is used to run program sveta, which can generate a random colesence tree (of tumor samples from a single patient) and structual variations along the tree branches.
 
-seed=1  # used for reproducing the results
+seed=$RANDOM  # used for reproducing the results
 verbose=0   # Whether or not to print debug information
 Nsim=1  # The number of simulations. Number of patients to simulate
 

@@ -16,8 +16,8 @@ bool is_tip_age_valid(const vector<double>& node_ages, const vector<double>& tob
 
   double max_time = *max_element(tobs.begin(), tobs.end());
   for(int i = 0; i < tobs.size(); i++){
-    if(fabs(node_ages[i]- (max_time - tobs[i])) > SMALL_DIFF_BRANCH){
-      // cout << i << "\t" << node_ages[i] << "\t" << tobs[i] << endl;
+    if(fabs(node_ages[i] - (max_time - tobs[i])) > SMALL_DIFF_BRANCH){
+    //   cout << i << "\t" << node_ages[i] << "\t" << tobs[i] << endl;
       return false;
     }
   }
@@ -636,14 +636,14 @@ evo_tree generate_random_tree(int Ns, gsl_rng* r, long unsigned (*fp_myrng)(long
       double tree_height = runiform(r, min_height, max_height);
       double old_tree_height = get_tree_height(test_tree.get_node_times());
       double ratio = tree_height / old_tree_height;
-          
+
       if(delta_t > 0){
         // Only scaling internal nodes to allow large differences at the tip
         test_tree.scale_time_internal(ratio);
       }else{
         test_tree.scale_time(ratio);
       }
-      
+
       if(debug){
           cout << "Tree height before scaling " << old_tree_height << endl;
           cout << "Scaling ratio " << ratio << endl;
@@ -1102,7 +1102,7 @@ void restore_branch_lengths(evo_tree& rtree, DoubleVector &lenvec, int startid, 
 
     	(*it)->setLength(lenvec, idx);
         (*it)->node->findNeighbor(node)->setLength(lenvec, idx);
-        
+
         rtree.edges[idx].length = lenvec[idx];
 
         if(debug) cout << "size of branch " << (*it)->node->id + 1 << ", " << (*it)->node->findNeighbor(node)->id + 1 << " after restoring is " << lenvec[(*it)->id + startid] << endl;
@@ -1165,8 +1165,12 @@ evo_tree read_tree_info(const string& filename, const int& Ns, int debug){
       	int end = atoi(split[1].c_str());
       	double length = atof(split[2].c_str());
         if(end == Ns + 1) length = 0;
-        if( !(length > 0) && end != Ns + 1 ) length = 1;
-      	// cout << "t: " << id << "\t" << start << "\t" << end << "\t" << length << endl;
+        if( !(length > 0) && end != Ns + 1 ){
+          cout << "Invalid branch length: " << id << "\t" << start << "\t" << end << "\t" << length << endl;
+          // length = 1;
+          exit(EXIT_FAILURE);
+        }
+
       	edges.push_back(edge(id - 1, start - 1, end - 1, length));
       }
       id++;
@@ -1202,32 +1206,54 @@ evo_tree read_tree_info(const string& filename, const int& Ns, int debug){
 // }
 
 
+void adjust_tip_time(evo_tree& rtree, const vector<double>& tobs, int Ns, int same_tip, int debug){
+    for(int i = 0; i < rtree.nodes.size(); i++){
+        Node* node = &rtree.nodes[i];
+        if(node->id < Ns){
+            if(same_tip){
+                node->time += node->age;
+            }
+            node->time += tobs[node->id];
+        }
+    }
+    rtree.calculate_age_from_time();
+
+    // update branch lengths based on node times
+    for(int i = 0; i < rtree.edges.size(); i++){
+        edge *e = &rtree.edges[i];
+        if(e->end < Ns) e->length += tobs[e->end];
+    }
+}
+
 
 // Read parsimony trees built by other tools as starting trees, assign timings to tip nodes and initialize mutation rates
-evo_tree read_parsimony_tree(const string& tree_file, const int& Ns, const vector<double>& rates, const vector<double>& tobs){
+evo_tree read_parsimony_tree(const string& tree_file, const int& Ns, const vector<double>& rates, const vector<double>& tobs, gsl_rng* r, int age, int cons){
     int debug = 0;
-    if(debug)   cout << tree_file << endl;
+    if(debug)   cout << "reading from file " << tree_file << endl;
+
     evo_tree rtree = read_tree_info(tree_file, Ns);
-    // for(int i = 0; i < tobs.size();i++){
-    //     cout << tobs[i] << endl;
-    // }
-    // rtree.tobs = tobs;
-
     // The branch lengths in parsimony tree may be very large
-    if(debug) rtree.print();
+    if(debug){
+        cout << "original tree: " << rtree.make_newick() << endl;
+        rtree.print();
+    }
 
-    if(rates.size() > 1){
-      rtree.dup_rate = rates[0];
-      rtree.del_rate = rates[1];
-      if(rates.size() > 2){
-          rtree.chr_gain_rate = rates[2];
-          rtree.chr_loss_rate = rates[3];
-          rtree.wgd_rate = rates[4];
-      }
+    if(cons){
+        double min_height = *max_element(tobs.begin(), tobs.end());
+        double max_height = age + min_height;
+        double tree_height = runiform(r, min_height, max_height);
+        double old_tree_height = get_tree_height(rtree.get_node_times());
+        double ratio = tree_height / old_tree_height;
+        rtree.scale_time(ratio);
+
+        adjust_tip_time(rtree, tobs, Ns, 1, debug);
+
+        if(debug){
+            cout << "adjusted tree: " << rtree.make_newick() << endl;
+            rtree.print();
+        }
     }
-    else{
-      rtree.mu = rates[0];
-    }
+    restore_mutation_rates(rtree, rates);
 
     return rtree;
 }

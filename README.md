@@ -23,12 +23,18 @@ This package is mostly written in C++. There are a few scripts written in R and 
   * C libaries: gsl, boost (version >= 1.42)
 
 * Required R libraries for postprocessing
-  * plot-cns.R: `copynumber`, `reshape`, `tools`, `tidyr`, `dplyr`, `purrr`
-  * plot-trees-all.R: `ggtree`, `ape`, `tools`, `ggplot2`
-  * tree_comparison.R: `phangorn`
+  * `optparse`
+  * `copynumber`
+  * `reshape`
+  * `tools`
+  * `tidyverse`
+  * `ggtree`
+  * `ape`
+  * `phangorn`
+
 
 * Required Python libraries for postprocessing
-  * newick2elist.py: networkx
+  * newick2elist.py: [networkx](https://networkx.org)
 
 ### How to install CMake
 #### Installing with package manager
@@ -63,9 +69,12 @@ BiocManager::install()
 BiocManager::install("copynumber")
 BiocManager::install("ggtree")
 
+install.packages("optparse")
+install.packages("tidyverse")
 install.packages("reshape")
 install.packages("ape")
-install.packages("optparse")
+install.packages("phangorn")
+
 
 # Check installed packages
 installed.packages()[, c("Package", "LibPath")]
@@ -130,7 +139,7 @@ There are three Markov models of evolution for the copy number profiles:
 * model 0: Mk model (extension of JC69 model)
 * model 1: bounded model of total copy number
 * model 2: bounded model of allele-specific copy number (default)
-* model 3: infinite sites model 
+* model 3: infinite sites model
 
 Mk model is an extension of JC69 model on total copy numbers, where segment duplication rate equals to segment deletion rate.
 
@@ -202,7 +211,7 @@ The initial trees for tree searching can be obtained by maximum parsimony method
 
 * (Optional) A file containing the timing information of tumor samples (*-rel-times.txt).
 
-  There need to be three colomns, separtate by space, in this file: sample_ID, time relative to 1st sample in year (float number), patient age at the time of sampling (integer). 
+  There need to be three colomns, separtate by space, in this file: sample_ID, time relative to 1st sample in year (float number), patient age at the time of sampling (integer).
 
 
 There are 4 running modes in svtreeml.

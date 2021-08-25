@@ -2,10 +2,7 @@
 
 
 void initialize_lnl_table(vector<vector<double>>& L_sk_k, const vector<int>& obs, const evo_tree& rtree, int model, int nstate, int is_total){
-    // int debug = 0;
-    // construct a table for each state of each node
-    // int ntotn = 2 * rtree.nleaf - 1;
-    // vector<vector<double>> L_sk_k(ntotn, vector<double>(nstate, 0));
+    int debug = 0;
 
     int Ns = rtree.nleaf - 1;
     if(model > 1){
@@ -34,21 +31,20 @@ void initialize_lnl_table(vector<vector<double>>& L_sk_k, const vector<int>& obs
         L_sk_k[Ns][2] = 1.0;
     }
 
-    // if(debug){
-    //   cout << "\nCNs at tips:\n";
-    //   for(int i = 0; i < Ns; ++i){
-    //       cout<< "\t" << obs[i];
-    //   }
-    //   cout << endl;
-    //   cout << "\nLikelihood for tips:\n";
-    //   for(int i = 0; i < rtree.nleaf; ++i){
-    //       for(int j = 0; j < nstate; ++j){
-    //         cout << "\t" << L_sk_k[i][j];
-    //       }
-    //       cout << endl;
-    //   }
-    // }
-
+    if(debug){
+      cout << "\nCNs at tips:\n";
+      for(int i = 0; i < Ns; ++i){
+          cout<< "\t" << obs[i];
+      }
+      cout << endl;
+      cout << "\nLikelihood for tips:\n";
+      for(int i = 0; i < rtree.nleaf; ++i){
+          for(int j = 0; j < nstate; ++j){
+            cout << "\t" << L_sk_k[i][j];
+          }
+          cout << endl;
+      }
+    }
 }
 
 
@@ -60,7 +56,7 @@ vector<vector<double>> initialize_lnl_table_decomp(vector<int>& obs, OBS_DECOMP&
     // construct a table for each state of each node
     int ntotn = 2 * rtree.nleaf - 1;
     int nstate = comps.size();
-    vector<vector<double>> L_sk_k(ntotn, vector<double>(nstate, 0));
+    vector<vector<double>> L_sk_k(ntotn, vector<double>(nstate, 0.0));
 
     for(int i = 0; i < rtree.nleaf - 1; ++i){
         // For total copy number, all the possible combinations have to be considered.
@@ -367,6 +363,11 @@ void get_likelihood_site(vector<vector<double>>& L_sk_k, const evo_tree& rtree, 
     double* pblj = pmat_per_blen[idx_blj];
 
     if(debug){
+      cout << "branch lengths so far:";
+      for(auto b : blens){
+          cout << "\t" << b;
+      }
+      cout << endl;
       cout << "node:" << rtree.nodes[k].id + 1 << " -> " << ni + 1 << " , " << bli << "\t" <<  nj + 1 << " , " << blj << endl;
       cout << "Get Pmatrix for branch length " << bli << "\t" << blens[idx_bli] << endl;
       r8mat_print(nstate, nstate, pmat_per_blen[idx_bli], "  P matrix:");
@@ -487,17 +488,16 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, const evo_tree& r
     double chr_loss = 0.0;
 
     for(int nchr = 1; nchr <= vobs.size(); nchr++){     // for each chromosome
-      if(debug) cout << "Computing likelihood on Chr " << nchr << endl;
-      double chr_logL = 0;  // for one chromosome
-      double chr_logL_normal = 0, chr_logL_gain = 0, chr_logL_loss = 0;
-      double site_logL = 0;   // log likelihood for all sites on a chromosome
+      if(debug) cout << "Computing likelihood on Chr " << nchr << " with  " << vobs[nchr].size() << " sites " << endl;
+      double chr_logL = 0.0;  // for one chromosome
+      double chr_logL_normal = 0.0, chr_logL_gain = 0.0, chr_logL_loss = 0.0;
+      double site_logL = 0.0;   // log likelihood for all sites on a chromosome
       int z = 0;    // no chr gain/loss
       // cout << " chromosome number change is " << 0 << endl;
       // Use a map to store computed log likelihood
       map<vector<int>, vector<vector<double>>> sites_lnl_map;
 
       for(int nc = 0; nc < vobs[nchr].size(); nc++){    // for each segment on the chromosome
-          // cout << "Number of sites for this chr " << vobs[nchr].size() << endl;
           // for each site of the chromosome (may be repeated)
           vector<int> obs = vobs[nchr][nc];
           vector<vector<double>> L_sk_k(2 * rtree.nleaf - 1, vector<double>(nstate, 0.0));
@@ -734,7 +734,6 @@ double get_likelihood_revised(evo_tree& rtree, map<int, vector<vector<int>>>& vo
 
   // Find the transition probability matrix for each branch
   vector<int> knodes = lnl_type.knodes;
-  // map<double, double*> pmats;
   vector<double> blens;
   vector<double*> pmat_per_blen;
 
@@ -932,7 +931,7 @@ double get_likelihood_decomp(evo_tree& rtree, map<int, vector<vector<int>>>& vob
          double blj = rtree.edges[rtree.nodes[k].e_ot[1]].length;
 
          // For WGD
-         if(max_wgd > 0){           
+         if(max_wgd > 0){
              if(pmats_wgd.find(bli) == pmats_wgd.end()){
                 pmati_wgd = new double[(dim_wgd)*(dim_wgd)];
                 memset(pmati_wgd, 0.0, (dim_wgd)*(dim_wgd)*sizeof(double));
@@ -940,15 +939,15 @@ double get_likelihood_decomp(evo_tree& rtree, map<int, vector<vector<int>>>& vob
                 pmats_wgd[bli] = pmati_wgd;
              }
              if(pmats_wgd.find(blj) == pmats_wgd.end()){
-                pmatj_wgd = new double[(dim_wgd)*(dim_wgd)];           
-                memset(pmatj_wgd, 0.0, (dim_wgd)*(dim_wgd)*sizeof(double));                 
+                pmatj_wgd = new double[(dim_wgd)*(dim_wgd)];
+                memset(pmatj_wgd, 0.0, (dim_wgd)*(dim_wgd)*sizeof(double));
                 get_transition_matrix_bounded(qmat_wgd, pmatj_wgd, blj, dim_wgd);
                 pmats_wgd[blj] = pmatj_wgd;
              }
          }
 
          // For chr gain/loss
-         if(max_chr_change > 0){       
+         if(max_chr_change > 0){
              if(pmats_chr.find(bli) == pmats_chr.end()){
                  pmati_chr = new double[(dim_chr)*(dim_chr)];
                  memset(pmati_chr, 0.0, (dim_chr)*(dim_chr)*sizeof(double));
@@ -964,7 +963,7 @@ double get_likelihood_decomp(evo_tree& rtree, map<int, vector<vector<int>>>& vob
          }
 
          // For segment duplication/deletion
-         if(max_site_change > 0){      
+         if(max_site_change > 0){
              if(pmats_seg.find(bli) == pmats_seg.end()){
                  pmati_seg = new double[(dim_seg)*(dim_seg)];
                  memset(pmati_seg, 0.0, (dim_seg)*(dim_seg)*sizeof(double));

@@ -1,6 +1,6 @@
 # This script is used to run program svtreeml.
 
-seed=1 # Setting seed for reproductive results
+seed=$RANDOM # Setting seed for reproductive results
 verbose=0  # Whether or not to print debug information
 
 # Running mode. 0: build maximum likelihood tree; 1: test; 2: compute likelihood; 3: compute maximum likelihood; 4: infer ancestral state
@@ -148,8 +148,10 @@ elif [[ $mode -eq 3 ]]; then
   # In this mode, the mutation rates can be specified or not
   suffix=m$model-o"$opt"-"$cons""$estmu"-mode"$mode"-"$prefix"
   mltree=$dir/MaxL-"$prefix"-"$suffix".txt
+  mltree2=$dir/MaxL-"$prefix"-"$suffix"-fixt.txt
+  echo "Estimating the branch lengths (and mutation rates) of the given tree $mltree"
 
-  code/svtreeml -c $input -t "$times" --is_bin $is_bin --incl_all $incl_all -s $Ns --tree_file "$tree_file"  --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change -o $mltree -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $estmu --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode > $dir/std_svtreeml_"$suffix"
+  code/svtreeml -c $input -t "$times" --is_bin $is_bin --incl_all $incl_all -s $Ns --tree_file "$mltree"  --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change -o $mltree2 -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $estmu --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode > $dir/std_svtreeml_"$suffix"
 
   Rscript ana/plot-trees-all.R -f $mltree -b 0 -t "single" -l "xlim" --time_file $times  #>& /dev/null
 
@@ -170,12 +172,13 @@ elif [[ $mode -eq 3 ]]; then
     Rscript ana/plot-trees-all.R -s $bdir -f $mltree -o $dir/MaxL-tree-"$suffix"-bootstrap.pdf -t "bootstrap" -l "age" --time_file $times -p "MaxL-"$suffix"-btree-*txt"
   fi
 
-elif [[ $mode -eq 4 ]]; then
+elif [[ $mode -eq 4 ]]; then  # Inferring ancestral states of a given tree from copy number profile
   # In this mode, the mutation rates have to be specified
-  suffix=m$model-"$cons""$estmu"-mode"$mode"-"$prefix"-"$1"
+  suffix=m$model-o"$opt"-s"$tree_search"-cons${cons}-estmu${estmu}-"$prefix"
   mltree=$dir/MaxL-"$suffix".txt
+  echo "Inferring ancestral states of the given tree $mltree"
 
-  code/svtreeml -c $input -t "$times" -o $mltree --is_bin $is_bin --incl_all $incl_all -s $Ns --tree_file "$tree_file" --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change -d $model --cn_max $cn_max --only_seg $only_seg --constrained $cons --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode  --seed $seed > $dir/std_svtreeml_"$suffix"
+  code/svtreeml -c $input -t "$times" -o "$mltree" --is_bin $is_bin --incl_all $incl_all -s $Ns --tree_file "$mltree" --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change -d $model --cn_max $cn_max --only_seg $only_seg --constrained $cons --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode  --seed $seed > $dir/std_svtreeml_state_"$suffix"
 fi
 
 echo "Finish running svtreeml"

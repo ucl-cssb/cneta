@@ -5,8 +5,8 @@ This script is used to convert NEWICK trees into the format that can be read by 
 The naming coventions for trees accepted by svtree*:
 Suppose there are Ns disease samples, named from 1 to Ns, and one normal sample named by Ns + 1.
 The root is named Ns + 2.
-The internal nodes are named from Ns + 3 to Ns +
-Two additional edges (Ns+2, Ns+1) and (Ns+2, Ns+3) are added to the original tree due to the addition of a node representing unaltered genome. Here, Ns is the number of patient samples.
+The internal nodes are named from Ns + 3 to Ns + Ns + 1.
+Two additional edges (Ns+2, Ns+1) and (Ns+2, Ns+3) are added to the original tree due to the addition of a node representing unaltered genome.
 The length of edge (Ns+2, Ns+1) is 0.
 The length of edge (Ns+2, 2*Ns+1) has to be specified by the user.
 
@@ -27,6 +27,30 @@ import argparse
 
 class NewickError(Exception):
     pass
+
+
+def write_edge_list(tree_file, tree_renamed, scaling, i = -1):
+    dir = os.path.dirname(tree_file)
+    bname = os.path.basename(tree_file)
+    if i > 0:
+        fname = os.path.splitext(bname)[0] + "_" + str(i) + ".txt"
+    else:
+        fname = os.path.splitext(bname)[0] + ".txt"
+    fname_full = os.path.join(dir, fname)
+    # print("write edge list to file {}".format(fname_full))
+
+    header="start\tend\tlength\teid\n"
+    with open(fname_full, "w") as fout:
+        fout.write(header)    
+        j = 1
+        for s, e in tree_renamed.edges:
+            l = tree_renamed.nodes[e]['length']
+            if scaling > 0:
+                l = l / scaling
+            line = "\t".join([str(s), str(e), str(l), str(j)])
+            line += "\n"
+            fout.write(line)
+            j += 1
 
 
 '''
@@ -153,6 +177,7 @@ def newick_to_tree(newick):
 
     return tree
 
+
 def get_num_leaf(tree):
     num_leaf = 0
     for n in tree.nodes:
@@ -171,224 +196,135 @@ def get_root(tree):
 
 
 
-# Rename all node names to integer
+# Rename all node names to integer, order as that is defined in sveta
 # num_leaf is the number of leaves in the final tree (plus one when the normal sample is not included)
 def rename_tree(tree, num_leaf, incl_normal, node_prefix=""):
     mapping = {}
     # print(tree.edges())
     k = 0
     for n in nx.dfs_postorder_nodes(tree):
-        n=str(n)
-        # print(n)
-        # print(tree.nodes[e]['length'])
+        n = str(n)
+        # print("visit node {}".format(n))
+        # print(tree.nodes[e]['length']
+        if n.isdigit() and int(n) <= num_leaf:
+            mapping[n] = int(n)
+
         if n.startswith("t"):   # Internal nodes got names bottom up with prefix t when traversing the tree
             k = k + 1
             if k == num_leaf - 1 and incl_normal:   # root when the normal sample is originally included in the tree
-                print("root node is {}".format(n))
+                # print("root node is {}".format(n))
                 mapping[n] = num_leaf + 1
             else:
                 mapping[n] = k + num_leaf + 1
-            print("{}th node {} mapped to {}".format(k, n, mapping[n]))
-        if n.startswith(node_prefix):
+            # print("{}th node {} mapped to {}".format(k, n, mapping[n]))
+
+        if node_prefix != '' and n.startswith(node_prefix):
             new_name = n.replace(node_prefix, "")
             new_name = new_name.lstrip("0")
             mapping[n] = new_name
-    print(mapping)
+
+    # print(mapping)
+
     tree_renamed = nx.relabel_nodes(tree, mapping)
+
+    return tree_renamed
+
+
+# Convert the nexus trees to edge list as it is
+def convert_nexus_file(tree_file, node_prefix, incl_normal, scaling, root_blen = 0):
+    with open(tree_file,"r") as fin:
+        dir = os.path.dirname(tree_file)
+        i = 0 # TREE ID
+        for line in fin:
+            line = line.strip()
+            if not (line.startswith("tree") or line.startswith("TREE")):
+                continue
+            # print(line)
+            line = line.split("=")[-1]
+            newick = line.strip()
+            # print("{}th tree {}".format(i, newick))
+
+            tree_renamed = newick_to_edgelist(newick, node_prefix, incl_normal, root_blen)   
+
+            # print(tree)
+            i += 1
+            write_edge_list(tree_file, tree_renamed, scaling, i)
+
+
+
+def get_newick_from_file(tree_file):
+    with open(tree_file, "r") as fin:
+        lines = fin.readlines()
+        assert(len(lines) == 1)
+        newick = lines[0].strip()
+
+    return newick
+
+
+def newick_to_edgelist(newick, node_prefix, incl_normal, root_blen = 0):
+    tree = newick_to_tree(newick)
+    # print("edges in original tree: ")
+    # print(tree.edges())
+
+    # Find the root of the tree
+    num_leaf = get_num_leaf(tree)
+    root = get_root(tree)
+    if not incl_normal:    
+        print("adding normal edge to root {}".format(root))   
+        s = num_leaf + 2  # new root
+        tree.add_edge(s, root)
+        tree.nodes[root]['length'] = root_blen
+        # print("blen above {} is {}".format(root, tree.nodes[root]['length']))
+        e2 = num_leaf + 1 # normal sample
+        tree.add_edge(s, e2)
+        tree.nodes[e2]['length'] = 0
+        num_leaf = num_leaf + 1
+
+    # print("edges in original tree after adding normal edges when required: ")
+    # print(tree.edges())
+
+    tree_renamed = rename_tree(tree, num_leaf, incl_normal, node_prefix)
+
+    # print("edges in renamed tree: ")
+    # print(tree_renamed.edges())
+
+    if incl_normal:
+        root_id = num_leaf + 1
+        norm_id = num_leaf
+        # print("root {}, normal {}".format(root_id, norm_id))
+        tree_renamed.nodes[norm_id]['length'] = 0
+
     return tree_renamed
 
 
 # Convert the newick tree to edge list as it is
-def convert_nexus_trees(tree_file, incl_normal):
-    with open(tree_file,"r") as fin:
-        dir = os.path.dirname(tree_file)
-        i=0 # TREE ID
-        for line in fin:
-            if not line.startswith("tree"):
-                continue
-            # print(line)
-            line = line.strip().split("=")[-1]
-            newick = line.strip()
-            # print(newick)
-            tree = newick_to_tree(newick)
-            num_leaf = get_num_leaf(tree)
-            tree_renamed = rename_tree(tree, num_leaf, incl_normal)
-
-            # print(tree)
-            i+=1
-            bname = os.path.basename(tree_file)
-            fname = os.path.splitext(bname)[0] + "_" + str(i) + ".txt"
-            fname_full = os.path.join(dir, fname)
-            header="start\tend\tlength\teid\n"
-            with open(fname_full, "w") as fout:
-                fout.write(header)
-                j = 1
-                for s, e in tree_renamed.edges:
-                    l = tree_renamed.nodes[e]['length']
-                    line = "\t".join([str(s), str(e), str(l), str(j)])
-                    line += "\n"
-                    fout.write(line)
-                    j+=1
-
-
-
-def convert_nexus_trees_with_blen(tree_file, incl_normal, blen):
-    with open(tree_file,"r") as fin:
-        dir = os.path.dirname(tree_file)
-        i=0
-        for line in fin:
-            newick = line.strip()
-            tree = newick_to_tree(newick)
-            num_leaf = get_num_leaf(tree)
-            tree_renamed = rename_tree(tree, num_leaf, incl_normal)
-            # print(tree.edges())
-            # print(tree_renamed.edges())
-            # for s, e in tree.edges:
-            #     l = tree.nodes[e]['length']
-            #     print("edge {} {} {}".format(s, e, l))
-
-            s = num_leaf+2
-            e1 = num_leaf+1
-            tree_renamed.add_edge(s, e1)
-            tree_renamed.nodes[e1]['length'] = 0
-            e2 = 2 * num_leaf+1
-            tree_renamed.add_edge(s, e2)
-            tree_renamed.nodes[e2]['length'] = blen
-
-            i+=1
-            bname = os.path.basename(tree_file)
-            fname = os.path.splitext(bname)[0] + "_" + str(i) + ".txt"
-            fname_full = os.path.join(dir, fname)
-            header="start\tend\tlength\teid\n"
-            with open(fname_full, "w") as fout:
-                fout.write(header)
-                j = 1
-                for s, e in tree_renamed.edges:
-                    # print("edge {} {}".format(s, e))
-                    l = tree_renamed.nodes[e]['length']
-                    line = "\t".join([str(s), str(e), str(l), str(j)])
-                    line += "\n"
-                    fout.write(line)
-                    j+=1
-
-
-# Convert the newick tree to edge list as it is
-def convert_newick_tree(tree_file, node_prefix, incl_normal, scaling):
-    with open(tree_file,"r") as fin:
-        dir = os.path.dirname(tree_file)
-        lines = fin.readlines()
-        assert(len(lines) == 1)
-        newick = lines[0].strip()
-        # print(newick)
-        tree = newick_to_tree(newick)
-
-        num_leaf = get_num_leaf(tree)
-        # Find the root of the tree
-
-        if not incl_normal:
-            root = get_root(tree)
-            s = num_leaf+2  # new root
-            tree.add_edge(s, root)
-            tree.nodes[root]['length'] = 0
-            e2 = num_leaf+1 # normal sample
-            tree.add_edge(s, e2)
-            tree.nodes[e2]['length'] = 0
-            num_leaf = num_leaf + 1
-
-        tree_renamed = rename_tree(tree, num_leaf, incl_normal, node_prefix)
-        print(tree_renamed)
-        bname = os.path.basename(tree_file)
-        fname = os.path.splitext(bname)[0] + ".txt"
-        fname_full = os.path.join(dir, fname)
-        header="start\tend\tlength\teid\n"
-        with open(fname_full, "w") as fout:
-            fout.write(header)
-            j = 1
-            for s, e in tree_renamed.edges:
-                l = tree_renamed.nodes[e]['length']
-                if scaling > 0:
-                    l = l / scaling
-                line = "\t".join([str(s), str(e), str(l), str(j)])
-                line += "\n"
-                fout.write(line)
-                j+=1
-
-
-# Convert the newick tree to edge list as it is
-def convert_newick_tree_with_blen(tree_file, node_prefix, incl_normal, scaling, blen):
-    with open(tree_file,"r") as fin:
-        dir = os.path.dirname(tree_file)
-        lines = fin.readlines()
-        assert(len(lines) == 1)
-        newick = lines[0].strip()
-        # print(newick)
-        tree = newick_to_tree(newick)
-        num_leaf = get_num_leaf(tree)
-        # Find the root of the tree
-
-        if not incl_normal:
-            root = get_root(tree)
-            s = num_leaf+2  # new root
-            tree.add_edge(s, root)
-            # print(tree.nodes[root]['length'])
-            tree.nodes[root]['length'] = blen
-            print("blen above {} is {}".format(root, tree.nodes[root]['length']))
-            e2 = num_leaf+1 # normal sample
-            tree.add_edge(s, e2)
-            tree.nodes[e2]['length'] = 0
-            num_leaf = num_leaf + 1
-
-        tree_renamed = rename_tree(tree, num_leaf, incl_normal, node_prefix)
-
-        print("{} leaves, blen {}".format(num_leaf, blen))
-        print("renamed tree: ")
-        print(tree_renamed)
-
-        bname = os.path.basename(tree_file)
-        fname = os.path.splitext(bname)[0] + ".txt"
-        fname_full = os.path.join(dir, fname)
-        header="start\tend\tlength\teid\n"
-        with open(fname_full, "w") as fout:
-            fout.write(header)
-            j = 1
-            for s, e in tree_renamed.edges:
-                l = tree_renamed.nodes[e]['length']
-                if scaling > 0:
-                    l = l / scaling
-                line = "\t".join([str(s), str(e), str(l), str(j)])
-                line += "\n"
-                fout.write(line)
-                j+=1
+def convert_newick_file(tree_file, node_prefix, incl_normal, scaling, root_blen = 0):
+    newick = get_newick_from_file(tree_file)
+    # print("original tree is {}".format(newick))
+    tree_renamed = newick_to_edgelist(newick, node_prefix, incl_normal, root_blen)   
+    write_edge_list(tree_file, tree_renamed, scaling)
 
 
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Converting NEWICK format to EGDE list')
     parser.add_argument('-f','--format', dest='format', metavar='N', type=int, default=1,
-                        help='The format of input file (0: NEXUS, 1: NEWICK)')
+                        help='The format of input file (0: NEXUS (which may contain multiple NEWICK strings), 1: NEWICK)')
     parser.add_argument('-t','--tree_file', dest='tree_file', type=str, required=True,
                         help='The input tree file')
     parser.add_argument('-p','--node_prefix', dest='node_prefix', type=str, default="",
-                        help='The prefix of the node to be replaced by space')
-    parser.add_argument('-b','--blen', dest='blen', type=float, default=0,
-                        help='The additional branch length connecting LUCA to MRCA')
-    parser.add_argument('-s','--scaling', dest='scaling', type=float, default=365,
+                        help='The prefix of the node to be replaced by space so that node name is an integer')
+    parser.add_argument('-b','--root_blen', dest='root_blen', type=float, default=0,
+                        help='The additional branch length connecting LUCA to MRCA if normal sample is not in the original tree')
+    parser.add_argument('-s','--scaling', dest='scaling', type=float, default=1,
                         help='Scaling the branch length')
     parser.add_argument('-n','--incl_normal', action='store_true', help='The normal sample is included in the tree')
 
     args = parser.parse_args()
 
-    tree_file = args.tree_file
-    incl_normal = args.incl_normal
     if args.format == 0:    # Convert all trees in a NEXUS file
-        if args.blen > 0:
-            blen = float(args.blen)
-            convert_nexus_trees_with_blen(tree_file, incl_normal, blen)
-        else:
-            convert_nexus_trees(tree_file, incl_normal)
+        print("convert nexus tree files")
+        convert_nexus_file(args.tree_file, args.node_prefix, args.incl_normal, args.scaling, args.root_blen)
     else:
-        if args.blen > 0:
-            blen = float(args.blen)
-            convert_newick_tree_with_blen(tree_file, args.node_prefix, incl_normal, args.scaling, blen)
-        else:
-            convert_newick_tree(tree_file, args.node_prefix, incl_normal, args.scaling)
+        print("convert newick tree file")
+        convert_newick_file(args.tree_file, args.node_prefix, args.incl_normal, args.scaling, args.root_blen)

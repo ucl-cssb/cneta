@@ -1,9 +1,9 @@
+#!/usr/bin/env Rscript
+
 suppressMessages(library(copynumber))
 suppressMessages(library(reshape))
 suppressMessages(library(tools))
-suppressMessages(library(tidyr))
-suppressMessages(library(dplyr))
-suppressMessages(library(purrr))
+suppressMessages(library(tidyverse))
 suppressMessages(library(optparse))
 
 #load("./bin_locations_4401.Rdata")

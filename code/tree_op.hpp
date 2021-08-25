@@ -207,8 +207,15 @@ evo_tree read_tree_info(const string& filename, const int& Ns, int debug = 0);
 //     return new_tree;
 // }
 
+
+// ajust time of tip nodes to be consistent with input time
+// Given a random colescent tree, all the original tip times are equal
+// Given a parsimony tree, the tip times may be different, which need to be made equal at first
+void adjust_tip_time(evo_tree& rtree, const vector<double>& tobs, int Ns, int same_tip = 1, int debug = 0);
+
+
 // Read parsimony trees built by other tools as starting trees, assign timings to tip nodes and initialize mutation rates
-evo_tree read_parsimony_tree(const string& tree_file, const int& Ns, const vector<double>& rates, const vector<double>& tobs);
+evo_tree read_parsimony_tree(const string& tree_file, const int& Ns, const vector<double>& rates, const vector<double>& tobs, gsl_rng* r, int age, int cons);
 
 
 // vector<double> get_blens_from_intervals(evo_tree& rtree, double *x){

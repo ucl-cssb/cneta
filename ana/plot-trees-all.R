@@ -1,4 +1,5 @@
-# library(tidyverse)
+#!/usr/bin/env Rscript
+
 suppressMessages(library(ggtree))
 suppressMessages(library(ape))
 suppressMessages(library(tools))

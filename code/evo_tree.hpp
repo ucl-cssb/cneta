@@ -286,7 +286,7 @@ public:
 
   // used in initialization
   void generate_nodes();
-  void generate_neighbors();  // neighbor for one internal node: 1 incoming edges and 2 outgoing edges 
+  void generate_neighbors();  // neighbor for one internal node: 1 incoming edges and 2 outgoing edges
   void update_neighbor_lengths(Node* node = NULL, Node* dad = NULL);   // Update neighbor lengths based on updated edge lengths
   void delete_neighbors();
 
@@ -298,7 +298,7 @@ public:
   vector<double> get_node_ages();
 
   void scale_time(double ratio);
-  void scale_time_internal(double ratio);   // used in svetagg
+  void scale_time_internal(double ratio);   // used in sveta
 
   // update node ages of a node and its ancestor (after the relevant edge is updated)
   void update_node_age(int node_id, double delta);
