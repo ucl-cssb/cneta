@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # This script is used to run program svtreeml.
 
 seed=$RANDOM # Setting seed for reproductive results

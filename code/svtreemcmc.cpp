@@ -2263,18 +2263,18 @@ int main (int argc, char ** const argv) {
     Nchar = 0;
     num_invar_bins = 0;
     map<int, vector<vector<int>>> data;
+    cout << "\nReading input copy numbers" << endl;
     if(is_bin){
-        cout << "Merging consecutive bins in the input" << endl;
-        data = read_data_var_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins, Nchar, obs_num_wgd, obs_change_chr, sample_max_cn, model, is_total);
+        cout << "   Merging consecutive bins in the input" << endl;
     }else{
         if(incl_all){
-            cout << "Using all input segments. There will be no bias correction " << endl;
+            cout << "   Using all input segments " << endl;
             correct_bias = 0;
         }else{
-            cout << "Using variant input segments\n" << endl;
+            cout << "   Using variable input segments " << endl;
         }
-        data = read_data_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins, Nchar, obs_num_wgd, obs_change_chr, sample_max_cn, model, incl_all, is_total);
     }
+    data = read_data_var_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins, Nchar, obs_num_wgd, obs_change_chr, sample_max_cn, model, is_total, is_bin, incl_all, debug);
     vobs = get_obs_vector_by_chr(data, Ns);
 
     int nleaf = Ns + 1;
