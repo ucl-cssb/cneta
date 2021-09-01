@@ -106,6 +106,9 @@ const double MAX_NLNL = 1e20;
 
 
 /****************** common functions *******************/
+void print_lnl_at_tips(const evo_tree& rtree, const vector<int>& obs, const vector<vector<double>>& L_sk_k, int nstate);
+
+
 void print_tree_lnl(const evo_tree& rtree, vector<vector<double>>& L_sk_k, int nstate);
 
 // From https://stackoverflow.com/questions/17074324/how-can-i-sort-two-vectors-in-the-same-way-with-criteria-that-uses-only-one-of

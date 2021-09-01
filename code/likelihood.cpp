@@ -1,6 +1,23 @@
 #include "likelihood.hpp"
 
 
+
+void print_lnl_at_tips(const evo_tree& rtree, const vector<int>& obs, const vector<vector<double>>& L_sk_k, int nstate){
+    cout << "\nCNs at tips:\n";
+    for(int i = 0; i < rtree.nleaf - 1; ++i){
+        cout<< "\t" << obs[i];
+    }
+    cout << endl;
+    cout << "\nLikelihood for tips:\n";
+    for(int i = 0; i < rtree.nleaf; ++i){
+        for(int j = 0; j < nstate; ++j){
+        cout << "\t" << L_sk_k[i][j];
+        }
+        cout << endl;
+    }
+}
+
+
 void initialize_lnl_table(vector<vector<double>>& L_sk_k, const vector<int>& obs, const evo_tree& rtree, int model, int nstate, int is_total){
     int debug = 0;
 
@@ -32,21 +49,9 @@ void initialize_lnl_table(vector<vector<double>>& L_sk_k, const vector<int>& obs
     }
 
     if(debug){
-      cout << "\nCNs at tips:\n";
-      for(int i = 0; i < Ns; ++i){
-          cout<< "\t" << obs[i];
-      }
-      cout << endl;
-      cout << "\nLikelihood for tips:\n";
-      for(int i = 0; i < rtree.nleaf; ++i){
-          for(int j = 0; j < nstate; ++j){
-            cout << "\t" << L_sk_k[i][j];
-          }
-          cout << endl;
-      }
+      print_lnl_at_tips(rtree, obs, L_sk_k, nstate);
     }
 }
-
 
 
 // L_sk_k has one row for each tree node and one column for each possible state; chr starting from 1
@@ -138,18 +143,7 @@ vector<vector<double>> initialize_lnl_table_decomp(vector<int>& obs, OBS_DECOMP&
     }
 
     if(debug){
-      cout << "\nCNs at tips:\n";
-      for(int i = 0; i < rtree.nleaf - 1; ++i){
-          cout<< "\t" << obs[i];
-      }
-      cout << endl;
-      cout << "\nLikelihood for tips:\n";
-      for(int i = 0; i < rtree.nleaf; ++i){
-          for(int j = 0; j < nstate; ++j){
-            cout << "\t" << L_sk_k[i][j];
-          }
-          cout << endl;
-      }
+        print_lnl_at_tips(rtree, obs, L_sk_k, nstate);
     }
     return L_sk_k;
 }

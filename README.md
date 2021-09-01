@@ -81,7 +81,7 @@ installed.packages()[, c("Package", "LibPath")]
 
 ```
 
-## Building C++
+## Building C++ source files
 OpenMP is used to accelerate tree search in svtreeml.
 To turned off OpenMP, please set "omp =" in makefile.
 
@@ -175,9 +175,10 @@ Please see run-sveta.sh to learn how to set different parameters.
 
 
 ## Output
-* *-cn.txt.gz: The total copy number for each site on each sample
+* *-cn.txt.gz: The total copy number at each site for each sample
 * *-rel-times.txt: The sampling time of tip nodes
-* *-allele-cn.txt.gz: The allele-specific copy number for each site on each sample
+* *-allele-cn.txt.gz: The allele-specific copy number at each site for each sample
+* *-inode-cn.txt.gz: The copy number at each site for each internal node in the tree
 * *-info.txt: The time of each node and the total number of mutations simulated on each branch of the tree, grouped by lineages of tip nodes.
 * *-mut.txt: The list of simulated mutations on each branch of the tree.
 * *-tree.txt: The simulated tree in tab-delimited format
@@ -205,14 +206,19 @@ For whole genome doubling, chr is assigned to 0 and seg_ID is assigned to -1.
 ## Input
 The initial trees for tree searching can be obtained by maximum parsimony methods.
 * (Required) A file containing integer absolute copy numbers for all the tumor samples and the normal sample (*-cn.txt.gz or *-allele-cn.txt.gz).
-
-   There need to be four colomns, separtate by space, in this file: sample_ID, chr_ID, bin_ID, CN. Each column is an integer.
+   
    Either compressed file or uncompressed file is fine.
+   There need to be four colomns, separtate by space, in this file: sample_ID, chr_ID, bin_ID, CN. Each column is an integer.
+   The sample_ID has to be orderred from 1 to n (the number of samples).
+   For allele-specific CN, there will be 5 columns, with the last two being cnA, cnB.
+   If the total CN is larger than the specified maximum CN allowed by the program, 
+   the total CN will be automatically decreased to the maximum CN when the input is total CN and the program will exit when the input is allele-specific CN.  
 
 * (Optional) A file containing the timing information of tumor samples (*-rel-times.txt).
 
-  There need to be three colomns, separtate by space, in this file: sample_ID, time relative to 1st sample in year (float number), patient age at the time of sampling (integer).
-
+  There need to be three colomns, separtate by space, in this file: 
+  sample_ID, time relative to 1st sample in year (float number), patient age at the time of sampling (integer).
+  The sample_ID has to be orderred from 1 to n (the number of samples).
 
 There are 4 running modes in svtreeml.
 * mode 0 (default): building maximum likelihood tree from input copy numbers, using -b 1 for bootstrapping

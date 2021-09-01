@@ -81,10 +81,12 @@ void get_bootstrap_vector_by_chr(map<int, vector<vector<int>>>& data, map<int, v
 // Read the samping time and patient age of each sample
 // Ns: number of samples
 // age: age at earliest sample
+// Assume samples are ordered by ID from 1 to Ns
 vector<double> read_time_info(const string& filename, const int& Ns, int& age, int debug = 0);
 
 // Format of input total copy number: sample, chr, seg, copy_number
-// Format of input allele specific copy number: sample, chr, seg, copy_number A, copy_number B -> converted into a specific number by position
+// Format of input allele specific copy number: sample, chr, seg, copy_number A, copy_number B -> converted into a specific state by decomposition
+// s_info: a vector for each sample, which is composed of a vector of vector<int> vcn{chr, sid, cn}
 vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int &num_total_bins, int cn_max, int is_total = 1, int debug = 0);
 
 

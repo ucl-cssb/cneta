@@ -106,7 +106,7 @@ map<int, vector<int>> extract_tree_ancestral_state(const evo_tree& rtree, const 
 // Create likelihood vectors and state vectors at the tip node for reconstructing joint ancestral state
 // L_sk_k (S_sk_k) has one row for each tree node and one column for each possible state
 void initialize_asr_table(const vector<int>& obs, const evo_tree& rtree, const vector<double>& blens, const vector<double*>& pmat_per_blen, vector<vector<double>>& L_sk_k, vector<vector<int>>& S_sk_k, int model, int nstate, int is_total){
-    int debug = 0;
+    int debug = 1;
     if(debug){
         cout << "Initializing tables for reconstructing joint ancestral state" << endl;
         cout << "branch lengths so far:";
@@ -118,16 +118,19 @@ void initialize_asr_table(const vector<int>& obs, const evo_tree& rtree, const v
 
     int Ns = rtree.nleaf - 1;
     for(int i = 0; i < Ns; ++i){
-        // cout << "node " << i + 1 << endl;
+        // cout << "node " << i + 1  << ", observed CN " << obs[i] << endl;
         // Find the parent node
         int parent = rtree.edges[rtree.nodes[i].e_in].start;
         double blen = rtree.edges[rtree.nodes[i].e_in].length;
-        cout << "parent " << parent + 1 << ", blen " << blen << endl;
+        // cout << "parent " << parent + 1 << ", blen " << blen << endl;
 
         auto pi = equal_range(blens.begin(), blens.end(), blen);
         // assert(distance(pi.first, pi.second) == 1);
-        int idx_blen = distance(pi.first, blens.begin());
-        // double* pblen = pmat_per_blen[idx_blen];
+        int idx_blen = distance(blens.begin(), pi.first);
+        if(debug){
+            cout << "Pmatrix for branch length " << blen << " " << blens[idx_blen] << endl;
+            r8mat_print(nstate, nstate, pmat_per_blen[idx_blen], "  P matrix:");
+        }
 
         // Find the state(s) of current node
         vector<int> tip_states;
@@ -142,11 +145,8 @@ void initialize_asr_table(const vector<int>& obs, const evo_tree& rtree, const v
               tip_states.push_back(obs[i]);
           }
         }
-
         if(debug){
             cout << "There are " << tip_states.size() << " states for copy number " << obs[i] << endl;
-            cout << "Pmatrix for branch length " << blen << endl;
-            r8mat_print(nstate, nstate, pmat_per_blen[idx_blen], "  P matrix:");
         }
 
         for(int j = 0; j < nstate; ++j){  // For each possible parent state, find the most likely tip states
@@ -177,18 +177,8 @@ void initialize_asr_table(const vector<int>& obs, const evo_tree& rtree, const v
     }
 
     if(debug){
-      cout << "\nCNs at tips:\n";
-      for(int i = 0; i < Ns; ++i){
-          cout<< "\t" << obs[i];
-      }
-      cout << endl;
-      cout << "\nLikelihood for tips:\n";
-      for(int i = 0; i < rtree.nleaf; ++i){
-          for(int j = 0; j < nstate; ++j){
-            cout << "\t" << L_sk_k[i][j];
-          }
-          cout << endl;
-      }
+      print_lnl_at_tips(rtree, obs, L_sk_k, nstate);
+
       cout << "\nState vector for tips:\n";
       for(int i = 0; i < rtree.nleaf; ++i){
           for(int j = 0; j < nstate; ++j){
@@ -513,7 +503,7 @@ void get_ancestral_states_site(vector<vector<double>>& L_sk_k, vector<vector<int
 
         auto pi = equal_range(blens.begin(), blens.end(), blen);
         // assert(distance(pi.first, pi.second) == 1);
-        int idx_blen = distance(pi.first, blens.begin());
+        int idx_blen = distance(blens.begin(), pi.first);
         double* pblen = pmat_per_blen[idx_blen];
 
         if(debug) cout << "node:" << np + 1 << " -> " << rtree.nodes[k].id + 1 << " -> " << ni + 1 << " , "  <<  nj + 1 << " , " << blen << endl;
@@ -914,7 +904,7 @@ double reconstruct_marginal_ancestral_state(const evo_tree& rtree, map<int, vect
     // For copy number instantaneous changes
     int nstate = cn_max + 1;
     if(model == BOUNDA) nstate = (cn_max + 1) * (cn_max + 2) / 2;
-    int nid = 2 * (Ns + 1) - 2;
+    int nid = 2 * Ns;    // node ID for MRCA
 
     // Find the transition probability matrix for each branch
     vector<double> blens;
@@ -961,9 +951,11 @@ double reconstruct_marginal_ancestral_state(const evo_tree& rtree, map<int, vect
           cn_mrca.push_back(cn);
 
           string line = to_string(nid + 1) + "\t" + to_string(nchr) + "_" + to_string(nc) + "\t" + to_string(cn) + "\t" + to_string(max_ln);
+
           for(int i = 0; i < L_sk_k[nid].size(); i++){
-              line += "\t" + to_string(L_sk_k[nid][i]);
+              line += "\t" + to_string((L_sk_k[nid][i]));
           }
+
           // fout << setprecision(dbl::max_digits10) << line << endl;
           fout << line << endl;
       }
@@ -1064,17 +1056,16 @@ void reconstruct_joint_ancestral_state_decomp(const evo_tree& rtree, map<int, ve
 
 // Infer the copy number of all internal nodes given a tree at a site, assuming only segment duplication/deletion
 void reconstruct_joint_ancestral_state(const evo_tree& rtree, map<int, vector<vector<int>>>& vobs, vector<int>& knodes, int model, int cn_max, int use_repeat, int is_total, int m_max, ofstream &fout, double min_asr){
-    int debug = 0;
+    int debug = 1;
     if(debug) cout << "\treconstruct joint ancestral state" << endl;
    
     int Ns = rtree.nleaf - 1;
     // For copy number instantaneous changes
     int nstate = cn_max + 1;
-    if(model == BOUNDA) nstate = (cn_max + 1) * (cn_max + 2) / 2;
-    int nid = 2 * (Ns + 1) - 2;
+    if(model == BOUNDA) nstate = (cn_max + 1) * (cn_max + 2) / 2;  
+    int max_id = 2 * Ns;    // node ID for MRCA
 
     // Find the transition probability matrix for each branch
-    // map<double, double*> pmats;
     vector<double> blens;
     vector<double*> pmat_per_blen;
 
@@ -1090,7 +1081,6 @@ void reconstruct_joint_ancestral_state(const evo_tree& rtree, map<int, vector<ve
     }
     
     int ntotn = 2 * rtree.nleaf - 1;
-    int max_id = 2 * (rtree.nleaf - 1);
     double logL = 0.0;    // for all chromosmes
     for(int nchr = 1; nchr <= vobs.size(); nchr++){     // for each chromosome
       if(debug) cout << "Computing likelihood on Chr " << nchr << " with " << vobs[nchr].size() << " sites" << endl;
@@ -1103,6 +1093,7 @@ void reconstruct_joint_ancestral_state(const evo_tree& rtree, map<int, vector<ve
           vector<vector<double>> L_sk_k(ntotn, vector<double>(nstate, 0.0));
           vector<vector<int>> S_sk_k(ntotn, vector<int>(nstate, 0));
           if(use_repeat){
+              if(debug) cout << " Use repeated site patterns on site " << nc << endl;
               if(sites_lnl_map.find(obs) == sites_lnl_map.end()){
                   if(debug) cout << "sites first seen" << endl;
                   initialize_asr_table(obs, rtree, blens, pmat_per_blen, L_sk_k, S_sk_k, model, nstate, is_total);
@@ -1119,22 +1110,27 @@ void reconstruct_joint_ancestral_state(const evo_tree& rtree, map<int, vector<ve
           if(debug){
               cout << " Get the likelihood table of all internal nodes" << endl;
           }
+
           map<int, int> asr_states;     // The state ID used in rate matrix
           set<vector<int>> comps;  // empty containtor for argument
           map<int, vector<int>> asr_cns = extract_tree_ancestral_state(rtree, comps, L_sk_k, S_sk_k, model, cn_max, is_total, m_max, asr_states);
+
           for(int nid = max_id; nid > Ns + 1; nid--){
               vector<int> cns = asr_cns[nid];
               int state = asr_states[nid];
               string line = to_string(nid + 1) + "\t" + to_string(nchr) + "_" + to_string(nc);
+
               if(cns.size() > 1){
                   line += "\t" + to_string(cns[0]) + "," + to_string(cns[1]);
               }else{
                 line += "\t" + to_string(cns[0]);
               }
-              line += "\t" + to_string(state) + "\t" + to_string(pow(10, L_sk_k[nid][state]));
+
+              line += "\t" + to_string(state) + "\t" + to_string((L_sk_k[nid][state]));
               for(int i = 0; i < L_sk_k[nid].size(); i++){
-                  line += "\t" + to_string(pow(10, L_sk_k[nid][i]));
+                  line += "\t" + to_string((L_sk_k[nid][i]));
               }
+
               fout << line << endl;
           }
       }

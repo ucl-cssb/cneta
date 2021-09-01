@@ -29,7 +29,7 @@ class NewickError(Exception):
     pass
 
 
-def write_edge_list(tree_file, tree_renamed, scaling, i = -1):
+def write_edge_list(tree_file, tree_renamed, nleaf, scaling, i = -1):
     dir = os.path.dirname(tree_file)
     bname = os.path.basename(tree_file)
     if i > 0:
@@ -41,12 +41,14 @@ def write_edge_list(tree_file, tree_renamed, scaling, i = -1):
 
     header="start\tend\tlength\teid\n"
     with open(fname_full, "w") as fout:
-        fout.write(header)    
+        fout.write(header)
         j = 1
         for s, e in tree_renamed.edges:
             l = tree_renamed.nodes[e]['length']
             if scaling > 0:
                 l = l / scaling
+            if e != nleaf and l <= 0:  # avoid length 0 in branches other than that leads to normal node
+                l = 1
             line = "\t".join([str(s), str(e), str(l), str(j)])
             line += "\n"
             fout.write(line)
@@ -244,11 +246,11 @@ def convert_nexus_file(tree_file, node_prefix, incl_normal, scaling, root_blen =
             newick = line.strip()
             # print("{}th tree {}".format(i, newick))
 
-            tree_renamed = newick_to_edgelist(newick, node_prefix, incl_normal, root_blen)   
+            tree_renamed, nleaf = newick_to_edgelist(newick, node_prefix, incl_normal, root_blen)
 
             # print(tree)
             i += 1
-            write_edge_list(tree_file, tree_renamed, scaling, i)
+            write_edge_list(tree_file, tree_renamed, nleaf, scaling, i)
 
 
 
@@ -269,8 +271,8 @@ def newick_to_edgelist(newick, node_prefix, incl_normal, root_blen = 0):
     # Find the root of the tree
     num_leaf = get_num_leaf(tree)
     root = get_root(tree)
-    if not incl_normal:    
-        print("adding normal edge to root {}".format(root))   
+    if not incl_normal:
+        print("adding normal edge to root {}".format(root))
         s = num_leaf + 2  # new root
         tree.add_edge(s, root)
         tree.nodes[root]['length'] = root_blen
@@ -294,15 +296,15 @@ def newick_to_edgelist(newick, node_prefix, incl_normal, root_blen = 0):
         # print("root {}, normal {}".format(root_id, norm_id))
         tree_renamed.nodes[norm_id]['length'] = 0
 
-    return tree_renamed
+    return tree_renamed, num_leaf
 
 
 # Convert the newick tree to edge list as it is
 def convert_newick_file(tree_file, node_prefix, incl_normal, scaling, root_blen = 0):
     newick = get_newick_from_file(tree_file)
     # print("original tree is {}".format(newick))
-    tree_renamed = newick_to_edgelist(newick, node_prefix, incl_normal, root_blen)   
-    write_edge_list(tree_file, tree_renamed, scaling)
+    tree_renamed, nleaf = newick_to_edgelist(newick, node_prefix, incl_normal, root_blen)
+    write_edge_list(tree_file, tree_renamed, nleaf, scaling)
 
 
 

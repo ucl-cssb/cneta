@@ -9,8 +9,7 @@ suppressMessages(library(optparse))
 # serving as initial trees for ML tree building in svtreeml
 
 # convert all CNs into a data frame for tree building
-get_phydata <- function(data_cn){
-  data_cn %>% unite(chr, seg, col = "pos", sep = "_") %>% spread(pos, cn) %>% select(-sid) -> cns_wide
+get_phydata <- function(cns_wide){
   # data: For matrices as.phyDat() assumes that the entries each row belongs to one individual (taxa), but for data.frame each column
   data = as.data.frame(t(cns_wide))
   norm = ncol(data)  # normal sample is the last one
@@ -40,6 +39,49 @@ get_phydata_bp <- function(data_cn){
   phydata <- as.phyDat(data, type='USER', level=dlevel)
 
   return(phydata)
+}
+
+
+get_bootstrap_phydata <- function(data_cn){
+  # the column order is changed to be alphabetical
+  data_cn %>% unite(chr, seg, col = "pos", sep = "_") %>% spread(pos, cn) %>% select(-sid) -> cns_wide
+  # resample columns to get the same dimension
+  nsite = ncol(cns_wide)
+  bs_idx = sample(1:nsite, nsite, replace=T)
+  cns_bs = cns_wide[, bs_idx]
+  
+  # build step addition trees for bootstrap sample
+  phydata = get_phydata(cns_bs)
+  
+  # convert data into format required by sveta  c("sid", "chr", "seg", "cn")
+  # check the convertion is right by converting cns_wide back to original data
+  # cns_wide$sid = 1:nrow(cns_wide)
+  # pos_names = setdiff(names(cns_wide), c("sid"))
+  # cns_wide %>% gather(pos_names, key = "pos", value = "cn") %>% separate(pos, sep="_", into = c("chr", "seg")) %>% mutate(chr = as.integer(chr), seg = as.integer(seg))%>% arrange(sid, chr, seg) -> dcn
+  
+  return(list(phydata = phydata, cns_bs = cns_bs))
+}
+
+
+get_bootstrap_cn <- function(cns_bs, fcn){
+  # convert sampled data to original data format
+  # encode segment ID to keep the order (optional)
+  cns_bs$sid = 1:nrow(cns_bs)
+  pos_names = setdiff(names(cns_bs), c("sid"))
+  cns_bs %>% gather(pos_names, key = "pos", value = "cn") %>% separate(pos, sep="_", into = c("chr", "seg")) %>% mutate(chr = as.integer(chr), seg = as.integer(seg))%>% arrange(sid, chr) -> dcn_bs
+  
+  # check segment ID orders are the same across samples
+  # dcn_bs %>% filter(sid == 1) %>% select(seg) -> seg1
+  # dcn_bs %>% filter(sid == 2) %>% select(seg) -> seg2
+  # all.equal(seg1, seg2)
+  # dcn_bs %>% filter(sid == 1) %>% select(chr) -> chr1
+  # dcn_bs %>% filter(sid == 2) %>% select(chr) -> chr2
+  # all.equal(chr1, chr2)
+  
+  # write the data into gz file for tree building
+  gz1 <- gzfile(fcn, "w")
+  write.table(dcn_bs, gz1 ,quote=F, row.names=F, col.names=F, sep="\t")
+  close(gz1)
 }
 
 
@@ -97,13 +139,38 @@ pick_top_ntree <- function(uniq_strees, num_select, dir_nwk, format = "NHS"){
 }
 
 
+get_nwk_trees <- function(phydata, dir_nwk, num_generate, num_select, output_format){
+  strees = list()
+  for(i in seq(1, num_generate)){
+    stree = random.addition(phydata, method = "fitch")
+    stree <- root(stree, as.character(length(phydata)), resolve.root=TRUE)
+    stree <- acctran(stree, phydata)
+    # p = plot_tree(stree)
+    # print(p)
+    strees[[i]] = stree
+  }
+  
+  uniq_strees = unique(strees)
+  cat("There are", length(uniq_strees), "unique trees\n")
+  
+  dir.create(file.path(dir_nwk), showWarnings = FALSE)
+  # Remove old files
+  oldfiles <- dir(path=dir_nwk, pattern="nwk")
+  if(length(oldfiles) > 0){
+    file.remove(file.path(dir_nwk, oldfiles))
+  }
+  
+  pick_top_ntree(uniq_strees, num_select, dir_nwk, output_format)
+}
+
+
 # Get input CNs, add normal sample if required
 get_cn <- function(file_cn){
   data_cn <- read.table(file_cn)
   names(data_cn) = c("sid", "chr", "seg", "cn")
   # data_cn %>% group_by(sid) %>% count()
 
-  # Check if the last sample is nomal
+  # Check if the last sample is normal
   nid = length(unique(data_cn$sid))
   data_cn %>% filter(sid == nid) -> sn
   ncn = unique(sn$cn)
@@ -126,12 +193,16 @@ get_cn <- function(file_cn){
 option_list = list(
   make_option(c("-f", "--file_cn"), type="character", default="",
               help="input copy number file [default=%default]", metavar="character"),
+  make_option(c("-b", "--bootstrap"), type="integer", default=0,
+              help="Whether or not to generate bootstrap samples (0: not; 1: yes)  [default=%default]", metavar="number"),
   make_option(c("-i", "--input_format"), type="integer", default=0,
               help="The input format for tree building (0: copy number; 1: breakpoint)  [default=%default]", metavar="number"),
   make_option(c("-o", "--output_format"), type="integer", default=0,
               help="The output format of selected trees (0: NHS; 1: NWK)  [default=%default]", metavar="number"),
   make_option(c("-d", "--dir_nwk"), type="character", default="",
               help="The directory to store results (NEWICK trees) [default=%default]", metavar="character"),
+  make_option(c("-c", "--file_bs"), type="character", default="",
+              help="The file to store copy number data obtained from bootstrapping", metavar="character"),
   make_option(c("-n", "--num_generate"), type="integer", default=100,
               help="The number of trees to generate [default=%default]", metavar="number"),
   make_option(c("-s", "--num_select"), type="integer", default=100,
@@ -148,39 +219,38 @@ dir_nwk = opt$dir_nwk
 output_format = ifelse(opt$output_format, "NWK", "NHS")
 
 # file_cn = "D:/data/sveta/test4paper/largetrees/run-5-0.001-0.001-0-1000-1-6/sim-data-100-cn.txt.gz"
+# dir_nwk = "D:/data/sveta/test4paper/largetrees/run-5-0.001-0.001-0-1000-1-6/init_trees"
+# 
+# file_cn = "D:/Gdrive/git/cnv_analysis/sveta/test4paper/IBD/13patients/joint_data/data-9467-cn.txt.gz"
+# dir_nwk = "D:/Gdrive/git/cnv_analysis/sveta/test4paper/IBD/13patients/joint_data/itrees_9467"
+# file_cn = "D:/Gdrive/git/cnv_analysis/sveta/test4paper/IBD/13patients/joint_data/data-1237-cn.txt.gz"
+# dir_nwk = "D:/Gdrive/git/cnv_analysis/sveta/test4paper/IBD/13patients/joint_data/itrees_1237_bs"
+# file_bs = "D:/Gdrive/git/cnv_analysis/sveta/test4paper/IBD/13patients/joint_data/bs_1237/data-1237-cn-bs1.txt.gz"
 # input_format = 0
 # num_generate = 100
 # num_select = 100
-# dir_nwk = "D:/data/sveta/test4paper/largetrees/run-5-0.001-0.001-0-1000-1-6/init_trees"
+# output_format = "NHS"
 
-
+# original copy number data in the format of sveta
 data_cn = get_cn(file_cn)
 
-if(input_format == 0){
-  phydata = get_phydata(data_cn)
+if(opt$bootstrap){
+  cat("Generating bootstrapping data\n")
+  data_bs = get_bootstrap_phydata(data_cn)
+  phydata = data_bs$phydata
+  cns = data_bs$cns_bs
+  get_nwk_trees(phydata, dir_nwk, num_generate, num_select, output_format)
+  get_bootstrap_cn(cns, opt$file_bs)
 }else{
-  phydata = get_phydata_bp(data_cn)
+  if(input_format == 0){
+    cat("Using copy numbers to build tree\n")
+    data_cn %>% unite(chr, seg, col = "pos", sep = "_") %>% spread(pos, cn) %>% select(-sid) -> cns_wide
+    phydata = get_phydata(cns_wide)
+  }else{
+    cat("Using breakpoints to build tree\n")
+    phydata = get_phydata_bp(data_cn)
+  }
+  
+  get_nwk_trees(phydata, dir_nwk, num_generate, num_select, output_format)
+  
 }
-
-
-strees = list()
-for(i in seq(1, num_generate)){
-  stree = random.addition(phydata, method = "fitch")
-  stree <- root(stree, as.character(length(phydata)), resolve.root=TRUE)
-  stree <- acctran(stree, phydata)
-  # p = plot_tree(stree)
-  # print(p)
-  strees[[i]] = stree
-}
-
-uniq_strees = unique(strees)
-cat("There are", length(uniq_strees), "unique trees\n")
-
-dir.create(file.path(dir_nwk), showWarnings = FALSE)
-# Remove old files
-oldfiles <- dir(path=dir_nwk, pattern="nwk")
-if(length(oldfiles) > 0){
-  file.remove(file.path(dir_nwk, oldfiles))
-}
-
-pick_top_ntree(uniq_strees, num_select, dir_nwk, output_format)

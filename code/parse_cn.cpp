@@ -53,15 +53,12 @@ int state_to_allele_cn(int state, int cn_max, int& cnA, int& cnB){
 }
 
 
-// Read the samping time and patient age of each sample
-// Ns: number of samples
-// age: age at earliest sample
 vector<double> read_time_info(const string& filename, const int& Ns, int& age, int debug){
   if(debug) cout << "\tread_time_info" << endl;
 
   vector<double> t_info;
   vector<int> ages;
-  ifstream infile (filename.c_str());
+  ifstream infile(filename.c_str());
   if(infile.is_open()){
     std::string line;
     while(!getline(infile, line).eof()){
@@ -119,8 +116,7 @@ int allele_cn_to_state(int cnA, int cnB){
     return s;
 }
 
-// Format of input total copy number: sample, chr, seg, copy_number
-// Format of input allele specific copy number: sample, chr, seg, copy_number A, copy_number B -> converted into a specific number by position
+
 vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int &num_total_bins, int cn_max, int is_total, int debug){
     vector<vector<vector<int>>> s_info;
     num_total_bins = 0;
@@ -170,14 +166,18 @@ vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int &num_tot
           if(cn1 < 0 || cn2 < 0){
               cout << "Negative copy numbers in line " << line << "!" << endl;
               exit(EXIT_FAILURE);
-          }          
-          cn = allele_cn_to_state(cn1, cn2);
-          if(cn > cn_max){
-              cout << "copy number " << cn << " is larger than " << cn_max << "! Please decrease the copy number or increase maximum copy number allowed!" << endl;
           }
+          int tcn = cn1 + cn2;
+          if(tcn > cn_max){   // a bit hard to decease allele-specific CNs
+              cout << "total copy number " << tcn << " is larger than " << cn_max << "! Please adjust input accordingly!";
+            //   int larger_cn = (cn1 > cn2) ? cn1 : cn2;
+            //   int diff = tcn - cn_max;
+              exit(EXIT_FAILURE);
+          }
+          cn = allele_cn_to_state(cn1, cn2);
       }
       vector<int> vcn{chr, sid, cn};
-      s_info[sample-1].push_back(vcn);
+      s_info[sample - 1].push_back(vcn);
 
       counter++;
 
@@ -293,26 +293,13 @@ void get_sample_mcn(const vector<vector<vector<int>>>& s_info, vector<int>& samp
 }
 
 
-// Distinguish invariable and variable sites;
-// Combine adjacent invariable sites
-// TODO: Distinguish different types of invariant sites: 2 vs 4, which have different likelihoods
 vector<vector<int>> get_invar_segs(const vector<vector<vector<int>>>& s_info, int Ns, int num_total_bins, int& num_invar_bins, int is_total, int debug){
     num_invar_bins = 0;
     // Find the number of invariable sites for each character (state)
     // Loop over and output only the regions that have varied, which provide information for tree building
     vector<int> var_bins(num_total_bins, 0);
     for(int k = 0; k < num_total_bins; ++k){
-        // // using sum to detect variant bins -- not work for aneuploid genomes
-        // int sum = 0;
-        // for(int i = 0; i < Ns; ++i){
-        //     sum += abs(s_info[i][k][2]);
-        // }
-        // if((is_total == 1 && sum != 2 * Ns) || (!is_total && sum != 4 * Ns)){    // each site has number 2 when it is total CN or 4 when it is allele-specific CN
-        //     var_bins[k] = 1;
-        // }
-        // else{
-        //     num_invar_bins += 1;
-        // }
+        // using sum to detect variant bins does not work for aneuploid genomes
         int has_diff = 0;
         int cn1 = s_info[0][k][2];
         for(int i = 1; i < Ns; ++i){
@@ -323,7 +310,7 @@ vector<vector<int>> get_invar_segs(const vector<vector<vector<int>>>& s_info, in
               break;
             }
         }
-        if(has_diff == 0){
+        if(!has_diff){
           num_invar_bins += 1;
         }
     }
@@ -331,23 +318,22 @@ vector<vector<int>> get_invar_segs(const vector<vector<vector<int>>>& s_info, in
     if(debug){
         cout << "\tVariable bins found:" << endl;
         for(int k = 0; k < num_total_bins; ++k){
-            if(var_bins[k] == 1){
-            cout << s_info[0][k][0] << "\t" << s_info[0][k][1];
-            for(int i = 0; i < Ns; ++i) cout << "\t" << s_info[i][k][2];
-            cout << endl;
+            if(var_bins[k]){
+              cout << s_info[0][k][0] << "\t" << s_info[0][k][1];
+              for(int i = 0; i < Ns; ++i) cout << "\t" << s_info[i][k][2];
+              cout << endl;
             }
         }
     }
 
     int nvar = accumulate(var_bins.begin(), var_bins.end(), 0);
     cout << "\tTotal number of bins:\t" << num_total_bins << endl;
-    cout << "\tFound variable bins:\t" << nvar << endl;
-    cout << "\tFound invariable bins:\t" << num_invar_bins << endl;
+    cout << "\tNumber of variable bins:\t" << nvar << endl;
+    cout << "\tNumber of invariable bins:\t" << num_invar_bins << endl;
 
     vector<vector<int>> segs;
     for(int k = 0; k < num_total_bins;){
-        if(var_bins[k] == 1){
-          //in_seg = true;
+        if(var_bins[k]){
           int chr = s_info[0][k][0];
           int seg_start = s_info[0][k][1];
           int id_start = k;
@@ -360,7 +346,7 @@ vector<vector<int>> get_invar_segs(const vector<vector<vector<int>>>& s_info, in
           // Check the subsequent bins
           bool const_cn = true;
           k++;
-          while(var_bins[k] == 1 && const_cn){
+          while(var_bins[k] && const_cn){
               vector<int> curr_bin;
               for(int j = 0; j < Ns; ++j) curr_bin.push_back(s_info[j][k][2]);
               if(is_equal_vector(prev_bin, curr_bin) && s_info[0][k][0] == chr){
@@ -372,9 +358,8 @@ vector<vector<int>> get_invar_segs(const vector<vector<vector<int>>>& s_info, in
               }
           }
           int seg_end = s_info[0][k-1][1];
-          int id_end = k-1;
+          int id_end = k - 1;
           //cout << "seg_end:\t" << seg_end << "\t" << k << endl;
-          //cout << endl;
 
           vector<int> seg{chr, id_start, id_end, seg_start, seg_end};
           segs.push_back(seg);
@@ -384,7 +369,7 @@ vector<vector<int>> get_invar_segs(const vector<vector<vector<int>>>& s_info, in
         }
         ++k;
     }
-    cout << "\tFound segments:\t\t" << segs.size() << endl;
+    cout << "\tFound segments:\t" << segs.size() << endl;
 
     return segs;
 }
@@ -400,10 +385,9 @@ vector<vector<int>> get_all_segs(const vector<vector<vector<int>>>& s_info, int 
         for(int i = 0; i < Ns; ++i){
           sum += abs(s_info[i][k][2]);
         }
-        if((is_total==1 && sum != 2*Ns) || (is_total==0 && sum != 4*Ns)){    // each site has number 2 when it is total CN or 4 when it is allele-specific CN
+        if((is_total && sum != 2 * Ns) || (!is_total && sum != 4 * Ns)){    // each site has number 2 when it is total CN or 4 when it is allele-specific CN
             var_bins[k] = 1;
-        }
-        else{
+        }else{
             num_invar_bins += 1;
         }
     }
@@ -411,7 +395,7 @@ vector<vector<int>> get_all_segs(const vector<vector<vector<int>>>& s_info, int 
     if(debug){
         cout << "\tVariable bins found:" << endl;
         for(int k = 0; k < num_total_bins; ++k){
-          if(var_bins[k] == 1){
+          if(var_bins[k]){
             cout << s_info[0][k][0] << "\t" << s_info[0][k][1];
             for(int i = 0; i < Ns; ++i) cout << "\t" << s_info[i][k][2];
             cout << endl;
@@ -421,8 +405,8 @@ vector<vector<int>> get_all_segs(const vector<vector<vector<int>>>& s_info, int 
 
     int nvar = accumulate(var_bins.begin(), var_bins.end(), 0);
     cout << "\tTotal number of bins:\t" << num_total_bins << endl;
-    cout << "\tFound variable bins:\t" << nvar << endl;
-    cout << "\tFound invariable bins:\t" << num_invar_bins << endl;
+    cout << "\tNumber of variable bins:\t" << nvar << endl;
+    cout << "\tNumber of invariable bins:\t" << num_invar_bins << endl;
 
     vector<vector<int>> segs;
     if(incl_all){
@@ -439,7 +423,7 @@ vector<vector<int>> get_all_segs(const vector<vector<vector<int>>>& s_info, int 
         }
     }else{
         for(int k = 0; k < num_total_bins; k++){
-            if(var_bins[k] == 1){
+            if(var_bins[k]){
                 int chr = s_info[0][k][0];
                 int seg_start = s_info[0][k][1];
                 int id_start = k;
@@ -459,19 +443,19 @@ vector<vector<int>> get_all_segs(const vector<vector<vector<int>>>& s_info, int 
 }
 
 
-map<int, vector<vector<int>>>  group_segs_by_chr(const vector<vector<int>>& segs, const vector<vector<vector<int>>>& s_info, int Ns, int cn_max, int debug){
+map<int, vector<vector<int>>> group_segs_by_chr(const vector<vector<int>>& segs, const vector<vector<vector<int>>>& s_info, int Ns, int cn_max, int debug){
     map<int, vector<vector<int>>> ret;
     int Nchar = 0;
 
     for(int i = 0; i < segs.size(); ++i){
-        vector<double> av_cn(Ns,0);     // Compute the average copy number of a segment
+        vector<double> av_cn(Ns, 0.0);     // Compute the average copy number of a segment
         bool valid = true;
 
         for(int j = 0; j < Ns; ++j){
-          for(int k=segs[i][1]; k < (segs[i][2]+1); ++k){
+          for(int k = segs[i][1]; k < (segs[i][2] + 1); ++k){
                  av_cn[j] += s_info[j][k][2];
           }
-          av_cn[j] = av_cn[j] / ( segs[i][2] - segs[i][1] + 1);
+          av_cn[j] = av_cn[j] / (segs[i][2] - segs[i][1] + 1);
           // The average should be the same as the value of each bin
           assert(av_cn[j] == s_info[j][segs[i][1]][2]);
           // check all cns across the segment are integer valued
@@ -485,13 +469,11 @@ map<int, vector<vector<int>>>  group_segs_by_chr(const vector<vector<int>>& segs
         }
 
         if(valid){
-          vector<int> vals;
-          vals.push_back(segs[i][0]); // chr
-          vals.push_back(segs[i][1]); // start
-          vals.push_back(segs[i][2]); // end
+          // chr, start, end
+          vector<int> vals{segs[i][0], segs[i][1], segs[i][2]};
           for(int j = 0; j < Ns; ++j){
           	int cn = (int) av_cn[j];
-          	if(cn <= cn_max ) vals.push_back(cn);
+          	if(cn <= cn_max) vals.push_back(cn);
           	else vals.push_back(cn_max);
           }
           ret[segs[i][0]].push_back(vals);
@@ -516,11 +498,12 @@ map<int, vector<vector<int>>>  group_segs_by_chr(const vector<vector<int>>& segs
     return ret;
 }
 
+
 vector<vector<int>> group_segs(const vector<vector<int>>& segs, const vector<vector<vector<int>>>& s_info, int Ns, int cn_max, int debug){
     vector<vector<int>> ret;
 
     for(int i = 0; i < segs.size(); ++i){
-        vector<double> av_cn(Ns,0);
+        vector<double> av_cn(Ns, 0.0);
         bool valid = true;
 
         for(int j = 0; j < Ns; ++j){
@@ -601,12 +584,12 @@ map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filenam
     vector<vector<int>> segs;
     if(is_bin){
          // Read the input copy numbers while converting runs of variable bins into segments of constant cn values and group them by chromosome
-        segs = get_invar_segs(s_info, Ns, num_total_bins, num_invar_bins, is_total, debug);       
-    }else{       
+        segs = get_invar_segs(s_info, Ns, num_total_bins, num_invar_bins, is_total, debug);
+    }else{
         // Read the input copy numbers as they are and group them by chromosome
         segs = get_all_segs(s_info, Ns, num_total_bins, num_invar_bins, incl_all, is_total, debug);
     }
-    
+
     seg_size = segs.size();
     int max_cn_val = cn_max;
     if(!is_total){
@@ -623,15 +606,14 @@ map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filenam
 map<int, vector<vector<int>>> get_obs_vector_by_chr(map<int, vector<vector<int>>>& data, const int& Ns){
     map<int, vector<vector<int>>> vobs;
     // Construct the CN matrix by chromosome
-    int total_chr = data.rbegin()->first;
-    // int total_chr = data.size();   // Some chromosomes got lost in the segment merging
+    // Assume chromosomes in data are ordered numberically
+    int total_chr = data.rbegin()->first;  // Some chromosomes got lost in the segment merging, so total_chr may not equal to data.size()
     for(int nchr = 1; nchr <= total_chr; nchr++){
         vector<vector<int>> obs_chr;
-        // Nchar += data[nchr].size();
         for(int nc = 0; nc < data[nchr].size(); ++nc){
             vector<int> obs;
             for(int i = 0; i < Ns; ++i){
-              obs.push_back(data[nchr][nc][i+3]);
+              obs.push_back(data[nchr][nc][i + 3]);
             }
             obs_chr.push_back(obs);
         }

@@ -219,14 +219,27 @@ vector<evo_tree> get_initial_trees(int init_tree, string dir_itrees, int Npop, c
                 continue;
             }
 
-            if(cons){
-                adjust_tip_time(rtree, tobs, Ns, 0, debug);
-                if(debug){
-                    cout << "Adjust the initial tree by time constraint" << endl;
-                    double max_tobs = *max_element(tobs.begin(), tobs.end());;
-                    assert(is_tree_valid(rtree, max_tobs, age, cons));
-                }
+            double old_tree_height = get_tree_height(rtree.get_node_times());
+            if(cons && old_tree_height > age){
+                double min_height = *max_element(tobs.begin(), tobs.end());
+                double max_height = age - min_height;
+                assert(min_height < max_height);
+                double tree_height = runiform(r, min_height, max_height);
+                double ratio = tree_height / old_tree_height;
+                rtree.scale_time(ratio);
             }
+
+            bool non_zero = std::any_of(tobs.begin(), tobs.end(), [](double i) { return i > 0.0; });
+            if(non_zero){
+                adjust_tip_time(rtree, tobs, Ns, 0, debug);
+            }
+
+
+            if(debug){
+                cout << "Adjust the initial tree by time constraint" << endl;
+                assert(is_tree_valid(rtree, max_tobs, age, cons));
+            }
+
             restore_mutation_rates(rtree, rates);
             rtree.score = -MAX_NLNL;
             trees.push_back(rtree);
@@ -897,7 +910,7 @@ double compute_tree_likelihood(evo_tree& tree, const string& tree_file, map<int,
     vector<int> knodes_orig = lnl_type.knodes;
     vector<int> inodes;
     Node* root = &(tree.nodes[tree.root_node_id]);
-    tree.get_inodes_postorder(root, inodes);   
+    tree.get_inodes_postorder(root, inodes);
     lnl_type.knodes = inodes;
 
     // cout << "root of real tree: " << tree.root_node_id << endl;
@@ -1048,6 +1061,70 @@ void find_ML_tree(string real_tstring, int total_chr, int num_total_bins, string
 }
 
 
+void print_desc(int cons, int maxj, int correct_bias, int use_repeat, int optim, int model, int is_total){
+  if(cons){
+    cout << "\nAssuming the tree is constrained by age at sampling time" << endl;
+    cout << "\nThe age of patient at the first sampling time: " << age << endl;
+  }else{
+    cout << "\nAssuming the tree is unconstrained when doing optimization" << endl;
+    // cout << "\nThe age of patient is assumed to be: " << age << endl;
+  }
+
+  if(!maxj){
+    cout << "\nAssuming mutation rate is fixed " << endl;
+  }else{
+    cout << "\nEstimating mutation rates" << endl;
+    if(!only_seg){
+      cout << "\tfor segment duplication/deletion, chromosome gain/loss, and whole genome doubling " << endl;
+    }else{
+      cout << "\tfor segment duplication/deletion " << endl;
+    }
+  }
+
+  if(!correct_bias){
+    cout << "\nNot correcting acquisition bias in likelihood computation " << endl;
+  }else{
+    cout << "\nCorrecting acquisition bias in likelihood computation " << endl;
+  }
+
+  if(use_repeat){
+      cout << "   Using site repeats to speed up likelihood computation " << endl;
+  }
+
+  if(optim == 0){
+    cout << "\nUsing Simplex method for optimization" << endl;
+  }else{
+    cout << "\nUsing L-BFGS-B method for optimization" << endl;
+  }
+
+  switch(model){
+      case MK: {
+          cout << "\nAssuming Mk model " << endl;
+          break;
+      }
+      case BOUNDT:{
+          cout << "\nAssuming One-step bounded model of total copy number" << endl;
+          break;
+      }
+      case BOUNDA:{
+          cout << "\nAssuming One-step bounded model of allele-specific copy number" << endl;
+          break;
+      }
+      case DECOMP:{
+          cout << "\nAssuming independent Markov chains" << endl;
+          if(!is_total){
+              cout << "This model only supports total copy number for now!" << endl;
+              exit(EXIT_FAILURE);
+          }
+          break;
+      }
+      default: {
+          cout << "";
+          break;
+      }
+  }
+}
+
 
 int main(int argc, char** const argv){
     int Npop, Ngen, Ne;
@@ -1175,36 +1252,11 @@ int main(int argc, char** const argv){
 
     fp_myrng = &myrng;
 
-    // cout << fp_myrng(10) << endl;
+    int num_total_bins = 0;
+    Nchar = 0;
+    num_invar_bins = 0;
 
-    if(!cons){
-      cout << "\nAssuming the tree is unconstrained when doing optimization" << endl;
-    }else{
-      cout << "\nAssuming the tree is constrained by age at sampling time" << endl;
-    }
-
-    if(!maxj){
-      cout << "\nAssuming mutation rate is fixed " << endl;
-    }else{
-      cout << "\nEstimating mutation rates" << endl;
-      if(!only_seg){
-        cout << "\tfor segment duplication/deletion, chromosome gain/loss, and whole genome doubling " << endl;
-      }else{
-        cout << "\tfor segment duplication/deletion " << endl;
-      }
-    }
-
-    if(!correct_bias){
-      cout << "\nNot correcting acquisition bias in likelihood computation " << endl;
-    }else{
-      cout << "\nCorrecting acquisition bias in likelihood computation " << endl;
-    }
-
-    if(optim == 0){
-      cout << "\nUsing Simplex method for optimization" << endl;
-    }else{
-      cout << "\nUsing L-BFGS-B method for optimization" << endl;
-    }
+    print_desc(cons, maxj, correct_bias, use_repeat, optim, model, is_total);
 
     // tobs already defined globally
     if(timefile != ""){
@@ -1217,44 +1269,6 @@ int main(int argc, char** const argv){
       cout << "\t" << t;
     }
     cout << endl;
-
-    if(cons){
-        cout << "\nThe age of patient at the first sampling time: " << age << endl;
-    }else{
-        cout << "\nThe age of patient is assumed to be: " << age << endl;
-    }
-
-    switch(model){
-        case MK: {
-            cout << "\nAssuming Mk model " << endl;
-            break;
-        }
-        case BOUNDT:{
-            cout << "\nAssuming One-step bounded model of total copy number" << endl;
-            break;
-        }
-        case BOUNDA:{
-            cout << "\nAssuming One-step bounded model of allele-specific copy number" << endl;
-            break;
-        }
-        case DECOMP:{
-            cout << "\nAssuming independent Markov chains" << endl;
-            if(!is_total){
-                cout << "This model only supports total copy number for now!" << endl;
-                exit(EXIT_FAILURE);
-            }
-            break;
-        }
-        default: {
-            cout << "";
-            break;
-        }
-    }
-
-    int num_total_bins = 0;
-
-    Nchar = 0;
-    num_invar_bins = 0;
 
     map<int, vector<vector<int>>> data;
     cout << "\nReading input copy numbers" << endl;
@@ -1273,9 +1287,6 @@ int main(int argc, char** const argv){
     if(num_total_bins == num_invar_bins){
         cout << "There are no variant segments in the input data!" << endl;
         exit(EXIT_FAILURE);
-    }
-    if(use_repeat){
-        cout << "   Using site repeats to speed up likelihood computation " << endl;
     }
 
     vobs = get_obs_vector_by_chr(data, Ns);
@@ -1315,7 +1326,7 @@ int main(int argc, char** const argv){
     int opt_one_branch = 0; // optimize all branches by default
     opt_type = {maxj, tolerance, miter, opt_one_branch, tobs, scale_tobs};
 
-    string real_tstring = "";   // used for comparison to searched trees 
+    string real_tstring = "";   // used for comparison to searched trees
     evo_tree real_tree;
     if(tree_file != ""){
         double lnl = compute_tree_likelihood(real_tree, tree_file, decomp_table, Ns, Nchar, num_invar_bins, vobs, tobs, rates, model, cons, cn_max, max_wgd, max_chr_change, max_site_change, only_seg, correct_bias, is_total);

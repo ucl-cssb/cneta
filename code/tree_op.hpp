@@ -210,7 +210,7 @@ evo_tree read_tree_info(const string& filename, const int& Ns, int debug = 0);
 
 // ajust time of tip nodes to be consistent with input time
 // Given a random colescent tree, all the original tip times are equal
-// Given a parsimony tree, the tip times may be different, which need to be made equal at first
+// Given a parsimony tree, the tip times may be different, which need to be made equal at first (indicated by same_tip)
 void adjust_tip_time(evo_tree& rtree, const vector<double>& tobs, int Ns, int same_tip = 1, int debug = 0);
 
 
