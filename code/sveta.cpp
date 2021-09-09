@@ -30,8 +30,6 @@ const int NODE_MIN_TIME = 1000;
 enum SIM_METHOD {SIM_TIME, SIM_SEQ};
 enum MUT_TYPE {DUP, DEL, GAIN, LOSS, WGD};
 
-// key: chr, seg, copy_number
-typedef map<int, map<int,int>> copy_number;
 
 int debug = 0;
 gsl_rng* r;
@@ -693,9 +691,9 @@ copy_number initialize_cn(const vector<int>& chr_lengths, int num_seg, int model
 
       for(int j = 0; j < num_seg; j++){
           if(model == BOUNDT){
-             cn[i][j] = 2;     // index of normal state
+             cn[i][j] = NORM_PLOIDY;     // index of normal state
           }else{
-             cn[i][j] = 4;
+             cn[i][j] = NORM_ALLElE_STATE;
           }
        }
     }
@@ -716,7 +714,7 @@ void print_cn_state(const copy_number& curr_cn){
     for(auto cn_profile : curr_cn){
         for(auto seg: cn_profile.second){
             // chr, seg, cn
-            cout <<  cn_profile.first << "\t"  << seg.first << "\t" << seg.second << endl;
+            cout << cn_profile.first << "\t"  << seg.first << "\t" << seg.second << endl;
         }
     }
 }
@@ -811,13 +809,12 @@ void write_cn(map<int, copy_number>& cn_matrix, int node_id, ogzstream& out, int
     copy_number cn_profile = cn_matrix[node_id];
 
     for(auto c : cn_profile){
-        // cout << c.first << endl;
         for(auto s : c.second){
             int cn = s.second;
             if(model == BOUNDA) cn = state_to_total_cn(s.second, cn_max);
             // node_id, chr, seg_id, copy number
-            if(debug) cout << node_id + 1 << "\t" << c.first << "\t" << s.first << "\t" << s.second << "\t" << cn << endl;
-            out << node_id + 1 << "\t" << c.first << "\t" << s.first << "\t" << cn << endl;
+            if(debug) cout << node_id + 1 << "\t" << c.first + 1 << "\t" << s.first + 1 << "\t" << s.second << "\t" << cn << endl;
+            out << node_id + 1 << "\t" << c.first + 1 << "\t" << s.first + 1 << "\t" << cn << endl;
         }
     }
 }
@@ -827,15 +824,14 @@ void write_allele_cn(map<int, copy_number>& cn_matrix, int node_id, ogzstream& o
     copy_number cn_profile = cn_matrix[node_id];
 
     for(auto c : cn_profile){
-        // cout << c.first << endl;
         for(auto s : c.second){
             int state = s.second;
             int cnA = 0;
             int cnB = 0;
             state_to_allele_cn(state, cn_max, cnA, cnB);
             // node_id, chr, seg_id, copy number
-            if(debug) cout << node_id + 1 << "\t" << c.first << "\t" << s.first << "\t" << s.second << "\t" << cnA  << "\t" << cnB << endl;
-            out << node_id + 1 << "\t" << c.first << "\t" << s.first << "\t" << cnA  << "\t" << cnB << endl;
+            if(debug) cout << node_id + 1 << "\t" << c.first + 1 << "\t" << s.first + 1 << "\t" << s.second << "\t" << cnA << "\t" << cnB << endl;
+            out << node_id + 1 << "\t" << c.first + 1 << "\t" << s.first + 1 << "\t" << cnA << "\t" << cnB << endl;
         }
     }
 }

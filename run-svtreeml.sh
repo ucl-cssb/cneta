@@ -13,7 +13,6 @@ idir="./example"   # The input directory
 prefix=sim-data-1   # The prefix of input files
 # prefix=sim-data-"$1"
 
-
 # The input parameters related to copy numbers
 input=$idir/"$prefix"-cn.txt.gz
 # input=$idir/"$prefix"-allele-cn.txt.gz
@@ -27,7 +26,7 @@ is_total=1    # If yes (1), the input is total copy number; or else (0), the inp
 # whether or not the input copy number is for each bin. If not, the input copy number is read as it is. Or else, consecutive bins will be merged
 is_bin=0
 # whether or not to include all the input copy numbers without further propressing
-incl_all=0
+incl_all=1
 cn_max=4  # Maximum copy number allowed
 
 # The input parameters that should be consistent with the simulation or real data
@@ -50,7 +49,7 @@ m_max=1
 estmu=1  # Whether or not to estimate mutation rate
 only_seg=1  # 1: only estimate segment duplication/deletion rates; 0: otherwise
 
-if [[ $times == "" ]]; then 
+if [[ $times == "" ]]; then
   estmu=0
   cons=0
 fi
@@ -74,8 +73,8 @@ speed_nni=1
 # Parameters about starting tree during search
 init_tree=0  # 0: Random coalescence tree, 1: Maximum parsimony tree
 dir_itrees=$idir/itrees  # The directory containing the initial trees (in TXT format)
-# tree_file=$idir/"$prefix"-tree.txt   # Only required when the tree is to be given as input
-tree_file=""
+tree_file=$idir/"$prefix"-tree.txt   # Only required when the tree is to be given as input
+# tree_file=""
 # effective population size for random initial coalescence tree
 Ne=90000
 beta=1.563e-3  # exponential growth rate
@@ -105,8 +104,9 @@ if [[ $mode -eq 0 ]]; then
   suffix=m$model-o"$opt"-s"$tree_search"-cons${cons}-estmu${estmu}-"$prefix"
   mltree=$dir/MaxL-"$suffix".txt
 
-  # valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all --track-origins=yes -v 
-  /usr/bin/time ./code/svtreeml -c $input -t "$times" --tree_file "$tree_file" --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change --is_bin $is_bin --incl_all $incl_all -s $Ns -p $Npop -g $Ngen -e $Nstop -r $tolerance -o $mltree -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $estmu --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode --speed_nni $speed_nni --seed $seed 2>&1  > $dir/std_svtreeml_"$suffix"
+  echo "seed $seed" > $dir/std_svtreeml_"$suffix" 
+  # valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all --track-origins=yes -v
+  /usr/bin/time ./code/svtreeml -c $input -t "$times" --tree_file "$tree_file" --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change --is_bin $is_bin --incl_all $incl_all -s $Ns -p $Npop -g $Ngen -e $Nstop -r $tolerance -o $mltree -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $estmu --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode --speed_nni $speed_nni --seed $seed 2>&1 >> $dir/std_svtreeml_"$suffix"
   # #
   #
   echo "Finish running svtreeml"
@@ -183,6 +183,7 @@ elif [[ $mode -eq 4 ]]; then  # Inferring ancestral states of a given tree from 
   # In this mode, the mutation rates have to be specified
   suffix=m$model-o"$opt"-s"$tree_search"-cons${cons}-estmu${estmu}-"$prefix"
   mltree=$dir/MaxL-"$suffix".txt
+  # mltree=$tree_file
   echo "Inferring ancestral states of the given tree $mltree"
 
   code/svtreeml -c $input -t "$times" -o "$mltree" --is_bin $is_bin --incl_all $incl_all -s $Ns --tree_file "$mltree" --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change -d $model --cn_max $cn_max --only_seg $only_seg --constrained $cons --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode  --seed $seed > $dir/std_svtreeml_state_"$suffix"

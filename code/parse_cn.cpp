@@ -136,9 +136,15 @@ vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int &num_tot
       stringstream ss(line);
       while(ss >> buf) split.push_back(buf);
 
-      int sample = atoi(split[0].c_str());
+      const char* sstr = split[0].c_str(); 
+      if(!isdigit(*sstr)){
+          cout << "Sample ID must be an integer, ordered from 1 to the specified number of patient samples!" << endl;
+          exit(EXIT_FAILURE);
+      }
+      int sample = atoi(sstr);
       // Read next sample
       if(sample > Ns){
+          cout << "Skipping sample with ID larger than " << Ns << endl;
           break;
       }
       if(prev_sample != sample){
@@ -190,7 +196,7 @@ vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int &num_tot
     return s_info;
 }
 
-// Find the potential number of WGDs for each sample
+
 void get_num_wgd(const vector<vector<vector<int>>>& s_info, int cn_max, vector<int>& obs_num_wgd, int is_total, int debug){
     cout << "Getting the potential number of WGDs for each sample" << endl;
     for(int i = 0; i < s_info.size(); i++){
@@ -226,7 +232,6 @@ void get_num_wgd(const vector<vector<vector<int>>>& s_info, int cn_max, vector<i
 }
 
 
-// Find the potential number of chromosome changes for each sample
 void get_change_chr(const vector<vector<vector<int>>>& s_info, vector<vector<int>>& obs_change_chr, int cn_max, int is_total, int debug){
     cout << "Getting the potential number of chromosome changes for each sample" << endl;
     for(int i = 0; i < s_info.size(); i++){
@@ -273,7 +278,6 @@ void get_change_chr(const vector<vector<vector<int>>>& s_info, vector<vector<int
 
 
 
-// Find the largest copy number in a sample
 void get_sample_mcn(const vector<vector<vector<int>>>& s_info, vector<int>& sample_max_cn, int cn_max, int is_total, int debug){
     cout << "Getting the largest copy number for each sample" << endl;
     for(int i = 0; i < s_info.size(); i++){
@@ -295,41 +299,8 @@ void get_sample_mcn(const vector<vector<vector<int>>>& s_info, vector<int>& samp
 
 vector<vector<int>> get_invar_segs(const vector<vector<vector<int>>>& s_info, int Ns, int num_total_bins, int& num_invar_bins, int is_total, int debug){
     num_invar_bins = 0;
-    // Find the number of invariable sites for each character (state)
-    // Loop over and output only the regions that have varied, which provide information for tree building
     vector<int> var_bins(num_total_bins, 0);
-    for(int k = 0; k < num_total_bins; ++k){
-        // using sum to detect variant bins does not work for aneuploid genomes
-        int has_diff = 0;
-        int cn1 = s_info[0][k][2];
-        for(int i = 1; i < Ns; ++i){
-            int cn2 = s_info[i][k][2];
-            if(cn2 != cn1){
-              has_diff = 1;
-              var_bins[k] = 1;
-              break;
-            }
-        }
-        if(!has_diff){
-          num_invar_bins += 1;
-        }
-    }
-
-    if(debug){
-        cout << "\tVariable bins found:" << endl;
-        for(int k = 0; k < num_total_bins; ++k){
-            if(var_bins[k]){
-              cout << s_info[0][k][0] << "\t" << s_info[0][k][1];
-              for(int i = 0; i < Ns; ++i) cout << "\t" << s_info[i][k][2];
-              cout << endl;
-            }
-        }
-    }
-
-    int nvar = accumulate(var_bins.begin(), var_bins.end(), 0);
-    cout << "\tTotal number of bins:\t" << num_total_bins << endl;
-    cout << "\tNumber of variable bins:\t" << nvar << endl;
-    cout << "\tNumber of invariable bins:\t" << num_invar_bins << endl;
+    get_var_bins(s_info, Ns, num_total_bins, num_invar_bins, var_bins, is_total, debug);
 
     vector<vector<int>> segs;
     for(int k = 0; k < num_total_bins;){
@@ -375,51 +346,62 @@ vector<vector<int>> get_invar_segs(const vector<vector<vector<int>>>& s_info, in
 }
 
 
-vector<vector<int>> get_all_segs(const vector<vector<vector<int>>>& s_info, int Ns, int num_total_bins, int& num_invar_bins, int incl_all, int is_total, int debug){
-    num_invar_bins = 0;
-    // Find the number of invariable sites for each character (state)
-    // Loop over and output only the regions that have varied
-    vector<int> var_bins(num_total_bins, 0);
+void get_var_bins(const vector<vector<vector<int>>>& s_info, int Ns, int num_total_bins, int& num_invar_bins, vector<int>& var_bins, int is_total, int debug){
     for(int k = 0; k < num_total_bins; ++k){
-        int sum = 0;
+        // using sum of CNs across samples to detect variant bins does not work for special cases
+        vector<int> cns;
         for(int i = 0; i < Ns; ++i){
-          sum += abs(s_info[i][k][2]);
+            int cn = s_info[i][k][2];
+            cns.push_back(cn);
         }
-        if((is_total && sum != 2 * Ns) || (!is_total && sum != 4 * Ns)){    // each site has number 2 when it is total CN or 4 when it is allele-specific CN
-            var_bins[k] = 1;
+
+        bool is_invar = true;
+        if(is_total){
+            is_invar = all_of(cns.begin(), cns.end(), [&] (int i) {return i == NORM_PLOIDY;});
+        }else{ // For allele-specific CN, normal state is 1/1, with ID 4
+            is_invar = all_of(cns.begin(), cns.end(), [&] (int i) {return i == NORM_ALLElE_STATE;});
+        }
+        if(is_invar){
+          num_invar_bins += 1;
         }else{
-            num_invar_bins += 1;
+          var_bins[k] = 1;
         }
     }
 
     if(debug){
         cout << "\tVariable bins found:" << endl;
         for(int k = 0; k < num_total_bins; ++k){
-          if(var_bins[k]){
-            cout << s_info[0][k][0] << "\t" << s_info[0][k][1];
-            for(int i = 0; i < Ns; ++i) cout << "\t" << s_info[i][k][2];
-            cout << endl;
-          }
+            if(var_bins[k]){
+              cout << s_info[0][k][0] << "\t" << s_info[0][k][1];
+              for(int i = 0; i < Ns; ++i) cout << "\t" << s_info[i][k][2];
+              cout << endl;
+            }
         }
-    }
+    }  
 
     int nvar = accumulate(var_bins.begin(), var_bins.end(), 0);
     cout << "\tTotal number of bins:\t" << num_total_bins << endl;
     cout << "\tNumber of variable bins:\t" << nvar << endl;
-    cout << "\tNumber of invariable bins:\t" << num_invar_bins << endl;
+    cout << "\tNumber of invariable bins:\t" << num_invar_bins << endl; 
+}
+
+
+vector<vector<int>> get_all_segs(const vector<vector<vector<int>>>& s_info, int Ns, int num_total_bins, int& num_invar_bins, int incl_all, int is_total, int debug){
+    num_invar_bins = 0;
+    vector<int> var_bins(num_total_bins, 0);
+    get_var_bins(s_info, Ns, num_total_bins, num_invar_bins, var_bins, is_total, debug);
 
     vector<vector<int>> segs;
     if(incl_all){
         for(int k = 0; k < num_total_bins; k++){
-              int chr = s_info[0][k][0];
-              int seg_start = s_info[0][k][1];
-              int id_start = k;
-              int seg_end = s_info[0][k][1];
-              int id_end = k;
-              //cout << "seg_end:\t" << seg_end << "\t" << k << endl;
-              //cout << endl;
-              vector<int> seg{chr, id_start, id_end, seg_start, seg_end};
-              segs.push_back(seg);
+            int chr = s_info[0][k][0];
+            int seg_start = s_info[0][k][1];
+            int id_start = k;
+            int seg_end = s_info[0][k][1];
+            int id_end = k;
+            //cout << "seg_end:\t" << seg_end << "\t" << k << endl;
+            vector<int> seg{chr, id_start, id_end, seg_start, seg_end};
+            segs.push_back(seg);
         }
     }else{
         for(int k = 0; k < num_total_bins; k++){
@@ -430,7 +412,6 @@ vector<vector<int>> get_all_segs(const vector<vector<vector<int>>>& s_info, int 
                 int seg_end = s_info[0][k][1];
                 int id_end = k;
                 //cout << "seg_end:\t" << seg_end << "\t" << k << endl;
-                //cout << endl;
                 vector<int> seg{chr, id_start, id_end, seg_start, seg_end};
                 segs.push_back(seg);
             }
@@ -458,7 +439,7 @@ map<int, vector<vector<int>>> group_segs_by_chr(const vector<vector<int>>& segs,
           av_cn[j] = av_cn[j] / (segs[i][2] - segs[i][1] + 1);
           // The average should be the same as the value of each bin
           assert(av_cn[j] == s_info[j][segs[i][1]][2]);
-          // check all cns across the segment are integer valued
+          // check all CNs across the segment are integers
           if(ceil(av_cn[j]) != floor(av_cn[j]) ) valid = false;
         }
 
@@ -572,7 +553,7 @@ vector<vector<int>> read_data_var_regions(const string& filename, const int& Ns,
 
 
 map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filename, const int& Ns, const int& cn_max, int& num_invar_bins, int& num_total_bins, int& seg_size, vector<int>& obs_num_wgd, vector<vector<int>>& obs_change_chr, vector<int>& sample_max_cn, int model, int is_total, int is_bin, int incl_all, int debug){
-    cout << "\nReading data and calculating CNA regions by chromosome" << endl;
+    cout << "\nReading data and group regions by chromosome" << endl;
 
     vector<vector<vector<int>>> s_info = read_cn(filename, Ns, num_total_bins, cn_max, is_total, debug);
     if(model == DECOMP){
@@ -607,8 +588,11 @@ map<int, vector<vector<int>>> get_obs_vector_by_chr(map<int, vector<vector<int>>
     map<int, vector<vector<int>>> vobs;
     // Construct the CN matrix by chromosome
     // Assume chromosomes in data are ordered numberically
-    int total_chr = data.rbegin()->first;  // Some chromosomes got lost in the segment merging, so total_chr may not equal to data.size()
-    for(int nchr = 1; nchr <= total_chr; nchr++){
+    // int total_chr = data.rbegin()->first;  // Some chromosomes got lost in the segment merging, so total_chr may not equal to data.size()
+    // int nchr = data.begin()->first;
+    // for(; nchr <= total_chr; nchr++){
+    for(auto dcn : data){
+        int nchr = dcn.first;
         vector<vector<int>> obs_chr;
         for(int nc = 0; nc < data[nchr].size(); ++nc){
             vector<int> obs;
@@ -627,18 +611,19 @@ void get_bootstrap_vector_by_chr(map<int, vector<vector<int>>>& data, map<int, v
     // create a copy of vobs to resample
     map<int, vector<vector<int>>> vobs_copy = vobs;
     vobs.clear();
-    int total_chr = data.rbegin()->first;
+
     // cout << "Total number of chromosomes " << total_chr << endl;
-    for(int nchr = 1; nchr <= total_chr; nchr++){
-      // cout << "Chr " << nchr << "\t";
-      vector<vector<int>> obs_chr;
-      for(int nc = 0; nc < data[nchr].size(); ++nc){
-            // randomly select a site
-           int i = gsl_rng_uniform_int(r, data[nchr].size());
-           // cout << i << ":" << vobs_copy[nchr][i].size() << "\t" ;
-           obs_chr.push_back(vobs_copy[nchr][i]);
-      }
-      // cout << obs_chr.size() << endl;
-      vobs[nchr] = obs_chr;
+    for(auto dcn : data){
+        int nchr = dcn.first;
+        // cout << "Chr " << nchr << "\t";
+        vector<vector<int>> obs_chr;
+        for(int nc = 0; nc < data[nchr].size(); ++nc){
+                // randomly select a site
+            int i = gsl_rng_uniform_int(r, data[nchr].size());
+            // cout << i << ":" << vobs_copy[nchr][i].size() << "\t" ;
+            obs_chr.push_back(vobs_copy[nchr][i]);
+        }
+        // cout << obs_chr.size() << endl;
+        vobs[nchr] = obs_chr;
     }
 }

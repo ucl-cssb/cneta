@@ -8,6 +8,7 @@ void print_lnl_at_tips(const evo_tree& rtree, const vector<int>& obs, const vect
         cout<< "\t" << obs[i];
     }
     cout << endl;
+    
     cout << "\nLikelihood for tips:\n";
     for(int i = 0; i < rtree.nleaf; ++i){
         for(int j = 0; j < nstate; ++j){
@@ -27,7 +28,7 @@ void initialize_lnl_table(vector<vector<double>>& L_sk_k, const vector<int>& obs
             // For total copy number, all the possible combinations have to be considered.
             // Set related allele specific cases to be 1, with index from obs[i] * (obs[i] + 1)/2 to obs[i] * (obs[i] + 1)/2 + obs[i]. The index is computed based on pre-specified order.
             if(is_total){
-                int si = (obs[i] * (obs[i] + 1))/2;
+                int si = (obs[i] * (obs[i] + 1)) / 2;
                 int ei = si + obs[i];
                 for(int k = si; k <= ei; k++){
                     L_sk_k[i][k] = 1.0;
@@ -37,7 +38,7 @@ void initialize_lnl_table(vector<vector<double>>& L_sk_k, const vector<int>& obs
             }
         }
         // set unaltered 1/1
-        L_sk_k[Ns][4] = 1.0;
+        L_sk_k[Ns][NORM_ALLElE_STATE] = 1.0;
     }else{
         for(int i = 0; i < Ns; ++i){
           for(int j = 0; j < nstate; ++j){
@@ -45,7 +46,7 @@ void initialize_lnl_table(vector<vector<double>>& L_sk_k, const vector<int>& obs
           }
         }
         // set unaltered
-        L_sk_k[Ns][2] = 1.0;
+        L_sk_k[Ns][NORM_PLOIDY] = 1.0;
     }
 
     if(debug){
@@ -130,9 +131,9 @@ vector<vector<double>> initialize_lnl_table_decomp(vector<int>& obs, OBS_DECOMP&
     }
     // set likelihood for normal sample
     // Fill all the possible state combinations
-    for (int j = 0; j < comps.size(); j++){
+    for(int j = 0; j < comps.size(); j++){
         int k = 0;
-        for (auto v : comps){
+        for(auto v : comps){
             bool zeros = all_of(v.begin(), v.end(), [](int i) { return i == 0; });
             if(zeros){
                 L_sk_k[rtree.nleaf - 1][k] = 1.0;
@@ -158,7 +159,7 @@ double get_prob_children_decomp(vector<vector<double>>& L_sk_k, const evo_tree& 
     set<vector<int>> comp_start = decomp_table[sk];
     // get_decomposition(sk, s_wgd, s_chr, s_seg, decomp_table);
 
-    double Li = 0;
+    double Li = 0.0;
     for(auto s : comp_start){
         s_wgd = s[0];
         s_chr = s[1] + s[3];
@@ -184,7 +185,7 @@ double get_prob_children_decomp(vector<vector<double>>& L_sk_k, const evo_tree& 
         }
     }
 
-    double Lj = 0;
+    double Lj = 0.0;
     for(auto s : comp_start){
         s_wgd = s[0];
         s_chr = s[1] + s[3];
@@ -246,7 +247,7 @@ double get_prob_children_decomp2(vector<vector<double>>& L_sk_k, const evo_tree&
     }
 
 
-    double Li = 0;
+    double Li = 0.0;
     int si = 0;
     for(auto e : comps){
         double prob = 0;
@@ -285,7 +286,7 @@ double get_prob_children_decomp2(vector<vector<double>>& L_sk_k, const evo_tree&
     }
     if(debug) cout << "\tscoring: Li\t" << Li << endl;
 
-    double Lj = 0;
+    double Lj = 0.0;
     int sj = 0;
     for(auto e : comps){
         double prob = 0;
@@ -348,7 +349,6 @@ void get_likelihood_site(vector<vector<double>>& L_sk_k, const evo_tree& rtree, 
     auto pi = std::equal_range(blens.begin(), blens.end(), bli);
     // assert(distance(pi.first, pi.second) == 1);
     int idx_bli = std::distance(blens.begin(), pi.first);
-
     auto pj = std::equal_range(blens.begin(), blens.end(), blj);
     // assert(distance(pj.first, pj.second) == 1);
     int idx_blj = std::distance(blens.begin(), pj.first);
@@ -372,8 +372,8 @@ void get_likelihood_site(vector<vector<double>>& L_sk_k, const evo_tree& rtree, 
     //loop over possible values of sk
     if(k == rtree.nleaf){    // root node is always normal
         if(debug) cout << "Getting likelihood for root node " << k << endl;
-        int nsk = 2;
-        if(model == BOUNDA) nsk = 4;
+        int nsk = NORM_PLOIDY;
+        if(model == BOUNDA) nsk = NORM_ALLElE_STATE;
         L_sk_k[k][nsk] = get_prob_children(L_sk_k, rtree, pbli, pblj, nsk, ni, nj, bli, blj, model, nstate);
     }else{
         for(int sk = 0; sk < nstate; ++sk){
@@ -480,16 +480,18 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, const evo_tree& r
     double logL = 0.0;    // for all chromosmes
     double chr_gain = 0.0;
     double chr_loss = 0.0;
+    // Use a map to store computed log likelihood to save computation on duplicated site patterns
+    map<vector<int>, vector<vector<double>>> sites_lnl_map;
 
-    for(int nchr = 1; nchr <= vobs.size(); nchr++){     // for each chromosome
+    // for each chromosome
+    for(auto vcn : vobs){
+      int nchr = vcn.first;  
       if(debug) cout << "Computing likelihood on Chr " << nchr << " with  " << vobs[nchr].size() << " sites " << endl;
       double chr_logL = 0.0;  // for one chromosome
       double chr_logL_normal = 0.0, chr_logL_gain = 0.0, chr_logL_loss = 0.0;
       double site_logL = 0.0;   // log likelihood for all sites on a chromosome
       int z = 0;    // no chr gain/loss
       // cout << " chromosome number change is " << 0 << endl;
-      // Use a map to store computed log likelihood
-      map<vector<int>, vector<vector<double>>> sites_lnl_map;
 
       for(int nc = 0; nc < vobs[nchr].size(); nc++){    // for each segment on the chromosome
           // for each site of the chromosome (may be repeated)
@@ -500,6 +502,7 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, const evo_tree& r
               if(sites_lnl_map.find(obs) == sites_lnl_map.end()){
                   initialize_lnl_table(L_sk_k, obs, rtree, model, nstate, is_total);
                   get_likelihood_site(L_sk_k, rtree, knodes, blens, pmat_per_blen, has_wgd, z, model, nstate);
+                  sites_lnl_map[obs] = L_sk_k;
               }else{
                   // cout << "sites repeated" << end1;
                   L_sk_k = sites_lnl_map[obs];
@@ -517,7 +520,7 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, const evo_tree& r
           }
       }
 
-      double chr_normal = 1;
+      double chr_normal = 1.0;
       if(!only_seg){
           chr_gain = rtree.chr_gain_rate;
           chr_loss = rtree.chr_loss_rate;
@@ -528,10 +531,10 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, const evo_tree& r
               cout << "Number of chr so far " << vobs.size() << endl;
           }
 
-          if(fabs(chr_loss - 0) > SMALL_VAL){
+          if(fabs(chr_loss) > SMALL_VAL){
              chr_normal -= chr_loss;
           }
-          if(fabs(chr_gain - 0) > SMALL_VAL){
+          if(fabs(chr_gain) > SMALL_VAL){
              chr_normal -= chr_gain;
           }
       }
@@ -546,7 +549,7 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, const evo_tree& r
       }
 
       if(!only_seg){
-          if(fabs(chr_loss - 0) > SMALL_VAL){
+          if(fabs(chr_loss) > SMALL_VAL){
               z = -1;
               double site_logL = 0.0;   // log likelihood for all sites on a chromosome
               // cout << " chromosome number change is " << z << endl;
@@ -573,9 +576,9 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, const evo_tree& r
               }
           } // for all chromosome loss
 
-          if(fabs(chr_gain - 0) > SMALL_VAL){
+          if(fabs(chr_gain) > SMALL_VAL){
               z = 1;
-              double site_logL = 0;   // log likelihood for all sites on a chromosome
+              double site_logL = 0.0;   // log likelihood for all sites on a chromosome
               // cout << " chromosome number change is " << z << endl;
               for(int nc = 0; nc < vobs[nchr].size(); nc++){
                   // cout << "Number of sites for this chr " << vobs[nchr].size() << endl;
@@ -594,8 +597,7 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, const evo_tree& r
               chr_logL_gain = log(chr_gain) + site_logL;
               if(chr_logL_loss > 0){
                   chr_logL += log(1 + 1 / (exp(chr_logL_normal - chr_logL_gain) + exp(chr_logL_loss - chr_logL_gain)));
-              }
-              else{
+              }else{
                   chr_logL += log(1 + exp(chr_logL_gain - chr_logL_normal));
               }
 
@@ -606,31 +608,37 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, const evo_tree& r
           } // for all chromosome loss
           // chr_logL = chr_logL_normal + log(1 + exp(chr_logL_loss-chr_logL_normal)) + log(1 + 1 / (exp(chr_logL_normal-chr_logL_gain) + exp(chr_logL_loss-chr_logL_gain)));
       }
+
       logL += chr_logL;
+
       if(debug){
           cout << "\nLikelihood after considering chr gain/loss for  " << nchr << " is " << logL << endl;
       }
     } // for each chromosome
+
     if(debug){
         cout << "\nLikelihood with chr gain/loss for all chromosmes: " << logL << endl;
     }
+
     return logL;
 }
 
-// Used when WGD is considered, dealing with mutations of different types at different levels
+
 double get_likelihood_chr_decomp(map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const evo_tree& rtree, const set<vector<int>>& comps, const vector<int>& knodes, PMAT_DECOMP& pmat_decomp, DIM_DECOMP& dim_decomp, int infer_wgd, int infer_chr, int use_repeat, int cn_max, int is_total){
     int debug = 0;
-    double logL = 0;    // for all chromosmes
-
+    double logL = 0.0;    // for all chromosmes
     int nstate = comps.size();
-    for(int nchr = 1; nchr <= vobs.size(); nchr++){     // for each chromosome
+    // Use a map to store computed log likelihood
+    map<vector<int>, vector<vector<double>>> sites_lnl_map;
+
+    // for each chromosome
+    for(auto vcn : vobs){
+      int nchr = vcn.first;    
       if(debug){
-        cout << "Computing likelihood on Chr " << nchr << endl;
-        cout << "Number of sites for this chr " << vobs[nchr].size() << endl;
+        cout << "Computing likelihood on Chr " << nchr <<  " with " << vobs[nchr].size() << "sites" << endl;
       }
-      double site_logL = 0;   // log likelihood for all sites on a chromosome
-      // Use a map to store computed log likelihood
-      map<vector<int>, vector<vector<double>>> sites_lnl_map;
+      double site_logL = 0.0;   // log likelihood for all sites on a chromosome
+
       // cout << " chromosome number change is " << 0 << endl;
       for(int nc = 0; nc < vobs[nchr].size(); nc++){    // for each segment on the chromosome
           // for each site of the chromosome (may be repeated)
@@ -661,11 +669,14 @@ double get_likelihood_chr_decomp(map<int, vector<vector<int>>>& vobs, OBS_DECOMP
               print_tree_lnl(rtree, L_sk_k, nstate);
           }
       }
+
       logL += site_logL;
+
       if(debug){
           cout << "\nLikelihood for chromosome " << nchr << " is " << site_logL << endl;
       }
     } // for each chromosome
+
     return logL;
 }
 
@@ -690,8 +701,6 @@ double get_likelihood_invariant_decomp(OBS_DECOMP& obs_decomp, evo_tree& rtree, 
 }
 
 
-// Incorporate chromosome gain/loss and WGD
-// Model 2: Treat total copy number as the observed data and the allele-specific information is missing
 double get_likelihood_revised(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, LNL_TYPE& lnl_type){
   // int debug = 0;
   // if(debug) cout << "\tget_likelihood by matrix exponential" << endl;
@@ -784,7 +793,6 @@ double get_likelihood_revised(evo_tree& rtree, map<int, vector<vector<int>>>& vo
       logL += rtree.wgd_rate * get_likelihood_chr(vobs, rtree, knodes, blens, pmat_per_blen, 1, lnl_type.only_seg, lnl_type.use_repeat, model, nstate, is_total);
   }
 
-
   // if(debug) cout << "Final likelihood before correcting acquisition bias: " << logL << endl;
 
   if(lnl_type.correct_bias){
@@ -795,7 +803,7 @@ double get_likelihood_revised(evo_tree& rtree, map<int, vector<vector<int>>>& vo
       // Suppose the value is 2 for all samples
       int normal_cn = 2;
       if(!is_total){
-          normal_cn = 4;
+          normal_cn = 4;    // state ID for allele-specific CN 1/1
       }
 
       vector<int> obs(rtree.nleaf - 1, normal_cn);
@@ -1176,12 +1184,14 @@ double extract_tree_lnl(vector<vector<double>>& L_sk_k, int Ns, int model){
 
     if(model == BOUNDA){
         // The index is changed from 2 to 4 (1/1)
-        if(debug) cout << "Likelihood for root is " << L_sk_k[Ns + 1][4] << endl;
-        if(L_sk_k[Ns + 1][4] > 0) return log(L_sk_k[Ns + 1][4]);
+        if(debug) cout << "Likelihood for root is " << L_sk_k[Ns + 1][NORM_ALLElE_STATE] << endl;
+
+        if(L_sk_k[Ns + 1][NORM_ALLElE_STATE] > 0) return log(L_sk_k[Ns + 1][NORM_ALLElE_STATE]);
         else return LARGE_LNL;
     }else{
-        if(debug) cout << "Likelihood for root is " << L_sk_k[Ns + 1][2] << endl;
-        if(L_sk_k[Ns + 1][2] > 0) return log(L_sk_k[Ns + 1][2]);
+        if(debug) cout << "Likelihood for root is " << L_sk_k[Ns + 1][NORM_PLOIDY] << endl;
+        
+        if(L_sk_k[Ns + 1][NORM_PLOIDY] > 0) return log(L_sk_k[Ns + 1][NORM_PLOIDY]);
         else return LARGE_LNL;
     }
 }

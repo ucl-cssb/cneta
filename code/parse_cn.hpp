@@ -60,6 +60,10 @@ void get_change_chr(const vector<vector<vector<int>>>& s_info, vector<vector<int
 void get_sample_mcn(const vector<vector<vector<int>>>& s_info, vector<int>& sample_max_cn, int cn_max, int is_total, int debug = 0);
 
 
+// Find the number of invariable sites for each character (state)
+// Loop over and output only the regions that have varied, which provide information for tree building
+void get_var_bins(const vector<vector<vector<int>>>& s_info, int Ns, int num_total_bins, int& num_invar_bins, vector<int>& var_bins, int is_total, int debug);
+
 // Distinguish invariable and variable sites;
 // Combine adjacent invariable sites
 // TODO: Distinguish different types of invariant sites: 2 vs 4, which have different likelihoods

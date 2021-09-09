@@ -193,8 +193,7 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, const evo_tree& r
 
 // Incorporate chromosome gain/loss and WGD
 // Model 2: Treat total copy number as the observed data and the allele-specific information is missing
-// additional parameters moved to be global to facilitate calling in optimization
-// , int model, int cons, int is_total
+// additional parameters moved to lnl_type to facilitate calling in optimization
 double get_likelihood_revised(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, LNL_TYPE& lnl_type);
 
 

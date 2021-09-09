@@ -5,7 +5,7 @@ Structural Variation Evolutionary Tree Analysis
 This is a set of programs to simulate and build phylogenetic trees from copy number profiles caused by chromosomal alteration events and structural variations (SVs).
 Currently, five types of events are considered, including segment duplication, segment deletion, chromosomal gain, chromosomal loss, and whole genome doubling (WGD).
 
-The tree building programs take as input the allele-specific or total copy numbers called from mulitiple samples of a patient.
+The tree building programs take as input the allele-specific or total copy numbers called from multiple samples of a patient.
 
 There are mainly 3 programs:
 * sveta: simulating SVs along a phylogenetic (coalescence) tree
@@ -205,20 +205,20 @@ For whole genome doubling, chr is assigned to 0 and seg_ID is assigned to -1.
 <!-- ## How to prepare MP trees -->
 ## Input
 The initial trees for tree searching can be obtained by maximum parsimony methods.
-* (Required) A file containing integer absolute copy numbers for all the tumor samples and the normal sample (*-cn.txt.gz or *-allele-cn.txt.gz).
-   
+* (Required) A file containing integer absolute copy numbers for all the patient samples and/or the normal sample (*-cn.txt.gz or *-allele-cn.txt.gz).
+
    Either compressed file or uncompressed file is fine.
-   There need to be four colomns, separtate by space, in this file: sample_ID, chr_ID, bin_ID, CN. Each column is an integer.
-   The sample_ID has to be orderred from 1 to n (the number of samples).
+   There need to be four columns, separated by space, in this file: sample_ID, chr_ID, bin_ID, CN. Each column is an integer.
+   The sample_ID has to be ordered from 1 to n (the number of patient samples).
    For allele-specific CN, there will be 5 columns, with the last two being cnA, cnB.
-   If the total CN is larger than the specified maximum CN allowed by the program, 
-   the total CN will be automatically decreased to the maximum CN when the input is total CN and the program will exit when the input is allele-specific CN.  
+   If the total CN is larger than the specified maximum CN allowed by the program,
+   the total CN will be automatically decreased to the maximum CN when the input is total CN and the program will exit when the input is allele-specific CN.
 
-* (Optional) A file containing the timing information of tumor samples (*-rel-times.txt).
+* (Optional) A file containing the timing information of patient samples (*-rel-times.txt).
 
-  There need to be three colomns, separtate by space, in this file: 
+  There need to be three columns, separated by space, in this file:
   sample_ID, time relative to 1st sample in year (float number), patient age at the time of sampling (integer).
-  The sample_ID has to be orderred from 1 to n (the number of samples).
+  The sample_ID has to be ordered from 1 to n (the number of patient samples).
 
 There are 4 running modes in svtreeml.
 * mode 0 (default): building maximum likelihood tree from input copy numbers, using -b 1 for bootstrapping

@@ -1388,6 +1388,11 @@ int main(int argc, char** const argv){
 
         assert(is_tree_valid(real_tree, max_tobs, age, cons));
 
+        if(!incl_all){
+            incl_all = 1;
+            cout << "All the sites are included in likelihood computation" << endl;
+        }
+
         vector<int> inodes;
         Node* root = &(real_tree.nodes[real_tree.root_node_id]);
         real_tree.get_inodes_postorder(root, inodes);
@@ -1403,25 +1408,21 @@ int main(int argc, char** const argv){
 
         if(infer_marginal_state){
             cout << "\tInferring marginal ancestral states" << endl;
-            string ofile_mrca = ofile + ".mrca.state";
-            ofstream fout(ofile_mrca);
             double lnl = 0.0;
             if(model == DECOMP){
-               lnl = reconstruct_marginal_ancestral_state_decomp(real_tree, vobs, inodes, comps, obs_decomp, use_repeat, infer_wgd, infer_chr, cn_max, fout, min_asr, is_total);
+               lnl = reconstruct_marginal_ancestral_state_decomp(real_tree, vobs, inodes, comps, obs_decomp, use_repeat, infer_wgd, infer_chr, cn_max, ofile, min_asr, is_total);
            }else{
-               lnl = reconstruct_marginal_ancestral_state(real_tree, vobs, inodes, model, cn_max, use_repeat, is_total, fout, min_asr);
+               lnl = reconstruct_marginal_ancestral_state(real_tree, vobs, inodes, model, cn_max, use_repeat, is_total, ofile, min_asr);
            }
-           cout << "The log likelihood of the input tree is " << lnl << endl;
+           cout << "The log likelihood of the input tree computed during state reconstruction is " << lnl << endl;
         }
 
         if(infer_joint_state){
             cout << "\tInferring joint ancestral states" << endl;
-            string ofile_state = ofile + ".joint.state";
-            ofstream fout_state(ofile_state);
             if(model == DECOMP){
-               reconstruct_joint_ancestral_state_decomp(real_tree, vobs, inodes, comps, max_decomp, use_repeat, cn_max, fout_state, min_asr, is_total);
+               reconstruct_joint_ancestral_state_decomp(real_tree, vobs, inodes, comps, max_decomp, use_repeat, cn_max, ofile, min_asr, is_total);
            }else{
-               reconstruct_joint_ancestral_state(real_tree, vobs, inodes, model, cn_max, use_repeat, is_total, m_max, fout_state, min_asr);
+               reconstruct_joint_ancestral_state(real_tree, vobs, inodes, model, cn_max, use_repeat, is_total, m_max, ofile, min_asr);
            }
         }
     }
