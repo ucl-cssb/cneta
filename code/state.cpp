@@ -816,7 +816,7 @@ void print_node_cnp(ofstream& fout, const copy_number& cnp, int nid, int cn_max,
 
 
 // Infer the copy number of the MRCA given a tree at a site, assuming independent Markov chains
-double reconstruct_marginal_ancestral_state_decomp(const evo_tree& rtree, map<int, vector<vector<int>>>& vobs, const vector<int>& knodes, const set<vector<int>>& comps, OBS_DECOMP& obs_decomp, int use_repeat, int infer_wgd, int infer_chr, int cn_max, string ofile, double min_asr, int is_total){
+double reconstruct_marginal_ancestral_state_decomp(const evo_tree& rtree, map<int, vector<vector<int>>>& vobs, const vector<int>& knodes, const set<vector<int>>& comps, OBS_DECOMP& obs_decomp, int use_repeat, int infer_wgd, int infer_chr, int cn_max, string ofile, int is_total){
     int debug = 0;
     if(debug) cout << "\treconstruct marginal ancestral state with independent chain model" << endl;
 
@@ -915,7 +915,7 @@ double reconstruct_marginal_ancestral_state_decomp(const evo_tree& rtree, map<in
 }
 
 
-double reconstruct_marginal_ancestral_state(const evo_tree& rtree, map<int, vector<vector<int>>>& vobs, const vector<int>& knodes, int model, int cn_max, int use_repeat, int is_total, string ofile, double min_asr){
+double reconstruct_marginal_ancestral_state(const evo_tree& rtree, map<int, vector<vector<int>>>& vobs, const vector<int>& knodes, int model, int cn_max, int use_repeat, int is_total, string ofile){
     int debug = 0;
     if(debug) cout << "\treconstruct marginal ancestral state" << endl;
 
@@ -1026,7 +1026,7 @@ double reconstruct_marginal_ancestral_state(const evo_tree& rtree, map<int, vect
 
 
 // Infer the copy number of all internal nodes given a tree at a site, assuming independent Markov chains
-void reconstruct_joint_ancestral_state_decomp(const evo_tree& rtree, map<int, vector<vector<int>>>& vobs,  vector<int>& knodes, const set<vector<int>>& comps, MAX_DECOMP& max_decomp, int use_repeat, int cn_max, string ofile, double min_asr, int is_total){
+void reconstruct_joint_ancestral_state_decomp(const evo_tree& rtree, map<int, vector<vector<int>>>& vobs,  vector<int>& knodes, const set<vector<int>>& comps, MAX_DECOMP& max_decomp, int use_repeat, int cn_max, string ofile, int is_total){
     int debug = 0;
     if(debug) cout << "\treconstruct joint ancestral state with independent chain model" << endl;
    
@@ -1115,7 +1115,7 @@ void reconstruct_joint_ancestral_state_decomp(const evo_tree& rtree, map<int, ve
 
 
 // Infer the copy number of all internal nodes given a tree at a site, assuming only segment duplication/deletion
-void reconstruct_joint_ancestral_state(const evo_tree& rtree, map<int, vector<vector<int>>>& vobs, vector<int>& knodes, int model, int cn_max, int use_repeat, int is_total, int m_max, string ofile, double min_asr){
+void reconstruct_joint_ancestral_state(const evo_tree& rtree, map<int, vector<vector<int>>>& vobs, vector<int>& knodes, int model, int cn_max, int use_repeat, int is_total, int m_max, string ofile){
     int debug = 0;
     if(debug) cout << "\treconstruct joint ancestral state" << endl;
    

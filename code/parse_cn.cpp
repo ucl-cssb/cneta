@@ -1,8 +1,7 @@
 #include "parse_cn.hpp"
 
 
-// collection of functions for reading/writing
-
+// collection of functions for reading/writing copy number data
 
 // Convert the allele-specific state (ordered by 0/0	0/1	1/0	0/2	 1/1	2/0	0/3	 1/2 2/1	3/0	 0/4 1/3 2/2 3/1	4/0) to total copy number
 int state_to_total_cn(int state, int cn_max){
@@ -117,7 +116,7 @@ int allele_cn_to_state(int cnA, int cnB){
 }
 
 
-vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int &num_total_bins, int cn_max, int is_total, int debug){
+vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int &num_total_bins, int cn_max, int is_total, int is_rcn, int debug){
     vector<vector<vector<int>>> s_info;
     num_total_bins = 0;
     // data indexed by [sample][data][ chr, bid, cn ]
@@ -136,7 +135,7 @@ vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int &num_tot
       stringstream ss(line);
       while(ss >> buf) split.push_back(buf);
 
-      const char* sstr = split[0].c_str(); 
+      const char* sstr = split[0].c_str();
       if(!isdigit(*sstr)){
           cout << "Sample ID must be an integer, ordered from 1 to the specified number of patient samples!" << endl;
           exit(EXIT_FAILURE);
@@ -156,32 +155,40 @@ vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int &num_tot
       int chr = atoi(split[1].c_str());  // chr
       int sid = atoi(split[2].c_str());  // segment ID
       int cn = -1;
-      if(is_total){
+
+      if(is_rcn){
           cn = atoi(split[3].c_str());  // copy number
-          if(cn < 0){
-              cout << "Negative copy numbers in line " << line << "!" << endl;
-              exit(EXIT_FAILURE);
-          }
-          if(cn > cn_max){
-              cout << "copy number " << cn << " is decreased to " << cn_max << endl;
-              cn = cn_max;
-          }
+          cn = cn + NORM_PLOIDY;
       }else{
-          int cn1 = atoi(split[3].c_str());  // copy number
-          int cn2 = atoi(split[4].c_str());  // copy number
-          if(cn1 < 0 || cn2 < 0){
-              cout << "Negative copy numbers in line " << line << "!" << endl;
-              exit(EXIT_FAILURE);
-          }
-          int tcn = cn1 + cn2;
-          if(tcn > cn_max){   // a bit hard to decease allele-specific CNs
-              cout << "total copy number " << tcn << " is larger than " << cn_max << "! Please adjust input accordingly!";
-            //   int larger_cn = (cn1 > cn2) ? cn1 : cn2;
-            //   int diff = tcn - cn_max;
-              exit(EXIT_FAILURE);
-          }
-          cn = allele_cn_to_state(cn1, cn2);
+        if(is_total){
+            cn = atoi(split[3].c_str());  // copy number
+            if(cn < 0){
+                cout << "Negative copy numbers in line " << line << "!" << endl;
+                exit(EXIT_FAILURE);
+            }
+            if(cn > cn_max){
+                cout << "copy number " << cn << " is decreased to " << cn_max << endl;
+                cn = cn_max;
+            }
+        }else{
+            int cn1 = atoi(split[3].c_str());  // copy number
+            int cn2 = atoi(split[4].c_str());  // copy number
+            if(cn1 < 0 || cn2 < 0){
+                cout << "Negative copy numbers in line " << line << "!" << endl;
+                exit(EXIT_FAILURE);
+            }
+            int tcn = cn1 + cn2;
+            if(tcn > cn_max){   // a bit hard to decease allele-specific CNs
+                cout << "total copy number " << tcn << " is larger than " << cn_max << "! Please adjust input accordingly!";
+              //   int larger_cn = (cn1 > cn2) ? cn1 : cn2;
+              //   int diff = tcn - cn_max;
+                exit(EXIT_FAILURE);
+            }
+            cn = allele_cn_to_state(cn1, cn2);
+        }
       }
+
+
       vector<int> vcn{chr, sid, cn};
       s_info[sample - 1].push_back(vcn);
 
@@ -377,12 +384,12 @@ void get_var_bins(const vector<vector<vector<int>>>& s_info, int Ns, int num_tot
               cout << endl;
             }
         }
-    }  
+    }
 
     int nvar = accumulate(var_bins.begin(), var_bins.end(), 0);
     cout << "\tTotal number of bins:\t" << num_total_bins << endl;
     cout << "\tNumber of variable bins:\t" << nvar << endl;
-    cout << "\tNumber of invariable bins:\t" << num_invar_bins << endl; 
+    cout << "\tNumber of invariable bins:\t" << num_invar_bins << endl;
 }
 
 
@@ -529,10 +536,10 @@ vector<vector<int>> group_segs(const vector<vector<int>>& segs, const vector<vec
 }
 
 // Read the input copy numbers
-vector<vector<int>> read_data_var_regions(const string& filename, const int& Ns, const int& cn_max, int& num_invar_bins, int& num_total_bins, int& seg_size, vector<int>&  obs_num_wgd, vector<vector<int>>& obs_change_chr, vector<int>& sample_max_cn, int model, int is_total, int debug){
+vector<vector<int>> read_data_var_regions(const string& filename, const int& Ns, const int& cn_max, int& num_invar_bins, int& num_total_bins, int& seg_size, vector<int>&  obs_num_wgd, vector<vector<int>>& obs_change_chr, vector<int>& sample_max_cn, int model, int is_total, int is_rcn, int debug){
     cout << "\nReading data and calculating CNA regions" << endl;
 
-    vector<vector<vector<int>>> s_info = read_cn(filename, Ns, num_total_bins, cn_max, is_total, debug);
+    vector<vector<vector<int>>> s_info = read_cn(filename, Ns, num_total_bins, cn_max, is_total, is_rcn, debug);
     if(model == DECOMP){
         get_num_wgd(s_info, cn_max, obs_num_wgd, is_total, debug);
         get_change_chr(s_info, obs_change_chr, cn_max, is_total, debug);
@@ -552,10 +559,14 @@ vector<vector<int>> read_data_var_regions(const string& filename, const int& Ns,
 }
 
 
-map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filename, const int& Ns, const int& cn_max, int& num_invar_bins, int& num_total_bins, int& seg_size, vector<int>& obs_num_wgd, vector<vector<int>>& obs_change_chr, vector<int>& sample_max_cn, int model, int is_total, int is_bin, int incl_all, int debug){
+map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filename, const int& Ns, const int& cn_max, int& num_invar_bins, int& num_total_bins, int& seg_size, vector<int>& obs_num_wgd, vector<vector<int>>& obs_change_chr, vector<int>& sample_max_cn, int model, INPUT_PROPERTY input_prop, int debug){
     cout << "\nReading data and group regions by chromosome" << endl;
+    int is_total = input_prop.is_total;
+    int is_rcn = input_prop.is_rcn;
+    int is_bin = input_prop.is_bin;
+    int incl_all = input_prop.incl_all;
 
-    vector<vector<vector<int>>> s_info = read_cn(filename, Ns, num_total_bins, cn_max, is_total, debug);
+    vector<vector<vector<int>>> s_info = read_cn(filename, Ns, num_total_bins, cn_max, is_total, is_rcn, debug);
     if(model == DECOMP){
         get_num_wgd(s_info, cn_max, obs_num_wgd, is_total, debug);
         get_change_chr(s_info, obs_change_chr, cn_max, is_total, debug);

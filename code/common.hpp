@@ -48,4 +48,13 @@ const double SMALL_VAL = 1.0e-10;   // used to compare floats
 // key: chr, seg, copy_number
 typedef map<int, map<int, int>> copy_number;
 
+
+struct INPUT_PROPERTY{
+  int is_total;
+  int is_rcn;
+  int is_bin;
+  int incl_all;
+};
+
+
 #endif

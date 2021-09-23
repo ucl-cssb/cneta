@@ -1,3 +1,4 @@
-### Plotting
-bin_locations_4401.Rdata constains the position of 4401 bins in the human reference genome hg19.
-The bins are obtained by non-overlapping sliding windows of size 500,000 bp along each chromosme.
+In this folder, there are some R scripts and Python scripts for plotting, preprocessing, and testing.
+
+bin_locations_4401.Rdata contains the position of 4401 bins in the human reference genome hg19.
+The bins are obtained by non-overlapping sliding windows of size 500,000 bp along each chromosome.

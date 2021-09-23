@@ -324,7 +324,6 @@ double get_transition_prob_bounded(double* p, const int& sk, const int& sj, cons
 }
 
 
-
 void insert_tuple(map<int, set<vector<int>>>& decomp_table, set<vector<int>>& comps, int cn_max, int m_max, int i, int j, int k){
     int sum = pow(2, i + 1) + j + k;
     // cout << i << "\t" << j << "\t" << k << "\t" << sum << endl;
@@ -334,8 +333,6 @@ void insert_tuple(map<int, set<vector<int>>>& decomp_table, set<vector<int>>& co
         comps.insert(c);
     }
 }
-
-
 
 
 // Get possible combinations for a total copy number with ordering of different types of events considered (at most 1 WGD)
@@ -351,8 +348,8 @@ void insert_tuple_order_withm(map<int, set<vector<int>>>& decomp_table, set<vect
 
 
 void insert_tuple_order(map<int, set<vector<int>>>& decomp_table, set<vector<int>>& comps, int cn_max, int m_max, int i, int j, int k, int j0, int k0){
-    for(int m = 0; m <= m_max; m++){
-        for(int m = 0; m <= m_max; m++){
+    // for(int m = 0; m <= m_max; m++){
+    //     for(int m = 0; m <= m_max; m++){
             int sum = pow(2, i + 1) + j + k + 2 * j0 + 2 * k0;
             // cout << i << "\t" << j << "\t" << k << "\t" << sum << endl;
             if(sum >= 0 && sum <= cn_max){
@@ -360,8 +357,8 @@ void insert_tuple_order(map<int, set<vector<int>>>& decomp_table, set<vector<int
                 decomp_table[sum].insert(c);
                 comps.insert(c);
             }
-        }
-    }
+        // }
+    // }
     // // Cases when there are multiple copies of a segment on a chromosome before chromosome gain/loss
     // if(j > 0){
     //     for(int m = 2; m <= m_max; m++){
@@ -407,8 +404,19 @@ void insert_tuple_allele_specific(map<int, set<vector<int>>>& decomp_table, set<
     }
 }
 
-// Adjust the value of m_max based on the maximum copy number for a sample
+
 void adjust_m_max(const vector<int>& obs_num_wgd, const vector<int>& sample_max_cn, int m_max, int max_chr_change, int max_site_change){
+    // For samples with WGD but with larger copy number
+    // max_sum = pow(2, 2) + 2 * m_max * max_chr_change + 2 * max_site_change;
+    // m_max = m_max;
+    // for(int i = 0; i < sample_max_cn.size(); i++){
+    //     if(obs_num_wgd[i] < 1) continue;
+    //     int cn = sample_max_cn[i];
+    //     if(cn > max_sum){
+    //         m_max = m_max + (cn - max_sum);
+    //     }
+    // }
+
     // For samples without WGD but with larger copy number
     int max_sum = pow(2, 1) + m_max * max_chr_change + max_site_change;
     int orig_m_max = m_max;
@@ -431,13 +439,13 @@ void adjust_m_max(const vector<int>& obs_num_wgd, const vector<int>& sample_max_
 
 
 // list all the possible decomposition of a copy number
-// All the input variables are global
 void build_decomp_table(map<int, set<vector<int>>>& decomp_table, set<vector<int>>& comps, int cn_max, int m_max, int max_wgd, int max_chr_change, int max_site_change, int is_total){
     for(int i = 0; i <= cn_max; i++){
         set<vector<int>> comp;
         decomp_table[i] = comp;
     }
     if(is_total){
+        // For 3D decomposition
         // for(int i = 0; i <= max_wgd; i++){
         //     for(int j = 0; j <= max_chr_change; j++){
         //         for(int k = 0; k <= max_site_change; k++){
@@ -448,6 +456,7 @@ void build_decomp_table(map<int, set<vector<int>>>& decomp_table, set<vector<int
         //         }
         //     }
         // }
+        // For 5D decomposition
         // No need to consider addtional terms when no WGD occurs
         for(int j = 0; j <= max_chr_change; j++){
             for(int k = 0; k <= max_site_change; k++){
@@ -459,17 +468,6 @@ void build_decomp_table(map<int, set<vector<int>>>& decomp_table, set<vector<int
         }
 
         // With WGD
-        // For samples with WGD but with larger copy number
-        // max_sum = pow(2, 2) + 2 * m_max * max_chr_change + 2 * max_site_change;
-        // m_max = m_max;
-        // for(int i = 0; i < sample_max_cn.size(); i++){
-        //     if(obs_num_wgd[i] < 1) continue;
-        //     int cn = sample_max_cn[i];
-        //     if(cn > max_sum){
-        //         m_max = m_max + (cn - max_sum);
-        //     }
-        // }
-
         for(int i = 1; i <= max_wgd; i++){
             for(int j = 0; j <= max_chr_change; j++){
                 for(int k = 0; k <= max_site_change; k++){
@@ -496,7 +494,7 @@ void build_decomp_table(map<int, set<vector<int>>>& decomp_table, set<vector<int
                 }
             }
         }
-    }else{
+    }else{  // TO REVISE
         for(int i = 0; i <= max_wgd; i++){
             for(int j1 = 0; j1 <= max_chr_change; j1++){
                 for(int j2 = 0; j2 <= max_chr_change; j2++){
@@ -527,7 +525,6 @@ void build_decomp_table(map<int, set<vector<int>>>& decomp_table, set<vector<int
 }
 
 
-// All the input variables are global, treating m_j as part of the vector
 void build_decomp_table_withm(map<int, set<vector<int>>>& decomp_table, set<vector<int>>& comps, int cn_max, int m_max, int max_wgd, int max_chr_change, int max_site_change, int is_total){
     for(int i = 0; i <= cn_max; i++){
         set<vector<int>> comp;

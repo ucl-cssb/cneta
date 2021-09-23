@@ -83,18 +83,16 @@ void insert_tuple_order(map<int, set<vector<int>>>& decomp_table, set<vector<int
 // Get possible combinations for a total copy number with ordering of different types of events considered (at most 1 WGD), mainly before and after WGD (seem problematic)
 void insert_tuple_order_withm(map<int, set<vector<int>>>& decomp_table, set<vector<int>>& comps, int cn_max, int m_max, int m1, int m2, int i, int j, int k, int j0, int k0);
 
-
 // Get possible allele-specific combinations for a total copy number (not used in practice for now)
 void insert_tuple_allele_specific(map<int, set<vector<int>>>& decomp_table, set<vector<int>>& comps, int cn_max, int m_max, int i, int j1, int j2, int k1, int k2);
 
-// Adjust the value of m_max based on the maximum copy number for a sample
+// Adjust the value of m_max based on the maximum copy number for a sample, not used for now
 void adjust_m_max(const vector<int>& obs_num_wgd, const vector<int>& sample_max_cn, int m_max, int max_chr_change, int max_site_change);
 
-// list all the possible decomposition of a copy number
-// All the input variables are global
+// list all the possible decomposition of a copy number, treating m_j as part of the vector
 void build_decomp_table(map<int, set<vector<int>>>& decomp_table, set<vector<int>>& comps, int cn_max, int m_max, int max_wgd, int max_chr_change, int max_site_change, int is_total = 1);
 
-// All the input variables are global, treating m_j as part of the vector
+// list all the possible decomposition of a copy number, treating m_j before and after WGD differently
 void build_decomp_table_withm(map<int, set<vector<int>>>& decomp_table, set<vector<int>>& comps, int cn_max, int m_max, int max_wgd, int max_chr_change, int max_site_change, int is_total = 1);
 
 void print_comps(const set<vector<int>>& comps);

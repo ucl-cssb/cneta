@@ -91,16 +91,15 @@ vector<double> read_time_info(const string& filename, const int& Ns, int& age, i
 // Format of input total copy number: sample, chr, seg, copy_number
 // Format of input allele specific copy number: sample, chr, seg, copy_number A, copy_number B -> converted into a specific state by decomposition
 // s_info: a vector for each sample, which is composed of a vector of vector<int> vcn{chr, sid, cn}
-vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int &num_total_bins, int cn_max, int is_total = 1, int debug = 0);
+vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int &num_total_bins, int cn_max, int is_total = 1, int is_rcn = 0, int debug = 0);
 
 
 // Read the input copy numbers
-vector<vector<int>> read_data_var_regions(const string& filename, const int& Ns, const int& cn_max, int& num_invar_bins, int& num_total_bins, int& seg_size, vector<int>&  obs_num_wgd, vector<vector<int>>& obs_change_chr, vector<int>& sample_max_cn, int model, int is_total = 1, int debug = 0);
+vector<vector<int>> read_data_var_regions(const string& filename, const int& Ns, const int& cn_max, int& num_invar_bins, int& num_total_bins, int& seg_size, vector<int>&  obs_num_wgd, vector<vector<int>>& obs_change_chr, vector<int>& sample_max_cn, int model, int is_total = 1, int is_rcn = 0, int debug = 0);
 
 
 // Read the input copy numbers and group them by chromosome
-map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filename, const int& Ns, const int& cn_max, int& num_invar_bins, int& num_total_bins, int &seg_size, vector<int>&  obs_num_wgd, vector<vector<int>>& obs_change_chr, vector<int>& sample_max_cn, int model, int is_total = 1, int is_bin = 1, int incl_all = 1, int debug = 0);
-
+map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filename, const int& Ns, const int& cn_max, int& num_invar_bins, int& num_total_bins, int &seg_size, vector<int>&  obs_num_wgd, vector<vector<int>>& obs_change_chr, vector<int>& sample_max_cn, int model, INPUT_PROPERTY input_prop, int debug = 0);
 
 
 #endif

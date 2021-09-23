@@ -1119,7 +1119,7 @@ void update_mutation_rates(evo_tree& rtree, double& log_likelihood, int& naccept
 //
 void update_mutation_rates_lnormal(evo_tree& rtree, int model, double& log_likelihood, int& naccepts, int& nrejects, const int n_draw, const int n_burnin, const int n_gap, vector<double> prior_parameters_mut, double sigma, int sample_prior, int cons, int cn_max, int only_seg, int correct_bias, int is_total=1) {
     double prev_log_prior, prev_log_likelihood, log_prior;
-    double log_hastings_ratio = 0;
+    double log_hastings_ratio = 0.0;
     bool accept = false;
     evo_tree ntree;
 
@@ -1132,8 +1132,7 @@ void update_mutation_rates_lnormal(evo_tree& rtree, int model, double& log_likel
     prev_log_prior = get_prior_mutation_lnormal(lmu, prior_parameters_mut);
     if(sample_prior){
         prev_log_likelihood = 1;
-    }
-    else{
+    }else{
         if(model == DECOMP){
             prev_log_likelihood = get_likelihood_decomp(rtree, vobs, obs_decomp, comps, lnl_type);
         }else{
@@ -1178,14 +1177,12 @@ void update_mutation_rates_lnormal(evo_tree& rtree, int model, double& log_likel
     if(runiform(r, 0, 1) < accept_prob){
         accept = true;
     }
-    if(accept)
-    {
+    if(accept){
         if(n_draw > n_burnin){
             naccepts++;
         }
         rtree = evo_tree(ntree);
-    }
-    else{
+    }else{
         if(n_draw > n_burnin)  nrejects++;
     }
 }
@@ -1650,8 +1647,7 @@ void run_mcmc(evo_tree& rtree, int model, const int n_draws, const int n_burnin,
             for(int j=1; j<=nintedge; j++){
                 header += "\tl" + to_string(j);
             }
-        }
-        else{
+        }else{
             for(int j=1; j<=nedge-1; j++){
                 header += "\tl" + to_string(j);
             }
@@ -1671,11 +1667,10 @@ void run_mcmc(evo_tree& rtree, int model, const int n_draws, const int n_burnin,
         double prob_move_topol = 0;
         double prob_move_blen = 0;
         double prob_move_rate = 0;
-        for (int i = 1; i <= n_draws; ++i)
-        {
+        for(int i = 1; i <= n_draws; ++i){
             // Randomly choose one type of operator: topology, branch length, mutation rate
             if(maxj){
-                if(fix_topology == 1){
+                if(fix_topology){
                     prob_move_topol = 0;
                     prob_move_blen = 0.5;
                     prob_move_rate = 0.5;
@@ -1686,7 +1681,7 @@ void run_mcmc(evo_tree& rtree, int model, const int n_draws, const int n_burnin,
                     prob_move_rate = 1/3;
                 }
             }else{
-                if(fix_topology == 1){
+                if(fix_topology){
                     prob_move_topol = 0;
                     prob_move_blen = 1;
                     prob_move_rate = 0;
@@ -1776,8 +1771,7 @@ void run_mcmc(evo_tree& rtree, int model, const int n_draws, const int n_burnin,
                     double probs[5] = {prob_move_dup, prob_move_del, prob_move_gain, prob_move_loss, prob_move_wgd};
                     dis = gsl_ran_discrete_preproc(5, probs);
                     int rate_update_tpye = gsl_ran_discrete(r, dis);
-                    switch (rate_update_tpye)
-                    {
+                    switch(rate_update_tpye){
                         case 0:{
                             nsel_dup++;
                             vector<double> prior_parameters_dup({mu_ldup, sigma_ldup});
@@ -1835,8 +1829,7 @@ void run_mcmc(evo_tree& rtree, int model, const int n_draws, const int n_burnin,
                 if(maxj){
                     if(model == MK){
                         fout_trace << "\t" << rtree.mu ;
-                    }
-                    else{
+                    }else{
                         if(!only_seg){
                             fout_trace << "\t" << rtree.dup_rate << "\t" << rtree.del_rate << "\t" << rtree.chr_gain_rate << "\t" << rtree.chr_loss_rate << "\t" << rtree.wgd_rate;
                         }else{
@@ -1852,8 +1845,7 @@ void run_mcmc(evo_tree& rtree, int model, const int n_draws, const int n_burnin,
                     for(int k = 0; k < intedges.size(); ++k){
                         fout_trace << "\t" << intedges[k]->length;
                     }
-                }
-                else{
+                }else{
                     for(int k = 0; k < nedge-1; k++){
                         fout_trace << "\t" << rtree.edges[k].length;
                     }
@@ -2227,6 +2219,8 @@ int main (int argc, char ** const argv) {
 
     fp_myrng = &myrng;
 
+    INPUT_PROPERTY input_prop{is_total, 0, is_bin, incl_all};
+
     if(model == MK){
         cout << "Assuming Mk model " << endl;
     }
@@ -2274,7 +2268,7 @@ int main (int argc, char ** const argv) {
             cout << "   Using variable input segments " << endl;
         }
     }
-    data = read_data_var_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins, Nchar, obs_num_wgd, obs_change_chr, sample_max_cn, model, is_total, is_bin, incl_all, debug);
+    data = read_data_var_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins, Nchar, obs_num_wgd, obs_change_chr, sample_max_cn, model, input_prop, debug);
     vobs = get_obs_vector_by_chr(data, Ns);
 
     int nleaf = Ns + 1;

@@ -237,10 +237,6 @@ void get_likelihood_site_decomp(vector<vector<double>>& L_sk_k, const evo_tree& 
 // Used when WGD is considered, dealing with mutations of different types at different levels (no WGD order considered, deprecated)
 double get_likelihood_chr_decomp(map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const evo_tree& rtree, const set<vector<int>>& comps, const vector<int>& knodes, PMAT_DECOMP& pmat_decomp, DIM_DECOMP& dim_decomp, int infer_wgd, int infer_chr, int use_repeat, int cn_max, int is_total);
 
-
-// Compute the likelihood of dummy sites consisting entirely of 2s for the tree
-double get_likelihood_invariant_decomp(OBS_DECOMP& obs_decomp, evo_tree& rtree, const set<vector<int>>& comps, const vector<int>& knodes, PMAT_DECOMP& pmat_decomp, DIM_DECOMP& dim_decomp, int infer_wgd, int infer_chr, int cn_max, int is_total);
-
 // Computing likelihood when WGD and chr gain/loss are incorporated
 // Assume likelihood is for allele-specific information
 double get_likelihood_decomp(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type);

@@ -1133,9 +1133,9 @@ int main(int argc, char** const argv){
     double mu, dup_rate, del_rate, chr_gain_rate, chr_loss_rate, wgd_rate, max_rate;
     double beta, gtime;
     string datafile, timefile, ofile, tree_file, dir_itrees;
-    int is_bin, incl_all;
+    int is_bin, incl_all, is_rcn;
     int infer_marginal_state, infer_joint_state;
-    double min_asr;
+    // double min_asr;
 
     namespace po = boost::program_options;
     po::options_description generic("Generic options");
@@ -1174,12 +1174,13 @@ int main(int argc, char** const argv){
 
     // types of copy number changes
     ("is_total", po::value<int>(&is_total)->default_value(1), "whether or not the input is total copy number")
+    ("is_rcn", po::value<int>(&is_rcn)->default_value(0), "whether or not the input is relative copy number")
     ("is_bin", po::value<int>(&is_bin)->default_value(1), "whether or not the input copy number is for each bin. If not, the input copy number is read as it is. Or else, consecutive bins will be merged")
     ("incl_all", po::value<int>(&incl_all)->default_value(1), "whether or not to include all the input copy numbers without further propressing")
 
-    ("only_seg", po::value<int>(&only_seg)->default_value(0), "Whether or not to only consider segment-level mutations (0: include chromosome gain/loss and whole genome doubling, 1: only consider segment-level mutations)")
-    ("infer_wgd", po::value<int>(&infer_wgd)->default_value(0), "whether or not to infer WGD status of a sample from its copy numbers")
-    ("infer_chr", po::value<int>(&infer_chr)->default_value(0), "whether or not to infer chromosome gain/loss status of a sample from its copy numbers")
+    ("only_seg", po::value<int>(&only_seg)->default_value(1), "Whether or not to only consider segment-level mutations (0: include chromosome gain/loss and whole genome doubling, 1: only consider segment-level mutations)")
+    ("infer_wgd", po::value<int>(&infer_wgd)->default_value(0), "whether or not to infer WGD status of a sample from its ABSOLUTE copy numbers")
+    ("infer_chr", po::value<int>(&infer_chr)->default_value(0), "whether or not to infer chromosome gain/loss status of a sample from its ABSOLUTE copy numbers")
 
     ("use_repeat", po::value<int>(&use_repeat)->default_value(1), "whether or not to use repeated site patterns when computing the likelihood")
     ("correct_bias", po::value<int>(&correct_bias)->default_value(1), "correct ascertainment bias")
@@ -1187,7 +1188,7 @@ int main(int argc, char** const argv){
     // options related to inferring ancestry state
     ("infer_marginal_state", po::value<int>(&infer_marginal_state)->default_value(1), "whether or not to infer marginal ancestral state of MRCA")
     ("infer_joint_state", po::value<int>(&infer_joint_state)->default_value(1), "whether or not to infer joint ancestral state of all internal nodes")
-    ("min_asr", po::value<double>(&min_asr)->default_value(0.5), "minimum posterior probability to determine the best ancestral state")
+    // ("min_asr", po::value<double>(&min_asr)->default_value(0.5), "minimum posterior probability to determine the best ancestral state")
 
     ("init_tree", po::value<int>(&init_tree)->default_value(0), "method of building inital tree (0: Random coalescence tree, 1: Maximum parsimony tree)")
     ("dir_itrees", po::value<string>(&dir_itrees)->default_value(""), "directory containing provided inital trees")
@@ -1232,7 +1233,7 @@ int main(int argc, char** const argv){
           return 1;
       }
       if(vm.count("version")){
-          cout << "svtreeml [version 0.1], a program to build a maximum likelihood phylogenetic tree from copy number profile" << endl;
+          cout << "svtreeml [version 0.1], a program to build a maximum likelihood phylogenetic tree from copy number profile of multiple (temporal) samples" << endl;
           cout << "This program can also be used to compute the likelihood of a tree with fixed branch lengths or maximum likelihood of a tree with fixed topology (and/or mutation rates), given the copy number profile." << endl;
           return 1;
       }
@@ -1257,6 +1258,7 @@ int main(int argc, char** const argv){
     num_invar_bins = 0;
 
     print_desc(cons, maxj, correct_bias, use_repeat, optim, model, is_total);
+    INPUT_PROPERTY input_prop{is_total, is_rcn, is_bin, incl_all};
 
     // tobs already defined globally
     if(timefile != ""){
@@ -1282,7 +1284,7 @@ int main(int argc, char** const argv){
             cout << "   Using variable input segments " << endl;
         }
     }
-    data = read_data_var_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins, Nchar, obs_num_wgd, obs_change_chr, sample_max_cn, model, is_total, is_bin, incl_all, debug);
+    data = read_data_var_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins, Nchar, obs_num_wgd, obs_change_chr, sample_max_cn, model, input_prop, debug);
     // cout << "Number of invariant bins " << num_invar_bins << endl;
     if(num_total_bins == num_invar_bins){
         cout << "There are no variant segments in the input data!" << endl;
@@ -1410,9 +1412,9 @@ int main(int argc, char** const argv){
             cout << "\tInferring marginal ancestral states" << endl;
             double lnl = 0.0;
             if(model == DECOMP){
-               lnl = reconstruct_marginal_ancestral_state_decomp(real_tree, vobs, inodes, comps, obs_decomp, use_repeat, infer_wgd, infer_chr, cn_max, ofile, min_asr, is_total);
+               lnl = reconstruct_marginal_ancestral_state_decomp(real_tree, vobs, inodes, comps, obs_decomp, use_repeat, infer_wgd, infer_chr, cn_max, ofile, is_total);
            }else{
-               lnl = reconstruct_marginal_ancestral_state(real_tree, vobs, inodes, model, cn_max, use_repeat, is_total, ofile, min_asr);
+               lnl = reconstruct_marginal_ancestral_state(real_tree, vobs, inodes, model, cn_max, use_repeat, is_total, ofile);
            }
            cout << "The log likelihood of the input tree computed during state reconstruction is " << lnl << endl;
         }
@@ -1420,9 +1422,9 @@ int main(int argc, char** const argv){
         if(infer_joint_state){
             cout << "\tInferring joint ancestral states" << endl;
             if(model == DECOMP){
-               reconstruct_joint_ancestral_state_decomp(real_tree, vobs, inodes, comps, max_decomp, use_repeat, cn_max, ofile, min_asr, is_total);
+               reconstruct_joint_ancestral_state_decomp(real_tree, vobs, inodes, comps, max_decomp, use_repeat, cn_max, ofile, is_total);
            }else{
-               reconstruct_joint_ancestral_state(real_tree, vobs, inodes, model, cn_max, use_repeat, is_total, m_max, ofile, min_asr);
+               reconstruct_joint_ancestral_state(real_tree, vobs, inodes, model, cn_max, use_repeat, is_total, m_max, ofile);
            }
         }
     }

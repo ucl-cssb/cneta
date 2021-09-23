@@ -221,11 +221,11 @@ The initial trees for tree searching can be obtained by maximum parsimony method
   The sample_ID has to be ordered from 1 to n (the number of patient samples).
 
 There are 4 running modes in svtreeml.
-* mode 0 (default): building maximum likelihood tree from input copy numbers, using -b 1 for bootstrapping
+* mode 0 (default): building maximum likelihood tree from input copy numbers, using "-b 1" for bootstrapping
 * mode 1: a simple comprehensive test on a simulated tree
 * mode 2: computing likelihood given a tree and its parameters (branch length and mutation rates)
-* mode 3: computing maximum likelihood tree given a tree topology, using -b 1 for bootstrapping
-* mode 4: inferring ancestral states of a given tree from copy number profile (TO IMPROVE)
+* mode 3: computing maximum likelihood tree given a tree topology, using "-b 1" for bootstrapping
+* mode 4: inferring marginal and joint ancestral states of a given tree from copy number profile 
 
 The last three modes can be used to validate the computation of likelihood.
 
@@ -243,7 +243,7 @@ There are four Markov models of evolution for building trees from the copy numbe
 * model 3: independent Markov chain model (with 3 chains)
 
 The first three models are the same as those for simulation.
-The last one (model of independent Markov chains) should be used for tree reconstruction with svtreeml on data with chromosome gain/loss and WGD.
+The last one (model of independent Markov chains) should be used for tree reconstruction on data with chromosome gain/loss and WGD.
 This model is DIFFERENT from the model used for simulating the data, which is usually model 2 (model of allele-specific copy number) in sveta.
 Model 2 may also be used but there is a strong assumption of event order, that WGD is followed by chromosomal gain or loss and then segment duplication or deletion.
 
@@ -263,6 +263,9 @@ The maximum chromosome change (max_chr_change) should be 1 in most cases, but it
 The segment-level CNAs are very likely to overlap, so max_site_change are often larger than 1.
 Suppose there is no WGD and chromosome gain/loss, if the maximum copy number in the sample is 5, then max_site_change should be 3 (5 - 2).
 You need to adjust the values of max_site_change according to the input data.
+This can be done via the provided script with the following command:
+`Rscript ana/check_site_pattern.R -c sim1-cn.txt -t sim1-patterns.txt`
+
 
 You may check the copy number counts in the input data using similar command as below:
 `less sim-data-1-cn.txt.gz | cut -f4 | sort | uniq -c`.
