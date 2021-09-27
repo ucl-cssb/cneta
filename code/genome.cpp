@@ -247,7 +247,7 @@ void genome::write(ogzstream& of){
 }
 
 
-void genome::write_rcn(ogzstream& of){
+void genome::write_rcn(ogzstream& of, gsl_rng* r){
   calculate_cn();
 
   int nwgd = nmuts[N_MUT_TYPE - 1];
@@ -257,9 +257,16 @@ void genome::write_rcn(ogzstream& of){
   for(copy_number::const_iterator it1 = cn_profile.begin(); it1 != cn_profile.end(); ++it1){
     for(map<int,int>::const_iterator it2 = it1->second.begin(); it2 != it1->second.end(); ++it2){
         // sample and chr starts with 1; segment starts with 0
-        int rcn = it2->second - ploidy;
+        int rcn = it2->second;
+        if(nwgd > 0){
+          // normalize CN so that current ploidy is normal
+          int incs = pow(NORM_PLOIDY, nwgd);
+          // randomly round up when there are WGDs
+          rcn = get_rcn_baseline(rcn, incs, r);
+        }
+        rcn = rcn - NORM_PLOIDY;
         if(rcn < -2) rcn = -2;
-        if(rcn > 2) rcn = 2;      
+        if(rcn > 2) rcn = 2;
         of << node_id + 1 << "\t" << it1->first + 1 << "\t" << it2->first + 1 << "\t" << rcn << endl;
     }
   }
@@ -268,13 +275,13 @@ void genome::write_rcn(ogzstream& of){
 
 void genome::write_rcn_baseline(ogzstream& of, const vector<int>& chr_lengths, gsl_rng* r){
     calculate_allele_cn();
-    
+
     int nwgd = nmuts[N_MUT_TYPE - 1];
     int ploidy = NORM_PLOIDY;
     if(nwgd > 0) ploidy = pow(NORM_PLOIDY, 1 + nwgd);
-    // std::cout << "Number of WGD events is " << nwgd << ", so ploidy is " << ploidy << endl; 
+    // std::cout << "Number of WGD events is " << nwgd << ", so ploidy is " << ploidy << endl;
     int allele_ploidy = ploidy / 2;
-    
+
   // cout << "Writing allele-specific copy number " << endl;
   for(int i = 0; i < allele_cn_profile.size() / 2; i++){
      map<int,int> segs1 = allele_cn_profile[i];
@@ -296,8 +303,8 @@ void genome::write_rcn_baseline(ogzstream& of, const vector<int>& chr_lengths, g
          }
         int rcnA = get_rcn_baseline(cn1, allele_ploidy, r);
         int rcnB = get_rcn_baseline(cn2, allele_ploidy, r);
-        int rcn = rcnA + rcnB;         
-         of << node_id + 1 << "\t" << i + 1 << "\t" << j + 1 << "\t" << rcn << endl;
+        // int rcn = rcnA + rcnB;
+         of << node_id + 1 << "\t" << i + 1 << "\t" << j + 1 << "\t" << rcnA << "\t" << rcnB << endl;
     }
   }
 }
@@ -1147,18 +1154,23 @@ int generate_wgd(genome& g, int cn_max, int debug){
 }
 
 
-int get_rcn_baseline(int cn, int ploidy, gsl_rng* r){
-    int rcn = cn / ploidy;   // quotient
-    int remainder = cn % ploidy;
+int get_rcn_baseline(int cn, int baseline, gsl_rng* r){
+    int rcn = cn / baseline;   // quotient
+
+    // remainder is always 0 when ploidy = 1
     // randomly round up when remainder is not 0
-    if(remainder != 0){
+    if(cn % baseline != 0){
         float rand = runiform(r, 0, 1);
+        float val = cn / float(baseline);
+        // check it is really float
+        // cout << val << endl;
         if(rand < 0.5){
-            remainder = 1;
-        }else{
-            remainder = 0;
+            rcn = ceil(val);
+        }else{            
+            rcn = floor(val);
+            if(rcn == 0) rcn = 1;           
         }
     }
-    rcn = rcn + remainder;    
+
     return rcn;
 }

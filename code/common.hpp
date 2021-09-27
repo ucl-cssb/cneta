@@ -45,6 +45,8 @@ const int PRINT_PRECISION = 10;
 
 const double SMALL_VAL = 1.0e-10;   // used to compare floats
 
+int WGD_CUTOFF = 3;    // genome ploidy to determine WGD
+
 // key: chr, seg, copy_number
 typedef map<int, map<int, int>> copy_number;
 

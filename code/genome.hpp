@@ -59,7 +59,7 @@ public:
   // allow different number of segs on different chromosmes
   genome(const int& _nchr, const vector<int>& _nsegs, const int& ploidy);
   // create a genome with varying chromosome sizes
-  genome(const vector<int>& _chr_lens);  
+  genome(const vector<int>& _chr_lens);
   // allow different germline ploidy
   genome(const vector<int>& _chr_lens, const int& ploidy);
 
@@ -74,7 +74,7 @@ public:
 
   void print_cn();
   void write(ogzstream& of);
-  void write_rcn(ogzstream& of);
+  void write_rcn(ogzstream& of, gsl_rng* r);
   void write_rcn_baseline(ogzstream& of, const vector<int>& chr_lengths, gsl_rng* r);
   void write_allele_cn(ogzstream& of, const vector<int>& chr_lengths);
 
@@ -118,7 +118,7 @@ int generate_chr_gain(genome& g, int c, int debug);
 int generate_chr_loss(genome& g, int c, int debug);
 int generate_wgd(genome& g, int cn_max, int debug);
 
-// Get relative copy number, using baseline strategy to pre-process data for data with WGD
-int get_rcn_baseline(int cn, int ploidy, gsl_rng* r);
+// Get relative copy number from absolute copy number based on the baseline, using baseline strategy to pre-process data for data with WGD
+int get_rcn_baseline(int cn, int baseline, gsl_rng* r);
 
 #endif

@@ -31,7 +31,7 @@ int state_to_allele_cn(int state, int cn_max, int& cnA, int& cnB){
     vector<int> sums;
     // cout << "Sums of state: ";
     for(int i = 1; i <= (cn_max + 1); i++){
-        int s = i * (i+1) / 2;
+        int s = i * (i + 1) / 2;
         sums.push_back(s);
         // cout << "\t" << s;
     }
@@ -39,7 +39,7 @@ int state_to_allele_cn(int state, int cn_max, int& cnA, int& cnB){
     if(state < sums[0]) return 0;
     int i = 1;
     do{
-        if(state >= sums[i-1] && state < sums[i]){
+        if(state >= sums[i - 1] && state < sums[i]){
              // total copy number is i;
              int diff = state - sums[i-1];
              cnA = diff;
@@ -151,7 +151,6 @@ vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int &num_tot
           counter = 0;
       }
 
-      //cout << sample-1 << "\t" << counter << endl;
       int chr = atoi(split[1].c_str());  // chr
       int sid = atoi(split[2].c_str());  // segment ID
       int cn = -1;
@@ -161,6 +160,10 @@ vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int &num_tot
           cn = cn + NORM_PLOIDY;
       }else{
         if(is_total){
+            if(split.size() != 4){
+                cout << "There should be 4 columns in the file for total copy numbers" << endl;
+                exit(EXIT_FAILURE);
+            }
             cn = atoi(split[3].c_str());  // copy number
             if(cn < 0){
                 cout << "Negative copy numbers in line " << line << "!" << endl;
@@ -171,6 +174,10 @@ vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int &num_tot
                 cn = cn_max;
             }
         }else{
+            if(split.size() != 5){
+                cout << "There should be 5 columns in the file for allele-specific copy numbers" << endl;
+                exit(EXIT_FAILURE);
+            }
             int cn1 = atoi(split[3].c_str());  // copy number
             int cn2 = atoi(split[4].c_str());  // copy number
             if(cn1 < 0 || cn2 < 0){
@@ -204,37 +211,47 @@ vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int &num_tot
 }
 
 
+
+
 void get_num_wgd(const vector<vector<vector<int>>>& s_info, int cn_max, vector<int>& obs_num_wgd, int is_total, int debug){
     cout << "Getting the potential number of WGDs for each sample" << endl;
+
     for(int i = 0; i < s_info.size(); i++){
+        int nwgd = 0;
+        int sum_cn = 0;
         vector<vector<int>> s_cn = s_info[i];
         // count the presence of each copy number
-        map<int, int> cn_count;
-        for(int k = 0; k < cn_max; k++){
-            cn_count[k] = 0;
-        }
+        // map<int, int> cn_count;
+        // for(int k = 0; k < cn_max; k++){
+        //     cn_count[k] = 0;
+        // }
         for (int j = 0; j < s_cn.size(); j++){
             vector<int> cp = s_cn[j];
             int cn = cp[2];
             if(!is_total) cn = state_to_total_cn(cn, cn_max);
-            cn_count[cn] += 1;
+            // cn_count[cn] += 1;
+            sum_cn += cn;
         }
-        // Find the most frequenct copy number
-        int most_freq_cn = 0;
-        int max_count = 0;
-        for(auto cnc : cn_count){
-            if(debug) cout << cnc.first << "\t" << cnc.second << endl;
-            if(cnc.second > max_count){
-                max_count = cnc.second;
-                most_freq_cn = cnc.first;
-            }
-        }
+        // // Find the most frequenct copy number
+        // int most_freq_cn = 0;
+        // int max_count = 0;
+        // for(auto cnc : cn_count){
+        //     if(debug) cout << cnc.first << "\t" << cnc.second << endl;
+        //     if(cnc.second > max_count){
+        //         max_count = cnc.second;
+        //         most_freq_cn = cnc.first;
+        //     }
+        // }
+        //
+        // int mode_logcn = ceil(log2(most_freq_cn));
+        // if(mode_logcn > 1) nwgd = mode_logcn - 1;
+        // use ploidy, to be applicable to real data, assume at most 1 WGD events
+        float ploidy = (float) sum_cn / s_cn.size();
+        if(ploidy > WGD_CUTOFF) nwgd = 1;
 
-        int nwgd = 0;
-        int mode_logcn = ceil(log2(most_freq_cn));
-        if(mode_logcn > 1) nwgd = mode_logcn - 1;
         obs_num_wgd.push_back(nwgd);
-        if(debug) cout << "Sample " << i+1 << " probably has " << nwgd << " WGD event(s)" << endl;
+        // if(debug)
+          cout << "Sample " << i + 1 << " probably has " << nwgd << " WGD event, with ploidy " << ploidy << endl;
     }
 }
 

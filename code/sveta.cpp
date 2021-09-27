@@ -227,7 +227,7 @@ void write_rcn(map<int, copy_number>& cn_matrix, int node_id, ogzstream& out, in
             int cn = s.second;
             if(model == BOUNDA) cn = state_to_total_cn(s.second, cn_max);
             // node_id, chr, seg_id, copy number
-            int rcn = cn - NORM_PLOIDY;   
+            int rcn = cn - NORM_PLOIDY;
             if(rcn < -2) rcn = -2;
             if(rcn > 2) rcn = 2;
             if(debug) cout << node_id + 1 << "\t" << c.first + 1 << "\t" << s.first + 1 << "\t" << s.second << "\t" << cn << "\t" << rcn << endl;
@@ -251,9 +251,9 @@ void write_rcn_baseline(map<int, copy_number>& cn_matrix, int node_id, ogzstream
             // node_id, chr, seg_id, copy number
             int rcnA = get_rcn_baseline(cnA, ploidy, r);
             int rcnB = get_rcn_baseline(cnB, ploidy, r);
-            int rcn = rcnA + rcnB;
-            if(debug) cout << node_id + 1 << "\t" << c.first + 1 << "\t" << s.first + 1 << "\t" << s.second << "\t" << rcn << endl;
-            out << node_id + 1 << "\t" << c.first + 1 << "\t" << s.first + 1 << "\t" << rcn << endl;
+            // int rcn = rcnA + rcnB;
+            if(debug) cout << node_id + 1 << "\t" << c.first + 1 << "\t" << s.first + 1 << "\t" << s.second << "\t" << rcnA << "\t" << rcnB << endl;
+            out << node_id + 1 << "\t" << c.first + 1 << "\t" << s.first + 1 << "\t" << rcnA << "\t" << rcnB << endl;
         }
     }
 }
@@ -969,7 +969,7 @@ void print_simulations(int mode, int num_seg, vector<genome>& results, const vec
         sstm << dir << prefix << "-rcn.txt.gz";
         ogzstream out_rcn(sstm.str().c_str());
         for(int j = 0; j < test_tree.nleaf; ++j){
-          results[j].write_rcn(out_rcn);
+          results[j].write_rcn(out_rcn, r);
         }
         out_rcn.close();
         sstm.str("");
@@ -979,7 +979,7 @@ void print_simulations(int mode, int num_seg, vector<genome>& results, const vec
         sstm << dir << prefix << "-baseline-rcn.txt.gz";
         ogzstream out_rcn_baseline(sstm.str().c_str());
         for(int j = 0; j < test_tree.nleaf; ++j){
-            // cout << "writing baseline RCN for node " << j + 1 << endl;         
+            // cout << "writing baseline RCN for node " << j + 1 << endl;
             results[j].write_rcn_baseline(out_rcn_baseline, chr_lengths, r);
         }
         out_rcn_baseline.close();

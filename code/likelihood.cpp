@@ -238,8 +238,8 @@ double get_prob_children_decomp2(vector<vector<double>>& L_sk_k, const evo_tree&
     int dim_seg = dim_decomp.dim_seg;
 
     // The indices for chromosome and segment matrix have to be ajusted
-    int delta_chr = (dim_chr - 1)/2;
-    int delta_seg = (dim_seg - 1)/2;
+    int delta_chr = (dim_chr - 1) / 2;
+    int delta_seg = (dim_seg - 1) / 2;
 
     if(debug){
         cout << "Starting state " << sk << "\t" << s_wgd << "\t" << s_chr << "\t" << s_seg << "\t" << s_chr2 << "\t" << s_seg2 << "\n";

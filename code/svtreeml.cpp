@@ -33,7 +33,6 @@ const int MAX_TREE2 = 5;
 const int MAX_PERTURB = 100;
 const int MAX_OPT = 10; // max number of optimization for each tree
 
-
 double loglh_epsilon = 0.001;
 double tolerance = 0.01;
 int miter = 2000;
