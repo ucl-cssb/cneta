@@ -3,6 +3,9 @@ Structural Variation Evolutionary Tree Analysis
 
 # Introduction
 This is a set of programs to simulate and build phylogenetic trees from copy number profiles caused by chromosomal alteration events and structural variations (SVs).
+
+NOTE: This repository is still under development and mainly for personal use currently.
+
 Currently, five types of events are considered, including segment duplication, segment deletion, chromosomal gain, chromosomal loss, and whole genome doubling (WGD).
 
 The tree building programs take as input the allele-specific or total copy numbers called from multiple samples of a patient.
@@ -106,13 +109,13 @@ You may use the provided bash scripts to run the programs.
 > bash run-svtreemcmc.sh
 ```
 
-The most recent Mac switched to zsh. In that case, please replace bash with zsh in the commands above.
+The most recent Mac switched to zsh. In that case, please replace `bash` with `zsh` in the commands above.
 
 
 
 # Simulation with sveta
-SVETA simulates structural variations that alter copy numbers along a coalescence tree of multiple samples.
-The coalescence tree can be either normal or exponential growing.
+SVETA simulates structural variations that alter copy numbers along a phylogenetic tree of multiple samples.
+
 1. Each node in the tree corresponds to the genome of a sample, which is represented by a consecutive set of pre-specified sites.
 
 2. Each site is considered as a segment of unknown size.
@@ -136,7 +139,7 @@ The procedure of simulations is as follows:
 
 
 There are three Markov models of evolution for the copy number profiles:
-* model 0: Mk model (extension of JC69 model)
+<!-- * model 0: Mk model (extension of JC69 model) -->
 * model 1: bounded model of total copy number
 * model 2: bounded model of allele-specific copy number (default)
 * model 3: infinite sites model
@@ -178,6 +181,8 @@ Please see run-sveta.sh to learn how to set different parameters.
 * *-cn.txt.gz: The total copy number at each site for each sample
 * *-rel-times.txt: The sampling time of tip nodes
 * *-allele-cn.txt.gz: The allele-specific copy number at each site for each sample
+* *-rcn.txt.gz: The relative total copy number at each site for each sample
+* *-baseline-rcn.txt.gz: The processed allele-specific copy number by normalizing with a baseline at each site for each sample
 * *-inode-cn.txt.gz: The copy number at each site for each internal node in the tree
 * *-info.txt: The time of each node and the total number of mutations simulated on each branch of the tree, grouped by lineages of tip nodes.
 * *-mut.txt: The list of simulated mutations on each branch of the tree.
@@ -225,7 +230,7 @@ There are 4 running modes in svtreeml.
 * mode 1: a simple comprehensive test on a simulated tree
 * mode 2: computing likelihood given a tree and its parameters (branch length and mutation rates)
 * mode 3: computing maximum likelihood tree given a tree topology, using "-b 1" for bootstrapping
-* mode 4: inferring marginal and joint ancestral states of a given tree from copy number profile 
+* mode 4: inferring marginal and joint ancestral states of a given tree from copy number profile
 
 The last three modes can be used to validate the computation of likelihood.
 

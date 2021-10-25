@@ -18,6 +18,8 @@ This file builds phylogenetic tree from integer copy numbers of multiple samples
 // using namespace std;
 
 
+typedef std::numeric_limits<double> dbl;
+
 // The number of tree for at most 11 samples, become slow with >6 leaves
 // int max_tree_num = fact(Ns) * fact(Ns - 1) / exp2(Ns - 1); // For trees
 static const int num_trees[] = {1, 1, 3, 15, 105, 945, 10395, 135135, 2027025, 34459425, 654729075};
@@ -32,6 +34,7 @@ const int MAX_TREE2 = 5;
 // The maximum number of times to refine the final set of trees
 const int MAX_PERTURB = 100;
 const int MAX_OPT = 10; // max number of optimization for each tree
+const int MIN_NSAMPLE_HCLIMB = 5;
 
 double loglh_epsilon = 0.001;
 double tolerance = 0.01;
@@ -101,7 +104,6 @@ OPT_TYPE opt_type;
 //create a list of nodes to loop over, making sure the root is last
 vector<int> knodes;
 
-typedef std::numeric_limits<double> dbl;
 
 // unary function and pointer to unary function
 // allows use of gsl rng for standard template algorithms
@@ -632,12 +634,12 @@ void do_evolutionary_algorithm(evo_tree& min_nlnl_tree, const int& Npop, const i
     }
 
     vector<int> index(2 * Npop);
-    int x=0;
+    int x = 0;
     iota(index.begin(), index.end(), x++);
-    sort(index.begin(), index.end(), [&](int i,int j){return lnLs[i]>lnLs[j];});
+    sort(index.begin(), index.end(), [&](int i, int j){ return lnLs[i] > lnLs[j]; });
 
     // Selection: calculate mean fitness of top half of population
-    double meand = 0;
+    double meand = 0.0;
     for(int k=0; k < Npop; ++k){
       //cout << "\t\t" << lnLs[ index[k] ] << endl;
       meand += lnLs[index[k]];
@@ -975,11 +977,21 @@ void maximize_tree_likelihood(const string& tree_file, const string& ofile, int 
     ofstream out_tree(ofile);
     tree.write(out_tree);
     out_tree.close();
+
+    string ofile_nex = ofile + ".nex";
+    ofstream nex_tree(ofile_nex);
+    int precision = 5;
+    string newick = tree.make_newick(precision);
+    tree.write_nexus(newick, nex_tree);
+    nex_tree.close();
 }
 
+// void write_tree(){
+
+// }
 
 // Build ML tree from given CNPs
-void find_ML_tree(string real_tstring, int total_chr, int num_total_bins, string ofile, int tree_search, int Npop, int Ngen, int init_tree, string dir_itrees, int max_static, double ssize, double tolerance, int miter, int optim, const vector<double>& rates, int Ne = 1, double beta = 0, double gtime=1){
+void find_ML_tree(string real_tstring, int num_total_bins, string ofile, int tree_search, int Npop, int Ngen, int init_tree, string dir_itrees, int max_static, double ssize, double tolerance, int miter, int optim, const vector<double>& rates, int Ne = 1, double beta = 0.0, double gtime=1.0){
     int debug = 0;
 
     evo_tree min_nlnl_tree;
@@ -988,7 +1000,7 @@ void find_ML_tree(string real_tstring, int total_chr, int num_total_bins, string
         do_evolutionary_algorithm(min_nlnl_tree, Npop, Ngen, init_tree, dir_itrees, max_static, rates, ssize, tolerance, miter, optim, Ne, beta, gtime);
     }else if(tree_search == 1){
         cout << "\nSearching tree space with hill climbing algorithm" << endl;
-        if(Ns <= 4){
+        if(Ns < MIN_NSAMPLE_HCLIMB){
             cout << "Hill climbing only support trees with at least 5 samples!" << endl;
             exit(EXIT_FAILURE);
         }
@@ -1007,7 +1019,7 @@ void find_ML_tree(string real_tstring, int total_chr, int num_total_bins, string
     if(maxj){
         cout << "Estimated mutation rates: " << endl;
     }else{
-      cout << "Pre-specified mutation rates: " << endl;
+        cout << "Pre-specified mutation rates: " << endl;
     }
     min_nlnl_tree.print_mutation_rates(model, only_seg);
 
@@ -1026,7 +1038,8 @@ void find_ML_tree(string real_tstring, int total_chr, int num_total_bins, string
     // When mutation rates are not estimated, using specified rates to compute number of mutations
     double mu_est = 0.0;
     if(!only_seg){
-        mu_est = NORM_PLOIDY * total_chr * (min_nlnl_tree.chr_gain_rate + min_nlnl_tree.chr_loss_rate) + NORM_PLOIDY * num_total_bins * (min_nlnl_tree.dup_rate + min_nlnl_tree.del_rate) + min_nlnl_tree.wgd_rate;
+        // int total_chr = vobs.size();
+        mu_est = NORM_PLOIDY * NUM_CHR * (min_nlnl_tree.chr_gain_rate + min_nlnl_tree.chr_loss_rate) + NORM_PLOIDY * num_total_bins * (min_nlnl_tree.dup_rate + min_nlnl_tree.del_rate) + min_nlnl_tree.wgd_rate;
     }else{
         mu_est = NORM_PLOIDY * num_total_bins * (min_nlnl_tree.dup_rate + min_nlnl_tree.del_rate);
     }
@@ -1097,7 +1110,7 @@ void print_desc(int cons, int maxj, int correct_bias, int use_repeat, int optim,
   }
 
   switch(model){
-      case MK: {
+      case MK:{
           cout << "\nAssuming Mk model " << endl;
           break;
       }
@@ -1117,7 +1130,7 @@ void print_desc(int cons, int maxj, int correct_bias, int use_repeat, int optim,
           }
           break;
       }
-      default: {
+      default:{
           cout << "";
           break;
       }
@@ -1278,13 +1291,13 @@ int main(int argc, char** const argv){
     }else{
         if(incl_all){
             cout << "   Using all input segments " << endl;
-            correct_bias = 0;
+            correct_bias = 0;   // normal site is treated as a site pattern in the computation
         }else{
             cout << "   Using variable input segments " << endl;
         }
     }
     data = read_data_var_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins, Nchar, obs_num_wgd, obs_change_chr, sample_max_cn, model, input_prop, debug);
-    // cout << "Number of invariant bins " << num_invar_bins << endl;
+    cout << "\nNumber of invariant bins after reading input is: " << num_invar_bins << endl;
     if(num_total_bins == num_invar_bins){
         cout << "There are no variant segments in the input data!" << endl;
         exit(EXIT_FAILURE);
@@ -1335,6 +1348,17 @@ int main(int argc, char** const argv){
         real_tstring = order_tree_string_uniq(create_tree_string_uniq(real_tree));
     }
 
+    if(bootstrap){
+        cout << "\nDoing bootstapping " << endl;
+        get_bootstrap_vector_by_chr(data, vobs, r);
+        if(debug){
+            cout << " Copy number matrix after bootstapping" << endl;
+            for(auto it : vobs){
+                cout << it.first << "\t" << it.second.size() << endl;
+            }
+        }
+    }
+
     if(mode == 0){
       cout << "\nBuilding maximum likelihood tree from copy number profile " << endl;
       if(init_tree == 0){
@@ -1343,19 +1367,7 @@ int main(int argc, char** const argv){
         cout << "   Using stepwise addition trees as initial trees " << endl;
       }
 
-      if(bootstrap){
-          cout << "\nDoing bootstapping " << endl;
-          get_bootstrap_vector_by_chr(data, vobs, r);
-          if(debug){
-              cout << " Copy number matrix after bootstapping" << endl;
-              for(auto it : vobs){
-                  cout << it.first << "\t" << it.second.size() << endl;
-              }
-          }
-      }
-      cout << "\nNumber of invariant bins after reading input is: " << num_invar_bins << endl;
-      int total_chr = data.rbegin()->first;
-      find_ML_tree(real_tstring, total_chr, num_total_bins, ofile, tree_search, Npop, Ngen, init_tree, dir_itrees, max_static, ssize, tolerance, miter, optim, rates, Ne, beta, gtime);
+      find_ML_tree(real_tstring, num_total_bins, ofile, tree_search, Npop, Ngen, init_tree, dir_itrees, max_static, ssize, tolerance, miter, optim, rates, Ne, beta, gtime);
 
     }else if(mode == 1){
         cout << "Running test on tree " << tree_file << endl;

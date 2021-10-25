@@ -59,12 +59,12 @@ vector<double> read_time_info(const string& filename, const int& Ns, int& age, i
   vector<int> ages;
   ifstream infile(filename.c_str());
   if(infile.is_open()){
-    std::string line;
+    string line;
     while(!getline(infile, line).eof()){
       if(line.empty()) continue;
 
-      std::vector<std::string> split;
-      std::string buf;
+      vector<string> split;
+      string buf;
       stringstream ss(line);
       while(ss >> buf) split.push_back(buf);
 
@@ -81,12 +81,12 @@ vector<double> read_time_info(const string& filename, const int& Ns, int& age, i
         age = *min_element(ages.begin(), ages.end());
     }
   }else{
-    std::cerr << "Error: open of time data unsuccessful: " << filename << std::endl;
+    cerr << "Error: open of time data unsuccessful: " << filename << endl;
     exit(EXIT_FAILURE);
   }
 
   if(t_info.size() != Ns){
-    std::cerr << "Error: timing information does not contain " << Ns << " entries: " << filename << std::endl;
+    cerr << "Error: timing information does not contain " << Ns << " entries: " << filename << endl;
     exit(EXIT_FAILURE);
   }
 
@@ -116,7 +116,7 @@ int allele_cn_to_state(int cnA, int cnB){
 }
 
 
-vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int &num_total_bins, int cn_max, int is_total, int is_rcn, int debug){
+vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int& num_total_bins, int cn_max, int is_total, int is_rcn, int debug){
     vector<vector<vector<int>>> s_info;
     num_total_bins = 0;
     // data indexed by [sample][data][ chr, bid, cn ]
@@ -124,14 +124,14 @@ vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int &num_tot
 
     igzstream infile(filename.c_str());
     int counter = 0;
-    std::string line;
+    string line;
     int prev_sample = 1;
 
     while(!getline(infile, line).eof()){
       if(line.empty()) continue;
 
-      std::vector<std::string> split;
-      std::string buf;
+      vector<string> split;
+      string buf;
       stringstream ss(line);
       while(ss >> buf) split.push_back(buf);
 
@@ -170,11 +170,12 @@ vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int &num_tot
                 exit(EXIT_FAILURE);
             }
             if(cn > cn_max){
-                cout << "copy number " << cn << " is decreased to " << cn_max << endl;
+                if(debug) cout << "copy number " << cn << " is decreased to " << cn_max << endl;
                 cn = cn_max;
             }
         }else{
             if(split.size() != 5){
+                cout << "Current file has " << split.size() << " columns " << endl;
                 cout << "There should be 5 columns in the file for allele-specific copy numbers" << endl;
                 exit(EXIT_FAILURE);
             }
@@ -201,11 +202,10 @@ vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int &num_tot
 
       counter++;
 
-      // if(counter >= num_total_bins) counter = 0;
       prev_sample = sample;
     }
 
-    if(debug) cout << "\tSuccessfully read input file" << endl;
+    if(debug) cout << "\tSuccessfully read input file with " << num_total_bins << " sites" << endl;
 
     return s_info;
 }
@@ -324,6 +324,7 @@ void get_sample_mcn(const vector<vector<vector<int>>>& s_info, vector<int>& samp
 vector<vector<int>> get_invar_segs(const vector<vector<vector<int>>>& s_info, int Ns, int num_total_bins, int& num_invar_bins, int is_total, int debug){
     num_invar_bins = 0;
     vector<int> var_bins(num_total_bins, 0);
+    if(debug) cout << "\tGetting all the variable bins" << endl;
     get_var_bins(s_info, Ns, num_total_bins, num_invar_bins, var_bins, is_total, debug);
 
     vector<vector<int>> segs;
@@ -336,12 +337,12 @@ vector<vector<int>> get_invar_segs(const vector<vector<vector<int>>>& s_info, in
           // hold all the sites in a bin
           vector<int> prev_bin;
           for(int j = 0; j < Ns; ++j) prev_bin.push_back(s_info[j][k][2]);
-          //cout << "seg_start: " << chr << "\t" << seg_start << ", cn =  " << seg_cn_tot << endl;
+        //   if(debug) cout << "seg_start: " << chr << "\t" << seg_start << ", cn =  " << s_info[0][k][2] << endl;
 
           // Check the subsequent bins
           bool const_cn = true;
           k++;
-          while(var_bins[k] && const_cn){
+          while(k < num_total_bins && var_bins[k] && const_cn){
               vector<int> curr_bin;
               for(int j = 0; j < Ns; ++j) curr_bin.push_back(s_info[j][k][2]);
               if(is_equal_vector(prev_bin, curr_bin) && s_info[0][k][0] == chr){
@@ -349,12 +350,12 @@ vector<vector<int>> get_invar_segs(const vector<vector<vector<int>>>& s_info, in
             	  ++k;
               }else{
             	  const_cn = false;
-            	  //cout << "\tsplitting segment" << endl;
+            	//   if(debug) cout << "\tsplitting segment" << endl;
               }
           }
           int seg_end = s_info[0][k-1][1];
           int id_end = k - 1;
-          //cout << "seg_end:\t" << seg_end << "\t" << k << endl;
+        //   if(debug) cout << "seg_end:\t" << seg_end << "\t" << k << endl;
 
           vector<int> seg{chr, id_start, id_end, seg_start, seg_end};
           segs.push_back(seg);
@@ -364,7 +365,7 @@ vector<vector<int>> get_invar_segs(const vector<vector<vector<int>>>& s_info, in
         }
         ++k;
     }
-    cout << "\tFound segments:\t" << segs.size() << endl;
+    cout << "\tFound segments (after merging consecutive bins):\t" << segs.size() << endl;
 
     return segs;
 }

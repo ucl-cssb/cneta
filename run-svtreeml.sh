@@ -119,10 +119,10 @@ if [[ $mode -eq 0 ]]; then
   # cmp_dist=$dir/cmp_dist-"$suffix".txt
   # Rscript test/tree_comparison/compare_trees.R -r "$tree_file" -i $mltree -o $cmp_plot -s $cmp_dist -p 1
 
-  bootstap=0
-  if [[ $bootstap -eq 1 ]]; then
-    echo "Run bootstapping"
-    # Do bootstapping
+  bootstrap=0
+  if [[ $bootstrap -eq 1 ]]; then
+    echo "Run bootstrapping"
+    # Do bootstrapping
     bdir=$dir/bootstrap
     mkdir -p $bdir
     for i in {1..10..1}
@@ -132,7 +132,7 @@ if [[ $mode -eq 0 ]]; then
 
       code/svtreeml -c $input -t "$times" --tree_file "$tree_file" --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change --is_bin $is_bin --incl_all $incl_all -s $Ns -p $Npop -g $Ngen -e $Nstop -r $tolerance -o $ofile -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $estmu  --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2  --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode -b 1 > $bdir/std_svtreeml_"$suffix"-btree-$i
     done
-    # Draw the ML tree with bootstapping support
+    # Draw the ML tree with bootstrapping support
     Rscript ana/plot-trees-all.R -s $bdir -f $mltree -o $dir/MaxL-tree-"$suffix"-bootstrap.pdf -t "bootstrap" -l "age" --time_file "$times" -p "MaxL-"$suffix"-btree-*txt"
   fi
 
@@ -162,10 +162,10 @@ elif [[ $mode -eq 3 ]]; then
 
   Rscript ana/plot-trees-all.R -f $mltree -b 0 -t "single" -l "xlim" --time_file "$times"  #>& /dev/null
 
-  bootstap=1
-  if [[ $bootstap -eq 1 ]]; then
-    echo "Run bootstapping"
-    # Do bootstapping
+  bootstrap=1
+  if [[ $bootstrap -eq 1 ]]; then
+    echo "Run bootstrapping"
+    # Do bootstrapping
     bdir=$dir/bootstrap
     mkdir -p $bdir
     for i in {1..10..1}
@@ -175,7 +175,7 @@ elif [[ $mode -eq 3 ]]; then
 
       code/svtreeml -c $input -t "$times" --is_bin $is_bin --incl_all $incl_all -s $Ns --tree_file "$tree_file"  --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change -o $ofile -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $estmu --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode -b 1 > $bdir/std_svtreeml_"$suffix"-btree-$i
     done
-    # Draw the ML tree with bootstapping support
+    # Draw the ML tree with bootstrapping support
     Rscript ana/plot-trees-all.R -s $bdir -f $mltree -o $dir/MaxL-tree-"$suffix"-bootstrap.pdf -t "bootstrap" -l "age" --time_file "$times" -p "MaxL-"$suffix"-btree-*txt"
   fi
 

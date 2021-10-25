@@ -32,7 +32,8 @@
 
 using namespace std;
 
-
+// MK model was used for test, not suitable for CN evolution
+// INFINITE was used for simulating Poisson process
 enum MODEL {MK, BOUNDT, BOUNDA, DECOMP, INFINITE = 3};
 
 const int MAX_AGE = 100;
@@ -45,7 +46,7 @@ const int PRINT_PRECISION = 10;
 
 const double SMALL_VAL = 1.0e-10;   // used to compare floats
 
-int WGD_CUTOFF = 3;    // genome ploidy to determine WGD
+const int WGD_CUTOFF = 3;    // genome ploidy to determine WGD
 
 // key: chr, seg, copy_number
 typedef map<int, map<int, int>> copy_number;

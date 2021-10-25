@@ -11,10 +11,10 @@ The length of edge (Ns+2, Ns+1) is 0.
 The length of edge (Ns+2, 2*Ns+1) has to be specified by the user.
 
 Sample command to run the program:
-    To convert a NEXUS tree file (which may contains multiple trees) to a list of TXT trees (in the format of edge lists):
-        python newick2elist.py -f 0 -t AllTreesNr5.txt -b 5.25
-    To convert a NEWICK tree file (which only contains one tree) to a TXT tree:
-        python newick2elist.py -f 1 -t tree1.nwk
+To convert a NEXUS tree file (which may contains multiple trees) to a list of TXT trees (in the format of edge lists):
+    python newick2elist.py -f 0 -t AllTreesNr5.txt -b 5.25
+To convert a NEWICK tree file (which only contains one tree) to a TXT tree:
+    python newick2elist.py -f 1 -t tree1.nwk
 
 '''
 
@@ -234,7 +234,7 @@ def rename_tree(tree, num_leaf, incl_normal, node_prefix=""):
 
 # Convert the nexus trees to edge list as it is
 def convert_nexus_file(tree_file, node_prefix, incl_normal, scaling, root_blen = 0):
-    with open(tree_file,"r") as fin:
+    with open(tree_file, "r") as fin:
         dir = os.path.dirname(tree_file)
         i = 0 # TREE ID
         for line in fin:

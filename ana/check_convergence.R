@@ -1,3 +1,5 @@
+#!/usr/bin/env Rscript
+
 # Check the convergence of MCMC chains
 # https://github.com/danlwarren/RWTY
 
