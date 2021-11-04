@@ -147,7 +147,6 @@ evo_tree perturb_tree_set(vector<evo_tree>& trees, gsl_rng* r, long unsigned (*f
 }
 
 
-
 // Generate initial set of unique trees, at most Npop trees, either reading from files or generating random coalescence trees
 // Ne, beta, gtime for generating coalescence tree
 vector<evo_tree> get_initial_trees(int init_tree, string dir_itrees, int Npop, const vector<double>& rates, int max_tree_num, int cons, int Ne = 1, double beta = 0.0, double gtime = 1.0){
@@ -945,15 +944,10 @@ void maximize_tree_likelihood(const string& tree_file, const string& ofile, int 
     // if(format == "txt"){
     tree = read_tree_info(tree_file, Ns);
     tree.print();
+    cout << tree.make_newick() << endl;
     // }
     // if(format == "nex"){
     //     tree = read_nexus(tree_file);
-    // }
-
-    // if(cons){
-    //     adjust_tree_blens(tree);
-    //     adjust_tree_height(tree);
-    //     adjust_tree_tips(tree);
     // }
 
     restore_mutation_rates(tree, rates);
