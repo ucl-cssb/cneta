@@ -1559,7 +1559,7 @@ void update_wgd_rates_lnormal(evo_tree& rtree, int model, double& log_likelihood
 
 
 // Given a tree, find the MAP estimation of the branch lengths (and optionally mu) assuming branch lengths are independent or constrained in time
-void run_mcmc(evo_tree& rtree, int model, const int n_draws, const int n_burnin, const int n_gap, vector<double> proposal_parameters, vector<double> prior_parameters_blen, vector<double> prior_parameters_height, vector<double> alphas, vector<double> prior_parameters_mut, double lambda_topl, string ofile, string tfile, int sample_prior=0, int fix_topology=0, int cons=0, int maxj=0, int cn_max = 4, int only_seg = 1, int correct_bias=0, int is_total=1, int epop = 1, double beta = 0, double gtime=1){
+void run_mcmc(evo_tree& rtree, int model, const int n_draws, const int n_burnin, const int n_gap, vector<double> proposal_parameters, vector<double> prior_parameters_blen, vector<double> prior_parameters_height, vector<double> alphas, vector<double> prior_parameters_mut, double lambda_topl, string ofile, string tfile, const ITREE_PARAM& itree_param, int sample_prior=0, int fix_topology=0, int cons=0, int maxj=0, int cn_max = 4, int only_seg = 1, int correct_bias=0, int is_total=1){
         ofstream fout_trace(ofile);
         ofstream fout_tree(tfile);
 
@@ -2003,7 +2003,7 @@ void revise_init_tree(evo_tree& rtree, const vector<double> rates, const vector<
 }
 
 
-void run_with_reference_tree(string rtreefile, int Ns, int Nchar, int num_invar_bins, int fix_topology, int model, int cons, int maxj, int cn_max, int only_seg, int correct_bias, int is_total, const vector<double>& ref_rates, const vector<double>& tobs, const vector<double>& rates, int n_draws, int n_burnin, int n_gap, const vector<double>& proposal_parameters, const vector<double>& prior_parameters_blen, const vector<double>& prior_parameters_height, const vector<double>& alphas, const vector<double>& prior_parameters_mut, double lambda_topl, string trace_param_file, string trace_tree_file, int sample_prior, int epop = 1, double beta = 0, double gtime=1){
+void run_with_reference_tree(string rtreefile, int Ns, int Nchar, int num_invar_bins, int fix_topology, int model, int cons, int maxj, int cn_max, int only_seg, int correct_bias, int is_total, const vector<double>& ref_rates, const vector<double>& tobs, const vector<double>& rates, int n_draws, int n_burnin, int n_gap, const vector<double>& proposal_parameters, const vector<double>& prior_parameters_blen, const vector<double>& prior_parameters_height, const vector<double>& alphas, const vector<double>& prior_parameters_mut, double lambda_topl, string trace_param_file, string trace_tree_file, int sample_prior, const ITREE_PARAM& itree_param){
     // MLE testing
     // read in true tree
     evo_tree test_tree = read_reference_tree(rtreefile, Ns, ref_rates, tobs);
@@ -2044,7 +2044,7 @@ void run_with_reference_tree(string rtreefile, int Ns, int Nchar, int num_invar_
     }
     else{
         cout << "   starting with a random coalescence tree" << endl;
-        rtree = generate_coal_tree(Ns, r, fp_myrng, epop, beta, gtime);
+        rtree = generate_coal_tree(Ns, r, fp_myrng, itree_param);
     }
     revise_init_tree(rtree, rates, tobs, cons);
 
@@ -2060,7 +2060,7 @@ void run_with_reference_tree(string rtreefile, int Ns, int Nchar, int num_invar_
 
     // Estimate branch length with MCMC
     cout << "\n\n### Running MCMC" << endl;
-    run_mcmc(rtree, model, n_draws, n_burnin, n_gap, proposal_parameters, prior_parameters_blen, prior_parameters_height, alphas, prior_parameters_mut, lambda_topl, trace_param_file, trace_tree_file, sample_prior, fix_topology, cons, maxj, cn_max, only_seg, correct_bias, is_total, epop, beta, gtime);
+    run_mcmc(rtree, model, n_draws, n_burnin, n_gap, proposal_parameters, prior_parameters_blen, prior_parameters_height, alphas, prior_parameters_mut, lambda_topl, trace_param_file, trace_tree_file, itree_param, sample_prior, fix_topology, cons, maxj, cn_max, only_seg, correct_bias, is_total);
     // cout << "\nMinimised tree likelihood by MCMC / mu : " << Lf << "\t" << min_tree.mu*Nchar <<  endl;
 }
 
@@ -2220,6 +2220,7 @@ int main (int argc, char ** const argv) {
     fp_myrng = &myrng;
 
     INPUT_PROPERTY input_prop{is_total, 0, is_bin, incl_all};
+    ITREE_PARAM itree_param{epop, beta, gtime};
 
     if(model == MK){
         cout << "Assuming Mk model " << endl;
@@ -2386,7 +2387,7 @@ int main (int argc, char ** const argv) {
     }
 
     if(rtreefile != "") {
-        run_with_reference_tree(rtreefile, Ns, Nchar, num_invar_bins, fix_topology, model, cons, maxj, cn_max, only_seg, correct_bias, is_total, ref_rates, tobs, rates, n_draws,  n_burnin,  n_gap, proposal_parameters, prior_parameters_blen, prior_parameters_height, alphas, prior_parameters_mut, lambda_topl, trace_param_file, trace_tree_file, sample_prior, epop, beta, gtime);
+        run_with_reference_tree(rtreefile, Ns, Nchar, num_invar_bins, fix_topology, model, cons, maxj, cn_max, only_seg, correct_bias, is_total, ref_rates, tobs, rates, n_draws,  n_burnin,  n_gap, proposal_parameters, prior_parameters_blen, prior_parameters_height, alphas, prior_parameters_mut, lambda_topl, trace_param_file, trace_tree_file, sample_prior, itree_param);
     }
     else{
         cout << "\nGenerate the start tree" << endl;
@@ -2394,7 +2395,7 @@ int main (int argc, char ** const argv) {
         if(init_tree == 0){
           cout << "\tUsing random coalescence tree " << endl;
           // start with a random coalescence tree
-          rtree = generate_coal_tree(Ns, r, fp_myrng, epop, beta, gtime);
+          rtree = generate_coal_tree(Ns, r, fp_myrng, itree_param);
         }else if(init_tree == 1){
           cout << "\tUsing provided tree " << endl;
           rtree = read_tree_info(file_itree, Ns);
@@ -2424,6 +2425,6 @@ int main (int argc, char ** const argv) {
 
         // Estimate branch length with MCMC
         cout << "\n\n### Running MCMC" << endl;
-        run_mcmc(rtree, model, n_draws, n_burnin, n_gap, proposal_parameters, prior_parameters_blen, prior_parameters_height, alphas, prior_parameters_mut, lambda_topl, trace_param_file, trace_tree_file, sample_prior, fix_topology, cons, maxj, cn_max, only_seg, correct_bias, is_total, epop, beta, gtime);
+        run_mcmc(rtree, model, n_draws, n_burnin, n_gap, proposal_parameters, prior_parameters_blen, prior_parameters_height, alphas, prior_parameters_mut, lambda_topl, trace_param_file, trace_tree_file, itree_param, sample_prior, fix_topology, cons, maxj, cn_max, only_seg, correct_bias, is_total);
     }
 }

@@ -60,7 +60,7 @@ inline void my_err_handler(const char * reason, const char * file, int line, int
 
 // given a tree, maximise the branch lengths (and optionally mu) assuming branch lengths are independent or constrained in time
 // use GSL simplex optimization
-void max_likelihood(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, const vector<double>& tobs, LNL_TYPE& lnl_type, OPT_TYPE& opt_type, double& min_nlnl, const double& ssize);
+void max_likelihood(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, LNL_TYPE& lnl_type, OPT_TYPE& opt_type, double& min_nlnl, const double& ssize);
 
 
 /*****************************************************

@@ -138,8 +138,9 @@ double my_f_cons_mu(const gsl_vector *v, void *params){
 
 // given a tree, maximise the branch lengths(and optionally mu) assuming branch lengths are independent or constrained in time
 // use GSL simplex optimization
-void max_likelihood(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, const vector<double>& tobs, LNL_TYPE& lnl_type, OPT_TYPE& opt_type, double& min_nlnl, const double& ssize){
+void max_likelihood(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, LNL_TYPE& lnl_type, OPT_TYPE& opt_type, double& min_nlnl, const double& ssize){
   int debug = 0;
+  vector<double> tobs = opt_type.tobs;
 
   const gsl_multimin_fminimizer_type *T = gsl_multimin_fminimizer_nmsimplex2;
   gsl_multimin_fminimizer *s = NULL;
@@ -242,7 +243,6 @@ void max_likelihood(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, const 
   gsl_vector_set_all(ss, ssize);
 
   // Initialize method and iterate
-  // evo_tree *p = &rtree;
   GSL_PARAM gsl_param = {rtree, vobs, lnl_type};
   GSL_PARAM* p = &gsl_param;
   void* pv = p;
@@ -638,7 +638,7 @@ double optimize_mutation_rates(evo_tree& rtree, map<int, vector<vector<int>>>& v
 
 
 // return log likelihood
-double optimize_one_branch(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, 
+double optimize_one_branch(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps,
 LNL_TYPE& lnl_type, double tolerance, Node* node1, Node* node2){
     int debug = 0;
     if(debug){
@@ -646,7 +646,7 @@ LNL_TYPE& lnl_type, double tolerance, Node* node1, Node* node2){
     }
 
     assert(!((node1->id == rtree.nleaf && node2->id == rtree.nleaf - 1) || (node2->id == rtree.nleaf && node1->id == rtree.nleaf - 1)));
-        
+
     rtree.current_it = (Neighbor*) node1->findNeighbor(node2);
     assert(rtree.current_it);
     rtree.current_it_back = (Neighbor*) node2->findNeighbor(node1);
@@ -688,7 +688,7 @@ void compute_best_traversal(evo_tree& rtree, NodeVector &nodes, NodeVector &node
 }
 
 
-double optimize_all_branches(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, 
+double optimize_all_branches(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps,
 LNL_TYPE& lnl_type, int my_iterations, double tolerance){
     int debug = 0;
 
@@ -729,12 +729,12 @@ LNL_TYPE& lnl_type, int my_iterations, double tolerance){
         for(int j = 0; j < nodes.size(); j++){
             if(debug){
                 cout << " optimizing branch " << nodes[j]->id << " " << nodes2[j]->id << endl;
-            }   
+            }
             // skip normal branch, which will always be 0
-            if(nodes[j]->id == rtree.nleaf - 1 || nodes2[j]->id == rtree.nleaf - 1)   continue;    
+            if(nodes[j]->id == rtree.nleaf - 1 || nodes2[j]->id == rtree.nleaf - 1)   continue;
             new_tree_lh = optimize_one_branch(rtree, vobs, obs_decomp, comps, lnl_type, tolerance, (Node* )nodes[j],(Node* )nodes2[j]);
         }
-        
+
         if(debug){
             cout << "tree log likelihood after iteration " << i + 1 << " : " << new_tree_lh << endl;
         }
@@ -745,7 +745,7 @@ LNL_TYPE& lnl_type, int my_iterations, double tolerance){
                 cout << "tree log-likelihood decreases" << endl;
                 cout << "NOTE: Restoring branch lengths as tree log-likelihood decreases after branch length optimization: " << tree_lh << " -> " << new_tree_lh << endl;
             }
-            
+
             restore_branch_lengths(rtree, lenvec);
 
             double max_delta_lh = 1.0;
@@ -951,7 +951,7 @@ void update_variables_transformed(evo_tree& rtree, double *x, LNL_TYPE& lnl_type
 
             // store original ratios
             vector<double> ratios = rtree.get_ratio_from_age();
-           
+
             double min_root = lnl_type.max_tobs + rtree.nleaf * BLEN_MIN;
 
             if(debug){
@@ -1053,7 +1053,7 @@ void update_variables_transformed(evo_tree& rtree, double *x, LNL_TYPE& lnl_type
     @param x the input vector x
     @return the function value at x (negative log likelihood)
 */
-double targetFunk(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, 
+double targetFunk(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps,
 LNL_TYPE& lnl_type, OPT_TYPE& opt_type, double x[]){
     update_variables_transformed(rtree, x, lnl_type, opt_type);
 
@@ -1071,7 +1071,7 @@ LNL_TYPE& lnl_type, OPT_TYPE& opt_type, double x[]){
 	@param dfx the derivative at x
 	@return the function value at x
 */
-double derivativeFunk(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, 
+double derivativeFunk(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps,
 LNL_TYPE& lnl_type, OPT_TYPE& opt_type, int ndim, double x[], double dfx[]){
   int debug = 0;
 
@@ -1287,7 +1287,7 @@ double L_BFGS_B(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP
 }
 
 
-void max_likelihood_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, 
+void max_likelihood_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps,
     LNL_TYPE& lnl_type, OPT_TYPE& opt_type, double &min_nlnl, int debug){
     int model = lnl_type.model;
     int cn_max = lnl_type.cn_max;
@@ -1331,7 +1331,7 @@ void max_likelihood_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, O
         if(!is_tip_age_valid(rtree.get_node_ages(), opt_type.tobs)){
           cout << "Tip timings inconsistent with observed data when doing BFGS!" << endl;
           rtree.print();
-          cout << rtree.make_newick() << endl;         
+          cout << rtree.make_newick() << endl;
           exit(EXIT_FAILURE);
         }
 
@@ -1454,10 +1454,10 @@ double optimize_one_branch_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& 
     if(debug){
         cout << "\tOptimizing the branch " << node1->id + 1 << ", " << node2->id + 1 << endl;
     }
- 
+
     // does not optimize virtual branch from root
     assert(!((node1->id == rtree.nleaf && node2->id == rtree.nleaf - 1) || (node2->id == rtree.nleaf && node1->id == rtree.nleaf - 1)));
-        
+
     int maxj = opt_type.maxj;    // record orignal maxj
 
     rtree.current_it = (Neighbor*) node1->findNeighbor(node2);
@@ -1490,7 +1490,7 @@ double optimize_one_branch_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& 
 
     opt_type.opt_one_branch = 0;
     opt_type.maxj = maxj;
-    
+
     if(debug){
         cout << "\tmax logl: " << -negative_lh << " optimized branch length " << rtree.edges[eid].length << endl;
         cout << "tree after optimization by BFGS " << rtree.make_newick() << endl;
@@ -1499,4 +1499,3 @@ double optimize_one_branch_BFGS(evo_tree& rtree, map<int, vector<vector<int>>>& 
 
     return -negative_lh;
 }
-

@@ -20,9 +20,12 @@ This file builds phylogenetic tree from integer copy numbers of multiple samples
 
 typedef std::numeric_limits<double> dbl;
 
+enum OPT_METHOD {GSL, BFGS};
+enum SEARCH_METHOD {EVOLUTION, HILLCLIMB, EXHAUST};
+
 // The number of tree for at most 11 samples, become slow with >6 leaves
 // int max_tree_num = fact(Ns) * fact(Ns - 1) / exp2(Ns - 1); // For trees
-static const int num_trees[] = {1, 1, 3, 15, 105, 945, 10395, 135135, 2027025, 34459425, 654729075};
+static const int NUM_TREES[] = {1, 1, 3, 15, 105, 945, 10395, 135135, 2027025, 34459425, 654729075};
 // The maximum number of samples in the tree which allows exhaustive search
 const int LARGE_TREE = 11;
 // The number of trees to search before terminating
@@ -36,73 +39,12 @@ const int MAX_PERTURB = 100;
 const int MAX_OPT = 10; // max number of optimization for each tree
 const int MIN_NSAMPLE_HCLIMB = 5;
 
-double loglh_epsilon = 0.001;
-double tolerance = 0.01;
-int miter = 2000;
-int speed_nni = 0;
-
-int debug = 0;
 
 // global value for tree search
 map<string, int> searched_trees;
 bool exhausted_tree_search = false;
 
 gsl_rng* r;
-unsigned seed;
-
-
-/********* input parameters ***********/
-int Ns;   // number of samples
-int age = MAX_AGE;
-
-// Set max_* as global variables to avoid adding more parameters in maximization
-int m_max;
-int max_wgd;
-int max_chr_change;
-int max_site_change;
-
-int cn_max;
-int is_total; // whether or not the input is total copy number
-
-int model;
-int cons;
-int maxj;
-
-int use_repeat;   // whether or not to use repeated site patterns, used in get_likelihood_chr*
-int correct_bias; // Whether or not to correct acquisition bias, used in get_likelihood_*
-int num_invar_bins;   // number of invariant sites
-
-int only_seg; // Whether or not to only consider segment-level mutations, used in get_likelihood_revised
-
-int infer_wgd; // whether or not to infer WGD status of a sample, called in initialize_lnl_table_decomp
-int infer_chr; // whether or not to infer chromosome gain/loss status of a sample, called in initialize_lnl_table_decomp
-
-int nstate;
-
-double scale_tobs;
-
-/********* derived from input ***********/
-map<int, vector<vector<int>>> vobs;   // CNP for each site, grouped by chr
-vector<double> tobs; // input times for each sample, should be the same for all trees, defined when reading input, used in likelihood computation
-double max_tobs;
-
-int Nchar;  // number of sites
-
-
-vector<int> obs_num_wgd;  // possible number of WGD events
-vector<vector<int>> obs_change_chr;
-vector<int> sample_max_cn;
-
-map<int, set<vector<int>>> decomp_table;  // possible state combinations for observed copy numbers
-set<vector<int>> comps;
-
-LNL_TYPE lnl_type;
-OBS_DECOMP obs_decomp;
-
-OPT_TYPE opt_type;
-
-//create a list of nodes to loop over, making sure the root is last
-vector<int> knodes;
 
 
 // unary function and pointer to unary function
@@ -148,9 +90,8 @@ evo_tree perturb_tree_set(vector<evo_tree>& trees, gsl_rng* r, long unsigned (*f
 
 
 // Generate initial set of unique trees, at most Npop trees, either reading from files or generating random coalescence trees
-// Ne, beta, gtime for generating coalescence tree
-vector<evo_tree> get_initial_trees(int init_tree, string dir_itrees, int Npop, const vector<double>& rates, int max_tree_num, int cons, int Ne = 1, double beta = 0.0, double gtime = 1.0){
-    int debug = 0;
+vector<evo_tree> get_initial_trees(int init_tree, string dir_itrees, int Ns, int Npop, const vector<double>& rates, const vector<double>& tobs, double max_tobs, int age, int max_tree_num, int cons, const ITREE_PARAM& itree_param, int debug){
+    // int debug = 0;
     vector<evo_tree> trees;
 
     if(init_tree){     // read MP trees from files
@@ -182,7 +123,7 @@ vector<evo_tree> get_initial_trees(int init_tree, string dir_itrees, int Npop, c
 
         int num_tree = 0;
         while(num_tree < n){
-            evo_tree rtree = generate_coal_tree(Ns, r, fp_myrng, Ne, beta, gtime);
+            evo_tree rtree = generate_coal_tree(Ns, r, fp_myrng, itree_param);
 
             // tree branch lengths may violate constaints
             bool wrong_blen = false;
@@ -288,16 +229,21 @@ vector<evo_tree> find_best_trees(const vector<evo_tree>& trees, const vector<dou
 
 // Only feasible for trees with fewer than 12 samples
 // Do maximization multiple times (determined by Ngen), since numerical optimizations are local hill-climbing algorithms and may converge to a local peak
-void do_exhaustive_search(evo_tree& min_nlnl_tree, string real_tstring, int Ngen, const int init_tree, const string& dir_itrees, const int& max_static, const vector<double>& rates, const double ssize, const int optim, int Ne = 1, double beta = 0, double gtime = 1){
+void do_exhaustive_search(evo_tree& min_nlnl_tree, string real_tstring, int Ns, int Ngen, int init_tree, const string& dir_itrees, const vector<double>& rates, double ssize, int optim, int max_static, const ITREE_PARAM& itree_param, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type, OPT_TYPE& opt_type, int debug){
     // initialize candidate tree set
     if(Ns > LARGE_TREE){
         cout << "\nFor data with larger than " << LARGE_TREE << " samples, it is very slow!" << endl;
         exit(EXIT_FAILURE);
     }
 
-    int max_tree_num = num_trees[Ns - 1];
+    double max_tobs = lnl_type.max_tobs;
+    int age = lnl_type.patient_age;
+    int cons = lnl_type.cons;
+    vector<double> tobs = opt_type.tobs;
+
+    int max_tree_num = NUM_TREES[Ns - 1];
     cout << "\nMaximum number of possible trees to explore " << max_tree_num << endl;
-    vector<evo_tree> init_trees = get_initial_trees(init_tree, dir_itrees, max_tree_num, rates, max_tree_num, cons, Ne, beta, gtime);
+    vector<evo_tree> init_trees = get_initial_trees(init_tree, dir_itrees, Ns, max_tree_num, rates, tobs, max_tobs, age, max_tree_num, cons, itree_param, debug);
 
     assert(max_tree_num == init_trees.size());
     cout << "Initial number of trees " << max_tree_num << endl;
@@ -328,8 +274,8 @@ void do_exhaustive_search(evo_tree& min_nlnl_tree, string real_tstring, int Ngen
 
         while(count < Ngen){
             // if(debug) cout << "Maximization in iteration " << count << endl;
-            if(optim == 0){
-                max_likelihood(init_trees[i], vobs, tobs, lnl_type, opt_type, nlnl, ssize);
+            if(optim == GSL){
+                max_likelihood(init_trees[i], vobs, lnl_type, opt_type, nlnl, ssize);
             }else{
                 // init_trees[i] has already been the same as best_tree
                 max_likelihood_BFGS(init_trees[i], vobs, obs_decomp, comps, lnl_type, opt_type, nlnl);
@@ -369,14 +315,18 @@ void do_exhaustive_search(evo_tree& min_nlnl_tree, string real_tstring, int Ngen
 // Npop determines the maximum number of unique trees to try
 // assume nni5 = true
 // have to update knodes when topolgy is changed
-void do_hill_climbing(evo_tree& min_nlnl_tree, int Npop, int Ngen, int init_tree, const string& dir_itrees, const vector<double>& rates, double ssize, int optim, int Ne = 1, double beta = 0.0, double gtime = 1.0){
+void do_hill_climbing(evo_tree& min_nlnl_tree, int Ns, int Npop, int Ngen, int init_tree, const string& dir_itrees, const vector<double>& rates, double ssize, int optim, const ITREE_PARAM& itree_param, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type, OPT_TYPE& opt_type, double loglh_epsilon, int speed_nni, int debug){
     // int debug = 0;
+    double max_tobs = lnl_type.max_tobs;
+    int age = lnl_type.patient_age;
+    int cons = lnl_type.cons;
+    vector<double> tobs = opt_type.tobs;
 
     int max_tree_num = INT_MAX;
-    if(Ns <= LARGE_TREE)   max_tree_num = num_trees[Ns - 1];
+    if(Ns <= LARGE_TREE)   max_tree_num = NUM_TREES[Ns - 1];
 
     // initialize candidate tree set
-    vector<evo_tree> trees = get_initial_trees(init_tree, dir_itrees, Npop, rates, max_tree_num, cons, Ne, beta, gtime);
+    vector<evo_tree> trees = get_initial_trees(init_tree, dir_itrees, Ns, max_tree_num, rates, tobs, max_tobs, age, max_tree_num, cons, itree_param, debug);
     int num2init = trees.size();
     vector<double> lnLs(num2init, 0.0);
     vector<int> index(num2init, 0);      // index of trees starting from 0
@@ -393,10 +343,10 @@ void do_hill_climbing(evo_tree& min_nlnl_tree, int Npop, int Ngen, int init_tree
     for(int i = 0; i < num2init; ++i){
         double nlnl = MAX_NLNL;
         if(debug)  cout << "\noptimize tree " << i + 1 << ": " << trees[i].make_newick() << endl;
-        if(optim == 0){  // use gsl libaries (deprecated)
+        if(optim == GSL){  // use gsl libaries (deprecated)
             while(!(nlnl < MAX_NLNL)){
               nlnl = MAX_NLNL;
-              max_likelihood(trees[i], vobs, tobs, lnl_type, opt_type, nlnl, ssize);
+              max_likelihood(trees[i], vobs, lnl_type, opt_type, nlnl, ssize);
             }
         }else{
             while(!(nlnl < MAX_NLNL)){
@@ -434,9 +384,6 @@ void do_hill_climbing(evo_tree& min_nlnl_tree, int Npop, int Ngen, int init_tree
     }
 
     // Perturb trees randomly (NNI may be disturbed by openmp due to use of pointers)
-    // #ifdef _OPENMP
-    // #pragma omp parallel for
-    // #endif
     for(int i = 0; i < num2perturb; ++i){
         trees2[i].generate_neighbors();
         if(debug){
@@ -486,18 +433,8 @@ void do_hill_climbing(evo_tree& min_nlnl_tree, int Npop, int Ngen, int init_tree
         ttree.generate_neighbors();
 
         do_random_NNIs(ttree, r, cons);
+        lnl_type.knodes = get_inodes_bottom_up(ttree, debug);
 
-        vector<int> inodes;
-        Node* root = &(ttree.nodes[ttree.root_node_id]);
-        ttree.get_inodes_postorder(root, inodes);
-
-        // cout << "Internal nodes in post order:";
-        // for(auto n: inodes){
-        //     cout << "\t" << n;
-        // }
-        // cout << endl;
-
-        lnl_type.knodes = inodes;
         do_hill_climbing_NNI(ttree, vobs, obs_decomp, comps, lnl_type, opt_type, loglh_epsilon, speed_nni);
         ttree.delete_neighbors();
 
@@ -553,10 +490,17 @@ void do_hill_climbing(evo_tree& min_nlnl_tree, int Npop, int Ngen, int init_tree
 
 
 // Using genetic algorithm to search tree space (TODO: optimize)
-void do_evolutionary_algorithm(evo_tree& min_nlnl_tree, const int& Npop, const int& Ngen, const int init_tree, const string& dir_itrees, const int& max_static, const vector<double>& rates, const double ssize, const double tolerance, const int miter, const int optim, int Ne = 1, double beta = 0, double gtime = 1){
+void do_evolutionary_algorithm(evo_tree& min_nlnl_tree, int Ns, int Npop, int Ngen, int init_tree, const string& dir_itrees, const vector<double>& rates, double ssize, int optim, int max_static, const ITREE_PARAM& itree_param, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type, OPT_TYPE& opt_type, int debug){
   //cout << "Running evolutionary algorithm" << endl;
   // create initial population of trees. Sample from coalescent trees
-  vector<evo_tree> trees = get_initial_trees(init_tree, dir_itrees, Npop, rates, Npop, cons, Ne, beta, gtime);
+  double max_tobs = lnl_type.max_tobs;
+  int age = lnl_type.patient_age;
+  int cons = lnl_type.cons;
+  vector<double> tobs = opt_type.tobs;
+  double tolerance = opt_type.tolerance;
+  int miter = opt_type.miter;
+
+  vector<evo_tree> trees = get_initial_trees(init_tree, dir_itrees, Ns, Npop, rates, tobs, max_tobs, age, Npop, cons, itree_param, debug);
 
   vector<double> lnLs(2 * Npop, 0);
   double min_nlnl = MAX_NLNL;
@@ -581,10 +525,9 @@ void do_evolutionary_algorithm(evo_tree& min_nlnl_tree, const int& Npop, const i
 
       // Selection: score all the trees in new_trees (all got maximized)
       for(int i = 0; i < 2 * Npop; ++i){
-        if(optim == 0){
-           max_likelihood(new_trees[i], vobs, tobs, lnl_type, opt_type, nlnl, ssize);
-        }
-        if(optim == 1){
+        if(optim == GSL){
+           max_likelihood(new_trees[i], vobs, lnl_type, opt_type, nlnl, ssize);
+        }else{
            max_likelihood_BFGS(new_trees[i], vobs, obs_decomp, comps, lnl_type, opt_type, nlnl);
         }
         new_trees[i].score = -nlnl;
@@ -613,10 +556,9 @@ void do_evolutionary_algorithm(evo_tree& min_nlnl_tree, const int& Npop, const i
             new_tree.score = get_likelihood_revised(new_tree, vobs, lnl_type);
       	    new_trees.push_back(new_tree);
             // new_trees of size 2 Npop
-            if(optim == 0){
-        	    max_likelihood(new_trees[Npop + i], vobs, tobs, lnl_type, opt_type, nlnl, ssize);
-            }
-            if(optim == 1){
+            if(optim == GSL){
+        	    max_likelihood(new_trees[Npop + i], vobs, lnl_type, opt_type, nlnl, ssize);
+            }else{
                 // new_trees[Npop + i].print();
                 max_likelihood_BFGS(new_trees[Npop + i], vobs, obs_decomp, comps, lnl_type, opt_type, nlnl);
             }
@@ -722,17 +664,26 @@ vector<int> compute_mutation_rates(evo_tree& tree, int only_seg, int num_total_b
 
 
 // Run the program on a given tree with different modes of estimation (branch length constrained or not, mutation rate estimated or not)
-void run_test(const string& tree_file, int Ns, int num_total_bins, int Nchar, int model, int cn_max, int only_seg, int correct_bias, int is_total, const vector<double>& tobs, const vector<vector<int>>& vobs0, int Nchar0, const vector<double>& rates, double ssize, double tolerance, double miter){
+void run_test(const string& tree_file, int Ns, int num_total_bins, int Nchar, const vector<vector<int>>& vobs0, int Nchar0, const vector<double>& rates, double ssize, double tolerance, double miter, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type, OPT_TYPE& opt_type, int debug){
     // MLE testing
     //static const int arr1[] = {8,5, 8,1, 9,2, 9,3, 10,9, 10,8, 11,4, 11,10, 7,11, 7,6 };
     //vector<int> e (arr1, arr1 + sizeof(arr1) / sizeof(arr1[0]) );
     //for(int i = 0; i < e.size();++i) e[i] = e[i] - 1;
     //static const double arr2[] = {18.49, 38.49, 51.71, 31.71, 0.51, 3.73, 22.2, 0.013, 0.99, 0};
     //vector<double> l (arr2, arr2 + sizeof(arr2) / sizeof(arr2[0]) );
+    int model = lnl_type.model;
+    int cn_max = lnl_type.cn_max;
+    int only_seg = lnl_type.only_seg;
+    int correct_bias = lnl_type.correct_bias;
+    int is_total = lnl_type.is_total;
+    int cons = lnl_type.cons;
+    int maxj = opt_type.maxj;
+    vector<double> tobs = opt_type.tobs;
 
     // read in true tree
     evo_tree test_tree = read_tree_info(tree_file, Ns);
     restore_mutation_rates(test_tree, rates);
+    vector<int> knodes = get_inodes_bottom_up(test_tree, debug);
 
     double Ls = 0.0;
     double nlnl = 0;  // Used in maximization
@@ -751,13 +702,6 @@ void run_test(const string& tree_file, int Ns, int num_total_bins, int Nchar, in
     cout << "\nOriginal tree -ve likelihood with revised method: " << -Ls << endl;
 
     cout << "\n\n### Running optimisation: branches free, mu fixed" << endl;
-    // min_tree = max_likelihood(test_tree, model, nlnl, ssize, tolerance, miter, 0, 0, cn_max, only_seg, correct_bias);
-    // cout << "\nMinimised tree likelihood / mu : " << nlnl << "\t" << min_tree.mu <<  endl;
-    // min_tree.print();
-    // fname = tree_file + ".opt00_gsl.txt";
-    // out_tree.open(fname);
-    // min_tree.write(out_tree);
-    // out_tree.close();
     nlnl = 0;
     cons = 0;
     maxj = 0;
@@ -776,14 +720,6 @@ void run_test(const string& tree_file, int Ns, int num_total_bins, int Nchar, in
 
 
     cout << "\n\n### Running optimisation: branches free, mu free" << endl;
-    // nlnl = 0;
-    // min_tree = max_likelihood(test_tree, model, nlnl, ssize, tolerance, miter, 0, 1, cn_max, only_seg, correct_bias);
-    // cout << "\nMinimised tree likelihood / mu : " << nlnl << "\t" << min_tree.mu << endl;
-    // min_tree.print();
-    // fname = tree_file + ".opt01_gsl.txt";
-    // out_tree.open(fname);
-    // min_tree.write(out_tree);
-    // out_tree.close();
     test_tree = read_tree_info(tree_file, Ns);
     restore_mutation_rates(test_tree, rates);
     nlnl = 0;
@@ -805,14 +741,6 @@ void run_test(const string& tree_file, int Ns, int num_total_bins, int Nchar, in
 
 
     cout << "\n\n### Running optimisation: branches constrained, mu fixed" << endl;
-    // nlnl = 0;
-    // min_tree = max_likelihood(test_tree, model, nlnl, ssize, tolerance, miter, 1, 0, cn_max, only_seg, correct_bias);
-    // cout << "\nMinimised tree likelihood / mu : " << nlnl << "\t" << min_tree.mu <<endl;
-    // min_tree.print();
-    // fname = tree_file + ".opt10_gsl.txt";
-    // out_tree.open(fname);
-    // min_tree.write(out_tree);
-    // out_tree.close();
     test_tree = read_tree_info(tree_file, Ns);
     restore_mutation_rates(test_tree, rates);
     nlnl = 0;
@@ -834,14 +762,6 @@ void run_test(const string& tree_file, int Ns, int num_total_bins, int Nchar, in
 
 
     cout << "\n\n### Running optimisation: branches constrained, mu free" << endl;
-    // nlnl = 0;
-    // min_tree = max_likelihood(test_tree, model, nlnl, ssize, tolerance, miter, 1, 1, cn_max, only_seg, correct_bias);
-    // cout << "\nMinimised tree likelihood / mu : " << nlnl << "\t" << min_tree.mu*Nchar <<endl;
-    // min_tree.print();
-    // fname = tree_file + ".opt11_gsl.txt";
-    // out_tree.open(fname);
-    // min_tree.write(out_tree);
-    // out_tree.close();
     test_tree = read_tree_info(tree_file, Ns);
     restore_mutation_rates(test_tree, rates);
     nlnl = 0;
@@ -865,108 +785,47 @@ void run_test(const string& tree_file, int Ns, int num_total_bins, int Nchar, in
 
 
 // Compute the likelihood of a tree given the observed copy number profile
-double compute_tree_likelihood(evo_tree& tree, const string& tree_file, map<int, set<vector<int>>>& decomp_table, int Ns, int Nchar, int num_invar_bins, map<int, vector<vector<int>>>& vobs, vector<double>& tobs, vector<double>& rates, int model, int cons, int cn_max, int max_wgd, int max_chr_change, int max_site_change, int only_seg, int correct_bias, int is_total=1){
-    cout << "\nReading the tree from file " << tree_file << endl;
-    // string format = tree_file.substr(tree_file.find_last_of(".") + 1);
-    // cout << "Format of the input tree file is " << format << endl;
-
-    // if(format == "txt"){
-    tree = read_tree_info(tree_file, Ns);
-    restore_mutation_rates(tree, rates);
-    // }
-    // if(format == "nex"){
-    //     tree = read_nexus(tree_file);
-    // }
-
-    // cout << "Node times: ";
-    // for(int i = 0; i < tree.nodes.size(); i++){
-    //     cout << "\t" << tree.nodes[i].time;
-    // }
-    // cout<< endl;
-
-    cout << tree.make_newick() << endl;
-
-    string real_tstring = order_tree_string_uniq(create_tree_string_uniq(tree));
-
-    // int sample1 = 0;
-    // tree.get_ntime_interval(Ns, sample1);
-    // cout << "Top " << Ns << " time intervals: ";
-    // for(int i = 0; i < tree.top_tinvls.size(); i++){
-    //     cout << "\t" << tree.top_tinvls[i];
-    // }
-    // cout<< endl;
-    // cout << "Corresponding " << Ns + 1 << " nodes: ";
-    // for(int i = 0; i < tree.top_tnodes.size(); i++){
-    //     cout << tree.top_tnodes[i] + 1 << "\t" << "\t" << tree.node_times[tree.top_tnodes[i]] << endl;
-    // }
-    //
-    // vector<double> blens = tree.get_edges_from_interval(tree.top_tinvls, tree.top_tnodes);
-    // cout << "Branch lengths computed from intervals: ";
-    // for(int i = 0; i < blens.size(); i++){
-    //     cout << i + 1 << "\t" << "\t" << blens[i] << endl;
-    // }
-
-    // The node IDs of input tree may not follow the specifics in sveta, eg. ML trees obtained by hill climbing
-    vector<int> knodes_orig = lnl_type.knodes;
-    vector<int> inodes;
-    Node* root = &(tree.nodes[tree.root_node_id]);
-    tree.get_inodes_postorder(root, inodes);
-    lnl_type.knodes = inodes;
-
-    // cout << "root of real tree: " << tree.root_node_id << endl;
-    // cout << "Internal nodes in post order:";
-    // for(auto n: inodes){
-    //     cout << "\t" << n;
-    // }
-    // cout << endl;
+double compute_tree_likelihood(evo_tree& tree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type, int debug){
+    lnl_type.knodes = get_inodes_bottom_up(tree, debug);
 
     double Ls = 0.0;
-    if(model == DECOMP){
-      cout << "\nComputing the likelihood based on independent Markov chain model " << endl;
+    if(lnl_type.model == DECOMP){
+      if(debug) cout << "\nComputing the likelihood based on independent Markov chain model " << endl;
       Ls = get_likelihood_decomp(tree, vobs, obs_decomp, comps, lnl_type);
     }else{
-      cout << "\nComputing the likelihood based on allele-specific model " << endl;
+      if(debug) cout << "\nComputing the likelihood based on allele-specific model " << endl;
       Ls = get_likelihood_revised(tree, vobs, lnl_type);
     }
-
-    lnl_type.knodes = knodes_orig;
 
     return Ls;
 }
 
 
 // Given a tree, compute its maximum likelihood
-void maximize_tree_likelihood(const string& tree_file, const string& ofile, int Ns, int Nchar, vector<double>& tobs, const vector<double>& rates, double ssize, double tolerance, int miter, int model, int optim, int cons, int maxj, int cn_max, int only_seg, int correct_bias, int is_total){
-    evo_tree tree;
-    // string format = tree_file.substr(tree_file.find_last_of(".") + 1);
-    // cout << "Format of the input tree file is " << format << endl;
+void maximize_tree_likelihood(evo_tree& tree, const string& ofile, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type, OPT_TYPE& opt_type, int optim, double ssize, int debug){
+    lnl_type.knodes = get_inodes_bottom_up(tree, debug);
 
-    // if(format == "txt"){
-    tree = read_tree_info(tree_file, Ns);
-    tree.print();
-    cout << tree.make_newick() << endl;
-    // }
-    // if(format == "nex"){
-    //     tree = read_nexus(tree_file);
-    // }
-
-    restore_mutation_rates(tree, rates);
-
-    double nlnl = 0.0;
-    if(optim == 1){
-        max_likelihood_BFGS(tree, vobs, obs_decomp, comps, lnl_type, opt_type, nlnl);
+    double nlnl = MAX_NLNL;
+    if(optim == GSL){
+        while(!(nlnl < MAX_NLNL)){
+            nlnl = MAX_NLNL;
+            max_likelihood(tree, vobs, lnl_type, opt_type, nlnl, ssize);
+        }
     }else{
-        max_likelihood(tree, vobs, tobs, lnl_type, opt_type, nlnl, ssize);
+        while(!(nlnl < MAX_NLNL)){
+            nlnl = MAX_NLNL;
+            max_likelihood_BFGS(tree, vobs, obs_decomp, comps, lnl_type, opt_type, nlnl);
+        }
     }
     cout << "\nMinimised negative log likelihood: " << nlnl << endl;
 
     tree.print();
-    if(maxj){
+    if(opt_type.maxj){
         cout << "Estimated mutation rates: " << endl;
     }else{
-      cout << "Pre-specified mutation rates: " << endl;
+        cout << "Pre-specified mutation rates: " << endl;
     }
-    tree.print_mutation_rates(model, only_seg);
+    tree.print_mutation_rates(lnl_type.model, lnl_type.only_seg);
 
     ofstream out_tree(ofile);
     tree.write(out_tree);
@@ -980,29 +839,32 @@ void maximize_tree_likelihood(const string& tree_file, const string& ofile, int 
     nex_tree.close();
 }
 
-// void write_tree(){
-
-// }
 
 // Build ML tree from given CNPs
-void find_ML_tree(string real_tstring, int num_total_bins, string ofile, int tree_search, int Npop, int Ngen, int init_tree, string dir_itrees, int max_static, double ssize, double tolerance, int miter, int optim, const vector<double>& rates, int Ne = 1, double beta = 0.0, double gtime=1.0){
-    int debug = 0;
-
+void find_ML_tree(string real_tstring, int num_total_bins, string ofile, int tree_search, int Ns, int Npop, int Ngen, int init_tree, string dir_itrees, int max_static, double ssize, int optim, const vector<double>& rates, const ITREE_PARAM& itree_param, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type, OPT_TYPE& opt_type, double loglh_epsilon, int speed_nni, int debug){
     evo_tree min_nlnl_tree;
-    if(tree_search == 0){
+    int only_seg = lnl_type.only_seg;
+    int age = lnl_type.patient_age;
+    int model = lnl_type.model;
+    int maxj = opt_type.maxj;
+    vector<double>& tobs = opt_type.tobs;
+    double tolerance = opt_type.tolerance;
+    int miter = opt_type.miter;
+
+    if(tree_search == EVOLUTION){
         cout << "\nSearching tree space with evolutionary algorithm" << endl;
-        do_evolutionary_algorithm(min_nlnl_tree, Npop, Ngen, init_tree, dir_itrees, max_static, rates, ssize, tolerance, miter, optim, Ne, beta, gtime);
-    }else if(tree_search == 1){
+        do_evolutionary_algorithm(min_nlnl_tree, Ns, Npop, Ngen, init_tree, dir_itrees, rates, ssize, optim, max_static, itree_param, vobs, obs_decomp, comps, lnl_type, opt_type, debug);
+    }else if(tree_search == HILLCLIMB){
         cout << "\nSearching tree space with hill climbing algorithm" << endl;
         if(Ns < MIN_NSAMPLE_HCLIMB){
             cout << "Hill climbing only support trees with at least 5 samples!" << endl;
             exit(EXIT_FAILURE);
         }
-        do_hill_climbing(min_nlnl_tree, Npop, Ngen, init_tree, dir_itrees, rates, ssize, optim, Ne, beta, gtime);
+        do_hill_climbing(min_nlnl_tree, Ns, Npop, Ngen, init_tree, dir_itrees, rates, ssize, optim, itree_param, vobs, obs_decomp, comps, lnl_type, opt_type, loglh_epsilon, speed_nni, debug);
     }else{
         cout << "\nSearching tree space exhaustively (only feasible for small trees)" << endl;
         // cout << "Parameters: " << Ngen << "\t" << Ns << "\t" << Nchar << "\t" << num_invar_bins << "\t" << model << "\t" << cons << "\t" << cn_max << "\t" << only_seg << "\t" << correct_bias << "\t" << is_total << endl;
-        do_exhaustive_search(min_nlnl_tree, real_tstring, Ngen, init_tree, dir_itrees, max_static, rates, ssize, optim, Ne, beta, gtime);
+        do_exhaustive_search(min_nlnl_tree, real_tstring, Ns, Ngen, init_tree, dir_itrees, rates, ssize, optim, max_static, itree_param, vobs, obs_decomp, comps, lnl_type, opt_type, debug);
     }
 
     if(debug) cout << "Writing results ......" << endl;
@@ -1067,7 +929,7 @@ void find_ML_tree(string real_tstring, int num_total_bins, string ofile, int tre
 }
 
 
-void print_desc(int cons, int maxj, int correct_bias, int use_repeat, int optim, int model, int is_total){
+void print_desc(int cons, int maxj, int correct_bias, int use_repeat, int optim, int model, int is_total, int age, int only_seg){
   if(cons){
     cout << "\nAssuming the tree is constrained by age at sampling time" << endl;
     cout << "\nThe age of patient at the first sampling time: " << age << endl;
@@ -1097,7 +959,7 @@ void print_desc(int cons, int maxj, int correct_bias, int use_repeat, int optim,
       cout << "   Using site repeats to speed up likelihood computation " << endl;
   }
 
-  if(optim == 0){
+  if(optim == GSL){
     cout << "\nUsing Simplex method for optimization" << endl;
   }else{
     cout << "\nUsing L-BFGS-B method for optimization" << endl;
@@ -1133,6 +995,63 @@ void print_desc(int cons, int maxj, int correct_bias, int use_repeat, int optim,
 
 
 int main(int argc, char** const argv){
+    /********* input parameters ***********/
+    int debug;
+    unsigned seed;
+
+    double loglh_epsilon;
+    double tolerance;
+    int miter;
+    int speed_nni;
+
+    int Ns;   // number of samples
+    int age = MAX_AGE;
+
+    // Set max_* as global variables to avoid adding more parameters in maximization
+    int m_max;
+    int max_wgd;
+    int max_chr_change;
+    int max_site_change;
+
+    int cn_max;
+    int is_total; // whether or not the input is total copy number
+
+    int model;
+    int cons;
+    int maxj;
+
+    int use_repeat;   // whether or not to use repeated site patterns, used in get_likelihood_chr*
+    int correct_bias; // Whether or not to correct acquisition bias, used in get_likelihood_*
+
+    int only_seg; // Whether or not to only consider segment-level mutations, used in get_likelihood_revised
+
+    int infer_wgd; // whether or not to infer WGD status of a sample, called in initialize_lnl_table_decomp
+    int infer_chr; // whether or not to infer chromosome gain/loss status of a sample, called in initialize_lnl_table_decomp
+
+    int nstate;
+
+    double scale_tobs;
+
+    /********* derived from input ***********/
+    map<int, vector<vector<int>>> vobs;   // CNP for each site, grouped by chr
+    vector<double> tobs; // input times for each sample, should be the same for all trees, defined when reading input, used in likelihood computation
+    double max_tobs;
+
+    vector<int> obs_num_wgd;  // possible number of WGD events
+    vector<vector<int>> obs_change_chr;
+    vector<int> sample_max_cn;
+
+    map<int, set<vector<int>>> decomp_table;  // possible state combinations for observed copy numbers
+    set<vector<int>> comps;
+
+    LNL_TYPE lnl_type;
+    OBS_DECOMP obs_decomp;
+
+    OPT_TYPE opt_type;
+
+    // a list of nodes to loop over for bottom-up likelihood computation, and the root is last
+    vector<int> knodes(Ns, 0);
+
     int Npop, Ngen, Ne;
     int max_static, bootstrap, optim, mode, tree_search, init_tree;
     double ssize;
@@ -1210,7 +1129,7 @@ int main(int argc, char** const argv){
     ("npop,p", po::value<int>(&Npop)->default_value(100), "number of population in genetic algorithm or maximum number of initial trees")
     ("ngen,g", po::value<int>(&Ngen)->default_value(50), "number of generation in genetic algorithm or maximum number of times to perturb/optimize a tree")
     ("nstop,e", po::value<int>(&max_static)->default_value(10), "Stop after this number of times that the tree does not get improved")
-    ("tolerance,r", po::value<double>(&tolerance)->default_value(1e-2), "tolerance value in maximization methods")
+    ("tolerance,r", po::value<double>(&tolerance)->default_value(0.01), "tolerance value in maximization methods")
     ("miter,m", po::value<int>(&miter)->default_value(2000), "maximum number of iterations in maximization")
     ("loglh_epsilon", po::value<double>(&loglh_epsilon)->default_value(0.001), "tolerance value bewteen log likelihood values")
     ("ssize,z", po::value<double>(&ssize)->default_value(0.01), "initial step size used in GSL optimization")
@@ -1260,10 +1179,11 @@ int main(int argc, char** const argv){
     fp_myrng = &myrng;
 
     int num_total_bins = 0;
-    Nchar = 0;
-    num_invar_bins = 0;
+    int Nchar = 0;  // number of sites
+    int num_invar_bins = 0;   // number of invariant sites
 
-    print_desc(cons, maxj, correct_bias, use_repeat, optim, model, is_total);
+
+    print_desc(cons, maxj, correct_bias, use_repeat, optim, model, is_total, age, only_seg);
     INPUT_PROPERTY input_prop{is_total, is_rcn, is_bin, incl_all};
 
     // tobs already defined globally
@@ -1302,11 +1222,6 @@ int main(int argc, char** const argv){
     if(model == MK)   mu = 1 / Nchar;
     vector<double> rates{mu, dup_rate, del_rate, chr_gain_rate, chr_loss_rate, wgd_rate};
 
-    // nodes are in an order suitable for dynamic programming (lower nodes at first, which may be changed after topolgy change)
-    int nleaf = Ns + 1;
-    for(int k = (nleaf + 1); k < (2 * nleaf - 1); ++k) knodes.push_back(k);
-    knodes.push_back(nleaf);
-
     if(infer_wgd){
         for(int i = 0; i < Ns; ++i){
             cout << "Sample " << i+1 << " probably has " << obs_num_wgd[i] << " WGD events" << endl;
@@ -1334,14 +1249,6 @@ int main(int argc, char** const argv){
     int opt_one_branch = 0; // optimize all branches by default
     opt_type = {maxj, tolerance, miter, opt_one_branch, tobs, scale_tobs};
 
-    string real_tstring = "";   // used for comparison to searched trees
-    evo_tree real_tree;
-    if(tree_file != ""){
-        double lnl = compute_tree_likelihood(real_tree, tree_file, decomp_table, Ns, Nchar, num_invar_bins, vobs, tobs, rates, model, cons, cn_max, max_wgd, max_chr_change, max_site_change, only_seg, correct_bias, is_total);
-        cout << "The log likelihood of the input tree is " << lnl << endl;
-        real_tstring = order_tree_string_uniq(create_tree_string_uniq(real_tree));
-    }
-
     if(bootstrap){
         cout << "\nDoing bootstapping " << endl;
         get_bootstrap_vector_by_chr(data, vobs, r);
@@ -1355,15 +1262,35 @@ int main(int argc, char** const argv){
 
     if(mode == 0){
       cout << "\nBuilding maximum likelihood tree from copy number profile " << endl;
+
       if(init_tree == 0){
         cout << "   Using random coalescence trees as initial trees " << endl;
       }else{
         cout << "   Using stepwise addition trees as initial trees " << endl;
       }
 
-      find_ML_tree(real_tstring, num_total_bins, ofile, tree_search, Npop, Ngen, init_tree, dir_itrees, max_static, ssize, tolerance, miter, optim, rates, Ne, beta, gtime);
+      string real_tstring = "";   // used for comparison to searched trees
+      if(tree_file != ""){
+          cout << " Assuming the input tree is real" << endl;
+          evo_tree real_tree = get_tree_from_file(tree_file, Ns, rates, max_tobs, age, cons);
+          real_tstring = order_tree_string_uniq(create_tree_string_uniq(real_tree));
+        //   cout << " the string representation is " << real_tstring << endl;
+
+          double lnl = compute_tree_likelihood(real_tree, vobs, obs_decomp, comps, lnl_type, debug);
+          cout << "   The log likelihood of the real tree is " << lnl << endl;          
+      }
+
+
+      // nodes are in an order suitable for dynamic programming (lower nodes at first, which may be changed after topolgy change)
+      initialize_knodes(lnl_type.knodes, Ns);
+      ITREE_PARAM itree_param{Ne, beta, gtime};
+      find_ML_tree(real_tstring, num_total_bins, ofile, tree_search, Ns, Npop, Ngen, init_tree, dir_itrees, max_static, ssize, optim, rates, itree_param, vobs, obs_decomp, comps, lnl_type, opt_type, loglh_epsilon, speed_nni, debug);
 
     }else if(mode == 1){
+        if(tree_file == ""){
+          cout << "An input tree must be provided!" << endl;
+          exit(EXIT_FAILURE);
+        }
         cout << "Running test on tree " << tree_file << endl;
         int num_invar_bins0 = 0;
         int num_total_bins0 = 0;
@@ -1381,35 +1308,34 @@ int main(int argc, char** const argv){
           vobs0.push_back(obs);
         }
 
-        run_test(tree_file, Ns, num_total_bins, Nchar, model, cn_max, only_seg, correct_bias, is_total, tobs, vobs0, Nchar0, rates, ssize, tolerance, miter);
+        run_test(tree_file, Ns, num_total_bins, Nchar, vobs0, Nchar0, rates, ssize, tolerance, miter, vobs, obs_decomp, comps, lnl_type, opt_type, debug);
 
-    }else if(mode == 2){   // not necessary to have this mode
+    }else if(mode == 2){
         cout << "Computing the likelihood of a given tree from copy number profile " << endl;
-        double lnl = compute_tree_likelihood(real_tree, tree_file, decomp_table, Ns, Nchar, num_invar_bins, vobs, tobs, rates, model, cons, cn_max, max_wgd, max_chr_change, max_site_change, only_seg, correct_bias, is_total);
+
+        evo_tree tree = get_tree_from_file(tree_file, Ns, rates, max_tobs, age, cons);
+
+        double lnl = compute_tree_likelihood(tree, vobs, obs_decomp, comps, lnl_type, debug);
         cout << "The log likelihood of the input tree is " << lnl << endl;
+
     }else if(mode == 3){
         cout << "Computing maximum likelihood of a given tree from copy number profile " << endl;
-        maximize_tree_likelihood(tree_file, ofile, Ns, Nchar, tobs, rates, ssize, tolerance, miter, model, optim, cons, maxj, cn_max, only_seg, correct_bias, is_total);
+
+        evo_tree tree = get_tree_from_file(tree_file, Ns, rates, max_tobs, age, cons);
+
+        maximize_tree_likelihood(tree, ofile, vobs, obs_decomp, comps, lnl_type, opt_type, optim, ssize, debug);
+
     }else{
         cout << "Inferring ancestral states of a given tree from copy number profile " << endl;
 
-        assert(is_tree_valid(real_tree, max_tobs, age, cons));
+        evo_tree tree = get_tree_from_file(tree_file, Ns, rates, max_tobs, age, cons);
 
         if(!incl_all){
             incl_all = 1;
             cout << "All the sites are included in likelihood computation" << endl;
         }
 
-        vector<int> inodes;
-        Node* root = &(real_tree.nodes[real_tree.root_node_id]);
-        real_tree.get_inodes_postorder(root, inodes);
-
-        // cout << "root of real tree: " << real_tree.root_node_id << endl;
-        // cout << "Internal nodes in post order:";
-        // for(auto n: inodes){
-        //     cout << "\t" << n;
-        // }
-        // cout << endl;
+        vector<int> inodes = get_inodes_bottom_up(tree, debug);
 
         MAX_DECOMP max_decomp = {m_max, max_wgd, max_chr_change, max_site_change};
 
@@ -1417,9 +1343,9 @@ int main(int argc, char** const argv){
             cout << "\tInferring marginal ancestral states" << endl;
             double lnl = 0.0;
             if(model == DECOMP){
-               lnl = reconstruct_marginal_ancestral_state_decomp(real_tree, vobs, inodes, comps, obs_decomp, use_repeat, infer_wgd, infer_chr, cn_max, ofile, is_total);
+               lnl = reconstruct_marginal_ancestral_state_decomp(tree, vobs, inodes, comps, obs_decomp, use_repeat, infer_wgd, infer_chr, cn_max, ofile, is_total);
            }else{
-               lnl = reconstruct_marginal_ancestral_state(real_tree, vobs, inodes, model, cn_max, use_repeat, is_total, ofile);
+               lnl = reconstruct_marginal_ancestral_state(tree, vobs, inodes, model, cn_max, use_repeat, is_total, ofile);
            }
            cout << "The log likelihood of the input tree computed during state reconstruction is " << lnl << endl;
         }
@@ -1427,9 +1353,9 @@ int main(int argc, char** const argv){
         if(infer_joint_state){
             cout << "\tInferring joint ancestral states" << endl;
             if(model == DECOMP){
-               reconstruct_joint_ancestral_state_decomp(real_tree, vobs, inodes, comps, max_decomp, use_repeat, cn_max, ofile, is_total);
+               reconstruct_joint_ancestral_state_decomp(tree, vobs, inodes, comps, max_decomp, use_repeat, cn_max, ofile, is_total);
            }else{
-               reconstruct_joint_ancestral_state(real_tree, vobs, inodes, model, cn_max, use_repeat, is_total, m_max, ofile);
+               reconstruct_joint_ancestral_state(tree, vobs, inodes, model, cn_max, use_repeat, is_total, m_max, ofile);
            }
         }
     }

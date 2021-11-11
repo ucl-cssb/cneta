@@ -7,7 +7,7 @@ suppressMessages(library(tidyverse))
 suppressMessages(library(tools))
 suppressMessages(library(ggplot2))
 suppressMessages(library(optparse))
-
+suppressMessages(library(ggrepel))
 
 # This script is used to plot phylogenetic trees:
 # 1) plotting a single tree file with tips as 1 to n or with provided labels
@@ -15,10 +15,12 @@ suppressMessages(library(optparse))
 # 3) plotting all tree files in a directory
 
 MIN_BLEN = 1e-3
+TIP_OFFSET = 0.5
+BLEN_DIGIT = 2
 
 # d is a data frame with 3 columns: start, end, branch length
 # Leaves must be encoded from 1 to nleaf
-make.tree <- function(d, labels = c(), digit = 2) {
+make.tree <- function(d, labels = c()) {
   nedge <- nrow(d)
   nleaf <- (nedge + 2) / 2
   nnode <- nleaf - 1
@@ -34,7 +36,7 @@ make.tree <- function(d, labels = c(), digit = 2) {
   }
 
   # control precision of branch length
-  mytree$edge.length <- round(d[, 3], digit)
+  mytree$edge.length <- d[, 3]
   class(mytree) <- "phylo"
   # checkValidPhylo(mytree)
 
@@ -54,7 +56,7 @@ get.outfile.name <- function(tree_file){
   
   fout <- file.path(dir, paste("plot-", mfix, ".pdf", sep=""))
 
-  cat("\n\nrunning over", stub, fout, "\n", sep = "\t")
+  # cat("\n\nrunning over", stub, fout, "\n", sep = "\t")
   
   return(fout)
 }
@@ -125,10 +127,11 @@ get.bootstrap.tree <- function(mytree, bstrap_dir, pattern){
 
 
 # get the tree with confidence intervals at internal nodes
-get.ci.tree <- function(tree_file_nex, bstrap_dir){
+get.ci.tree <- function(tree_file_nex, bstrap_dir, has_bstrap = F){
   bstrees = list.files(bstrap_dir, pattern = "*.nex")
   ntimes_all = data.frame()
   nbs = length(bstrees)
+  
   for(i in 1:nbs){
     # i = 2
     ftree = file.path(bstrap_dir, bstrees[i])
@@ -148,13 +151,17 @@ get.ci.tree <- function(tree_file_nex, bstrap_dir){
   
   # read the tree string
   stree = read_file(tree_file_nex)
+  ape_tree = read.nexus(tree_file_nex)
+
   # compute CI interval and append CI to the tree for visualization
   start_inode = btree$Nnode + 2
   root = start_inode
+  
   for(i in start_inode: ncol(ntimes_all)){
     # i = 8
     lbl = id_labels[i]
-    #print(lbl)
+    # print(i)
+    # print(lbl)
     times = ntimes_all[, lbl]
     smu = mean(times)
     error = qnorm(0.975) * sd(times) / sqrt(length(times))
@@ -163,24 +170,46 @@ get.ci.tree <- function(tree_file_nex, bstrap_dir){
     # [&time_95%_CI={4.50612194676725E-002,1.10259531669597E-001}]
     if(i == start_inode){
       marker = ";"
+      blen=""
     }else{
       marker = ":"
+      # use branch length to avoid mismatching
+      # find the edge ID with the node 
+      eid = which(ape_tree$edge[, 2]==i)
+      blen = ape_tree$edge.length[eid]
     }
-    ci_str = paste0(lbl, "[&time_0.95_CI={", left, ",", right, "}]", marker)
-    orig_str = paste0(lbl, marker)
+    
+    if(has_bstrap){
+      # when the tree has bootstrap support value, the node label is the support value
+      # assume: all internal branches have different lengths
+      # find the index of current node 
+      nid = which(id_labels == lbl)
+      bsval = ape_tree$node.label[nid - ape_tree$Nnode - 1]
+      orig_str = paste0(bsval, marker, blen)
+      ci_str = paste0(lbl, "[&time_0.95_CI={", left, ",", right, "},bootstrap=", bsval, "]", marker, blen)
+    }else{
+      orig_str = paste0(lbl, marker, blen)
+      ci_str = paste0(lbl, "[&time_0.95_CI={", left, ",", right, "}]", marker, blen)
+    }
+    # print(orig_str)
+    # print(ci_str)
     stree = str_replace(stree, orig_str, ci_str)
   }
   
   # write annotated tree to a file
-  ftree_ci = str_replace(tree_file, ".txt", ".ci")
+  ftree_ci = str_replace(tree_file, ".txt", ".ci.nex")
+  #print(stree)
   write_lines(stree, ftree_ci)
   
   # read from file and plot CI
   tree_ci = read.mega(ftree_ci)
-  lbl_orders = 1:length(labels)
-  # ensure labels are ordered by original tree_ci@phylo$tip.label
-  tree_ci@phylo$tip.label = labels[match(tree_ci@phylo$tip.label, lbl_orders)]
-  
+
+  if(length(labels) > 0){
+    lbl_orders = 1:length(labels)
+    # ensure labels are ordered by original tree_ci@phylo$tip.label
+    tree_ci@phylo$tip.label = labels[match(tree_ci@phylo$tip.label, lbl_orders)]
+  }
+
   return(tree_ci)
 }
 
@@ -235,8 +264,11 @@ plot.tree <- function(tree, title = "", da = data.frame()) {
   p <- ggtree(tree)  #+ geom_rootedge()
   p <- p + geom_tiplab()
   p <- p + geom_text2(aes(subset = !isTip, label = label), hjust = -0.3)
+  
   edge = data.frame(tree$edge, edge_num = 1:nrow(tree$edge), edge_len = tree$edge.length)
   colnames(edge) = c("parent", "node", "edge_num", "edge_len")
+  edge$edge_len = round(edge$edge_len, BLEN_DIGIT)
+  
   p <- p %<+% edge + geom_text(aes(x = branch, label = edge_len), nudge_y = 0.1) + ggtitle(title)
   
   if(nrow(da) > 0){
@@ -252,9 +284,12 @@ plot.tree.xlim <- function(tree, title = "", rextra = 20, da = data.frame()) {
   p <- ggtree(tree, size = 0.5, linetype = 1)  #+ geom_rootedge()
   # Add margin to show full name of labels  if (is.na(tree.max))
   tree.max = max(node.depth.edgelength(tree)) + rextra
-  p <- p + geom_tiplab(align = TRUE) + theme_tree2() + xlim(NA, tree.max)
+  p <- p + geom_tiplab(align = TRUE, offset = TIP_OFFSET) + theme_tree2() + xlim(NA, tree.max)
+  
   edge = data.frame(tree$edge, edge_num = 1:nrow(tree$edge), edge_len = tree$edge.length)
   colnames(edge) = c("parent", "node", "edge_num", "edge_len")
+  edge$edge_len = round(edge$edge_len, BLEN_DIGIT)
+  
   p <- p %<+% edge + geom_text(aes(x = branch, label = edge_len), nudge_y = 0.1) + ggtitle(title)
   
   if(nrow(da) > 0){
@@ -266,7 +301,9 @@ plot.tree.xlim <- function(tree, title = "", rextra = 20, da = data.frame()) {
 
 
 # Plot tree with xlim specified with age forwards
-plot.tree.xlim.age <- function(tree, res_age, title = "", lextra = 3, rextra = 3, da = data.frame()) {
+plot.tree.xlim.age <- function(tree, time_file, title = "", lextra = 3, rextra = 3, da = data.frame()) {
+  res_age = prepare.tree.age(tree, time_file)
+  
   p <- ggtree(tree)  #, size = 0.5, linetype = 1, + geom_rootedge()
 
   # Add margin to show full name of labels
@@ -279,11 +316,13 @@ plot.tree.xlim.age <- function(tree, res_age, title = "", lextra = 3, rextra = 3
 
   edge = data.frame(tree$edge, edge_num = 1:nrow(tree$edge), edge_len = tree$edge.length)
   colnames(edge) = c("parent", "node", "edge_num", "edge_len")
+  edge$edge_len = round(edge$edge_len, BLEN_DIGIT)
+  
   p <- p %<+% edge + geom_text(aes(x = branch, label = edge_len), nudge_y = 0.1, nudge_x = res_age$tshift) + ggtitle(title)
   
   # Shift all nodes by the difference between age util the first sample and node time of the first sample
   p$data$x = p$data$x + res_age$tshift
-  p <- p + geom_tiplab(align = TRUE) + theme_tree2() + xlim(xl, tree_max) + xlab("Patient age (years)")
+  p <- p + geom_tiplab(align = TRUE, offset = TIP_OFFSET) + theme_tree2() + xlim(xl, tree_max) + xlab("Patient age (years)")
   p <- p + geom_text2(aes(subset=!isTip, label=label), hjust=-.3)
 
   if(nrow(da) > 0){
@@ -295,18 +334,25 @@ plot.tree.xlim.age <- function(tree, res_age, title = "", lextra = 3, rextra = 3
 
 
 plot.tree.bootstrap <- function(tree, title = "", rextra = 20, da = data.frame()){
-  p <- ggtree(tree) #+ geom_rootedge()
+  p <- ggtree(tree) 
+  
+  #+ geom_rootedge()
+  
   # support <- character(length(tree$node.label))
   # #The following three lines define your labeling scheme.
   # support[tree$node.label >= 95] <- "red"
   # support[tree$node.label < 95 & tree$node.label >= 70] <- "pink"
   # support[tree$node.label < 70] <- "blue"
+  
   tree.max = max(node.depth.edgelength(tree)) + rextra
-  p <- p + geom_tiplab(align = TRUE) + theme_tree2() + xlim(NA, tree.max)
+  p <- p + geom_tiplab(align = TRUE, offset = TIP_OFFSET) + theme_tree2() + xlim(NA, tree.max)
   p <- p + geom_text2(aes(subset=!isTip, label=label), hjust=-.3, color="red")
-  edge = data.frame(tree$edge, edge_num = 1:nrow(tree$edge), edge_len = tree$edge.length)
-  colnames(edge)=c("parent", "node", "edge_num", "edge_len")
-  p <- p %<+% edge + geom_text(aes(x = branch, label = edge_len), nudge_y = 0.1) + ggtitle(title)
+  
+  # edge = data.frame(tree$edge, edge_num = 1:nrow(tree$edge), edge_len = tree$edge.length)
+  # colnames(edge)=c("parent", "node", "edge_num", "edge_len")
+  # p <- p %<+% edge + geom_text(aes(x = branch, label = edge_len), nudge_y = 0.1) 
+  
+  p <- p + ggtitle(title) + xlab("Size of copy number alteration (Mbp)")
   
   if(nrow(da) > 0){
     p = get.plot.annot(tree, da, p)
@@ -318,10 +364,12 @@ plot.tree.bootstrap <- function(tree, title = "", rextra = 20, da = data.frame()
 
 # Plot bootstrapped tree with x-axis being patient age
 # age: used to set limit of x-axis
-plot.tree.bootstrap.age <- function(tree, res_age, title = "", lextra = 3, rextra = 3, da = data.frame()){
-  p <- ggtree(tree) #+ geom_rootedge()
+plot.tree.bootstrap.age <- function(tree, time_file, title = "", lextra = 3, rextra = 3, da = data.frame()){
+  res_age = prepare.tree.age(tree, time_file)
+  
+  p <- ggtree(tree)
+  
   # Add margin to show full name of labels
-
   age = res_age$age  # age at 1st sample
    # to display tip text
   tree_max = age + res_age$max_tdiff + rextra
@@ -330,11 +378,14 @@ plot.tree.bootstrap.age <- function(tree, res_age, title = "", lextra = 3, rextr
 
   # Shift all nodes by the difference between age util the first sample and node time of the first sample
   p$data$x = p$data$x + res_age$tshift
-  p <- p + geom_tiplab(align = TRUE) + theme_tree2() + xlim(xl, tree_max) + xlab("Patient age (years)")
+  p <- p + geom_tiplab(align = TRUE, offset = TIP_OFFSET) + theme_tree2() + xlim(xl, tree_max) + xlab("Patient age (years)")
   p <- p + geom_text2(aes(subset=!isTip, label=label), hjust=-.3, color="red")
-  edge = data.frame(tree$edge, edge_num = 1:nrow(tree$edge), edge_len = tree$edge.length)
-  colnames(edge)=c("parent", "node", "edge_num", "edge_len")
-  p <- p %<+% edge + geom_text(aes(x = branch, label = edge_len), nudge_y = 0.1, nudge_x = res_age$tshift) + ggtitle(title)
+  
+  # edge = data.frame(tree$edge, edge_num = 1:nrow(tree$edge), edge_len = tree$edge.length)
+  # colnames(edge)=c("parent", "node", "edge_num", "edge_len")
+  # p <- p %<+% edge + geom_text(aes(x = branch, label = edge_len), nudge_y = 0.1, nudge_x = res_age$tshift) 
+  
+  p <- p + ggtitle(title)
 
   if(nrow(da) > 0){
     p = get.plot.annot(tree, da, p)
@@ -346,7 +397,7 @@ plot.tree.bootstrap.age <- function(tree, res_age, title = "", lextra = 3, rextr
 
 # Plot CI for node time estimation
 # read all the trees in the bootstrap folder, bsdir, to compute time CI for original tree
-plot.tree.ci.node <- function(tree_ci, time_file, title = "", lextra = 3, rextra = 3, da = data.frame()){
+plot.tree.ci.node <- function(tree_ci, time_file, title = "", lextra = 3, rextra = 3, da = data.frame(), has_bstrap = F){
   res_age = prepare.tree.age(tree_ci@phylo, time_file)
   age = res_age$age  # age at 1st sample
   tree_max = age + res_age$max_tdiff + rextra
@@ -356,10 +407,12 @@ plot.tree.ci.node <- function(tree_ci, time_file, title = "", lextra = 3, rextra
   p <- ggtree(tree_ci)
   # Shift all nodes by the difference between age util the first sample and node time of the first sample
   p$data$x = p$data$x + res_age$tshift
-  p <- p + geom_tiplab(align = TRUE, offset = 0.5) + theme_tree2() + ggtitle(title)
+  p <- p + geom_tiplab(align = TRUE, offset = TIP_OFFSET) + theme_tree2() + ggtitle(title)
 
   # show label of internal nodes
-  # p <- p + geom_text2(aes(subset = !isTip, label = label), hjust = -0.3)
+  if(has_bstrap){
+    p <- p + geom_label_repel(aes(label = bootstrap, fill = bootstrap)) + scale_fill_viridis_c()
+  }
 
   # branch length not properly show after narrow down xaxis
   # edge = data.frame(tree_ci@phylo$edge, edge_num = 1:nrow(tree_ci@phylo$edge), edge_len = tree_ci@phylo$edge.length)
@@ -378,14 +431,28 @@ plot.tree.ci.node <- function(tree_ci, time_file, title = "", lextra = 3, rextra
 
 
 # Plot a single tree in different format
-print.tree <- function(mytree, fout, tree_style, time_file="", tree_file_nex = "", bstrap_dir2 = "", title = "", lextra = 0, rextra = 20, da = data.frame()){
-
+print.single.tree <- function(mytree, tree_style, time_file="", title = "", lextra = 0, rextra = 20, da = data.frame()){
+  if(tree_style == "simple"){
+    p = plot.tree(mytree, title, da)
+  }else if(tree_style == "xlim"){
+    p = plot.tree.xlim(mytree, title, rextra, da)
+  }else if(tree_style == "age"){
+    if(time_file == ""){
+      stop("The file containing the sampling time information is not provided!")
+    }
+    p = plot.tree.xlim.age(mytree, time_file, title, lextra, rextra, da)
+  }else{
+    stop("tree plot style not supported!")
+  }
+  return(p)
 }
 
 
 option_list = list(
   make_option(c("-f", "--tree_file"), type="character", default="",
-              help="dataset file name [default=%default]", metavar="character"),
+              help="tree file name in TSV format [default=%default]", metavar="character"),
+  make_option(c("", "--tree_file_nex"), type="character", default="",
+              help="tree file name in NEXUS format [default=%default]", metavar="character"),
   make_option(c("-o", "--out_file"), type="character", default="",
               help="The name of output file [default=%default]", metavar="character"),
   make_option(c("-a", "--annot_file"), type="character", default="",
@@ -418,8 +485,6 @@ option_list = list(
               help="Showing title [default=%default]", metavar="logical"),
   make_option(c("", "--title"), type="character", default="",
               help="The title of the plot [default=%default]", metavar="character"),
-  # make_option(c("-g", "--use_age"), type="integer", default = 0,
-  #             help="Showing x-axis as the real age (0: default (root as beginning time), 1: x-axis as real age of the patient) [default=%default]", metavar="integer"),
   make_option(c("-t", "--plot_type"), type="character", default="single",
               help="The type of plot, including: all (plotting all tree files in a directory), single (plotting a single tree file), bootstrap (plotting a single tree file with bootstrapping support) [default=%default]", metavar="character"),
   make_option(c("-l", "--tree_style"), type="character", default="simple",
@@ -430,6 +495,7 @@ opt_parser = OptionParser(option_list = option_list);
 opt = parse_args(opt_parser);
 
 tree_file = opt$tree_file
+tree_file_nex = opt$tree_file_nex
 out_file = opt$out_file
 plot_type = opt$plot_type
 tree_dir = opt$tree_dir
@@ -462,13 +528,6 @@ cat("plot title \n", title, "\n")
 # add extra lengths along x-axis to show long labels
 lextra = opt$lextra
 rextra = opt$rextra
-if(branch_num == 1){
-  rextra = 500
-}
-
-if(out_file == ""){
-  out_file = get.outfile.name(tree_file)
-}
 
 if(file.exists(annot_file)){
   da = read.table(annot_file, header = T, stringsAsFactors = F, sep = "\t")
@@ -494,53 +553,55 @@ if(plot_type == "all"){
   }else{
     files <- list.files(dir, pattern = glob2rx(pattern))
   }
-  #print(files)
 
   for(f in files){
-    cat("running on: ", f, "\n")
     fname = file.path(dir, f)
-    tree = get.tree(fname, branch_num, labels, scale_factor)
-    print.tree(tree$mytree, tree$fout, tree_style, time_file, tree_file_nex, bstrap_dir2, title, lextraa, rextra)
+    cat("running on: ", fname, "\n")
+    out_file = get.outfile.name(fname)
+    mytree = get.tree(fname, branch_num, labels, scale_factor)
+    p = print.single.tree(mytree, tree_style, time_file, title, lextra, rextra, da)
+    ggsave(out_file, p, width = 8, height = 5)
   }
 
 }else if(plot_type == "single"){
-  cat(paste0("Plotting the tree in ", tree_file))
-
+  cat(paste0("Plotting the tree in ", tree_file, "\n"))
+  if(out_file == ""){
+    out_file = get.outfile.name(tree_file)
+  }
+  
   if(tree_style != "ci"){
     mytree = get.tree(tree_file, branch_num, labels, scale_factor)
-    if(tree_style == "simple"){
-      p = plot.tree(mytree, title, da)
-    }else if(tree_style == "xlim"){
-      p = plot.tree.xlim(mytree, title, rextra, da)
-    }else if(tree_style == "age"){
-      res_age = prepare.tree.age(mytree, time_file)
-      p = plot.tree.xlim.age(mytree, res_age, title, lextra, rextra, da)
-    }else{
-      stop("tree plot style not supported!")
-    }
-  }else{ # if(tree_style == "ci")
+    p = print.single.tree(mytree, tree_style, time_file, title, lextra, rextra, da)
+  }else{ 
     # cat(paste0("Plotting confidence intervals for the tree in ", tree_file_nex, " with bootstrap trees in folder ", bstrap_dir2, "\n"))
     tree_ci = get.ci.tree(tree_file_nex, bstrap_dir2)
-    p = plot.tree.ci.node(tree_ci, out_file, title, lextra, rextra, da)
+    p = plot.tree.ci.node(tree_ci, time_file, title, lextra, rextra, da)
   }
   
   ggsave(out_file, p, width = 8, height = 5)
   
 }else if(plot_type == "bootstrap"){
-  cat(paste0("Plotting bootstrap values for the tree in ", tree_file))
-
-  mytree = get.tree(tree_file, out_file, branch_num, labels, scale_factor)
+  cat(paste0("Plotting bootstrap values for the tree in ", tree_file, "\n"))
+  
+  mytree = get.tree(tree_file, branch_num, labels, scale_factor)
   mytree = get.bootstrap.tree(mytree, bstrap_dir, pattern)
 
   if(tree_style == "age"){
-    res_age = prepare.tree.age(mytree, time_file)
-    p = plot.tree.bootstrap.age(mytree, out_file, res_age, title, lextra, rextra, da)
+    if(time_file == ""){
+      stop("The file containing the sampling time information is not provided!")
+    }
+    p = plot.tree.bootstrap.age(mytree, time_file, title, lextra, rextra, da)
   }else if(tree_style == "ci"){
-    # TODO: write bootstrap tree to a nex file 
-    tree_ci = get.ci.tree(tree_file_nex, bstrap_dir2)
-    p = plot.tree.ci.node(tree_ci, out_file, title, rextra, da)
+    if(time_file == ""){
+      stop("The file containing the sampling time information is not provided!")
+    }
+    # write bootstrap tree to a nex file 
+    fbs = str_replace(tree_file, ".txt", ".bstrap.nex")
+    write.nexus(mytree, file = fbs)
+    tree_ci = get.ci.tree(fbs, bstrap_dir2, T)
+    p = plot.tree.ci.node(tree_ci, time_file, title, lextra, rextra, da, T)
   }else{
-    p = plot.tree.bootstrap(mytree, out_file, title, rextra, da)
+    p = plot.tree.bootstrap(mytree, title, rextra, da)
   }
   
   ggsave(out_file, p, width = 8, height = 5)

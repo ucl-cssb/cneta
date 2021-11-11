@@ -91,7 +91,6 @@ mu=0  # Used in model 0
 ################################################################################
 
 
-
 ####################### Set output directory and run the program ###############
 echo "Start running svtreeml"
 
@@ -99,41 +98,41 @@ dir=$idir
 if [[ ! -d $dir ]]; then
   mkdir -p $dir
 fi
+bsdir1=$dir/bootstrap
+bsdir2=$dir/bootstrap_fixt
 
 if [[ $mode -eq 0 ]]; then
   suffix=m$model-o"$opt"-s"$tree_search"-cons${cons}-estmu${estmu}-"$prefix"
   mltree=$dir/MaxL-"$suffix".txt
 
-  echo "seed $seed" > $dir/std_svtreeml_"$suffix" 
+  echo "seed $seed" > $dir/std_svtreeml_"$suffix"
   # valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all --track-origins=yes -v
-  /usr/bin/time ./code/svtreeml -c $input -t "$times" --tree_file "$tree_file" --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change --is_bin $is_bin --incl_all $incl_all -s $Ns -p $Npop -g $Ngen -e $Nstop -r $tolerance -o $mltree -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $estmu --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode --speed_nni $speed_nni --seed $seed 2>&1 >> $dir/std_svtreeml_"$suffix"
+  /usr/bin/time code/svtreeml -c $input -t "$times" --tree_file "$tree_file" --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change --is_bin $is_bin --incl_all $incl_all -s $Ns -p $Npop -g $Ngen -e $Nstop -r $tolerance -o $mltree -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $estmu --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode --speed_nni $speed_nni --seed $seed 2>&1 >> $dir/std_svtreeml_"$suffix"
   # #
   #
   echo "Finish running svtreeml"
 
   Rscript ana/plot-trees-all.R -f $mltree -b 0 -t "single" -l "xlim" --time_file "$times"  #>& /dev/null
-  # Rscript ana/plot-trees-all.R -f $mltree -b 1 -t "single" -l "xlim" --time_file "$times"  #>& /dev/null
 
   # Evaluate the estimation error
   # cmp_plot=$dir/cmp_plot-"$suffix".pdf
   # cmp_dist=$dir/cmp_dist-"$suffix".txt
   # Rscript test/tree_comparison/compare_trees.R -r "$tree_file" -i $mltree -o $cmp_plot -s $cmp_dist -p 1
 
-  bootstrap=0
+  bootstrap=1
   if [[ $bootstrap -eq 1 ]]; then
     echo "Run bootstrapping"
     # Do bootstrapping
-    bdir=$dir/bootstrap
-    mkdir -p $bdir
+    mkdir -p $bsdir1
     for i in {1..10..1}
     do
       echo $i
-      ofile=$bdir/MaxL-"$suffix"-btree-$i.txt
+      ofile=$bsdir1/MaxL-"$suffix"-btree-$i.txt
 
-      code/svtreeml -c $input -t "$times" --tree_file "$tree_file" --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change --is_bin $is_bin --incl_all $incl_all -s $Ns -p $Npop -g $Ngen -e $Nstop -r $tolerance -o $ofile -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $estmu  --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2  --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode -b 1 > $bdir/std_svtreeml_"$suffix"-btree-$i
+      code/svtreeml -c $input -t "$times" --tree_file "$tree_file" --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change --is_bin $is_bin --incl_all $incl_all -s $Ns -p $Npop -g $Ngen -e $Nstop -r $tolerance -o $ofile -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $estmu  --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2  --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode -b 1 > $bsdir1/std_svtreeml_"$suffix"-btree-$i
     done
     # Draw the ML tree with bootstrapping support
-    Rscript ana/plot-trees-all.R -s $bdir -f $mltree -o $dir/MaxL-tree-"$suffix"-bootstrap.pdf -t "bootstrap" -l "age" --time_file "$times" -p "MaxL-"$suffix"-btree-*txt"
+    Rscript ana/plot-trees-all.R -s $bsdir1 -f $mltree -o $dir/MaxL-tree-"$suffix"-bootstrap.pdf -t "bootstrap" -l "age" --time_file "$times" -p "MaxL-"$suffix"-btree-*txt"
   fi
 
 elif [[ $mode -eq 1 ]]; then
@@ -141,9 +140,6 @@ elif [[ $mode -eq 1 ]]; then
   mltree=$dir/MaxL-"$suffix".txt
 
   code/svtreeml -c $input -t "$times" --is_bin $is_bin --incl_all $incl_all --tree_file "$tree_file"  --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change -s $Ns -p $Npop -g $Ngen -e $Nstop -r $tolerance -o $mltree -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $estmu --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose > $dir/std_svtreeml_"$suffix"
-
-  # Rscript ana/plot-trees-all.R -d $dir/ -b 0 -t "all" -l "xlim" --time_file "$times" -p "sim-data-*-tree*_bfgs.txt"
-  # Rscript ana/plot-trees-all.R -d $dir/ -b 1 -t "all" -l "xlim" --time_file "$times" -p "sim-data-*-tree*_bfgs.txt"
 
 elif [[ $mode -eq 2 ]]; then
   # In this mode, the mutation rates have to be specified
@@ -153,30 +149,36 @@ elif [[ $mode -eq 2 ]]; then
 
 elif [[ $mode -eq 3 ]]; then
   # In this mode, the mutation rates can be specified or not
-  suffix=m$model-o"$opt"-"$cons""$estmu"-mode"$mode"-"$prefix"
-  mltree=$dir/MaxL-"$prefix"-"$suffix".txt
-  mltree2=$dir/MaxL-"$prefix"-"$suffix"-fixt.txt
+  suffix=m$model-o"$opt"-s"$tree_search"-cons${cons}-estmu${estmu}-"$prefix"
+  mltree=$dir/MaxL-"$suffix".txt
+  mltree2=$dir/MaxL-"$suffix"-fixt.txt
   echo "Estimating the branch lengths (and mutation rates) of the given tree $mltree"
+  if [[ ! -f $mltree ]]; then 
+  echo "$mltree does not exist!"
+  exit
+  fi
 
-  code/svtreeml -c $input -t "$times" --is_bin $is_bin --incl_all $incl_all -s $Ns --tree_file "$mltree"  --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change -o $mltree2 -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $estmu --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode > $dir/std_svtreeml_"$suffix"
+  code/svtreeml --tree_file "$mltree" -o $mltree2 -c $input -t "$times" --is_bin $is_bin --incl_all $incl_all -s $Ns --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $estmu --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode > $dir/std_svtreeml_"$suffix"-mode"$mode"
 
-  Rscript ana/plot-trees-all.R -f $mltree -b 0 -t "single" -l "xlim" --time_file "$times"  #>& /dev/null
+  # plot the new tree
+  Rscript ana/plot-trees-all.R -f $mltree2 -b 0 -t "single" -l "xlim" --time_file "$times"  #>& /dev/null
 
   bootstrap=1
   if [[ $bootstrap -eq 1 ]]; then
     echo "Run bootstrapping"
     # Do bootstrapping
-    bdir=$dir/bootstrap
-    mkdir -p $bdir
+    mkdir -p $bsdir2
+
     for i in {1..10..1}
     do
       echo $i
-      ofile=$bdir/MaxL-"$suffix"-btree-$i.txt
+      ofile=$bsdir2/MaxL-"$suffix"-btree-$i.txt
 
-      code/svtreeml -c $input -t "$times" --is_bin $is_bin --incl_all $incl_all -s $Ns --tree_file "$tree_file"  --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change -o $ofile -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $estmu --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode -b 1 > $bdir/std_svtreeml_"$suffix"-btree-$i
+      code/svtreeml --tree_file "$mltree" -o $ofile -c $input -t "$times" --is_bin $is_bin --incl_all $incl_all -s $Ns  --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change  -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $estmu --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode -b 1 > $bsdir2/std_svtreeml_"$suffix"-btree-$i
     done
-    # Draw the ML tree with bootstrapping support
-    Rscript ana/plot-trees-all.R -s $bdir -f $mltree -o $dir/MaxL-tree-"$suffix"-bootstrap.pdf -t "bootstrap" -l "age" --time_file "$times" -p "MaxL-"$suffix"-btree-*txt"
+
+    # Draw the ML tree with confidence intervals
+    Rscript ana/plot-trees-all.R -s $bsdir1 -f $mltree2 -o $dir/MaxL-tree-"$suffix"-fixt-bootstrap.pdf -t "bootstrap" -l "ci" --time_file "$times" -p "MaxL-"$suffix"-btree-*txt" --bstrap_dir2 $bsdir2
   fi
 
 elif [[ $mode -eq 4 ]]; then  # Inferring ancestral states of a given tree from copy number profile

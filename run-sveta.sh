@@ -54,7 +54,7 @@ prefix=""
 echo "Start running sveta"
 
 echo "seed $seed"  > $dir/std_sveta_cons${cons}_model${model}_method${method}
-# valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all --track-origins=yes -v 
+# valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all --track-origins=yes -v
 /usr/bin/time ./code/sveta --tree_file "${tree_file}" -p "${prefix}" -o $dir -r $Ns -n $Nsim --mode $mode --method $method --fix_nseg $fix_nseg --seg_max $seg_max --cn_max $cn_max --dup_rate $r1 --del_rate $r2 --chr_gain $r3 --chr_loss $r4 --wgd $r5 --dup_size $s1 --del_size $s2 -e $Ne -b $beta --gtime $gtime -t $dt --verbose $verbose --constrained $cons --model $model --age $age --seed $seed >> $dir/std_sveta_cons${cons}_model${model}_method${method}
 
 wait
@@ -67,7 +67,7 @@ echo "Finish running sveta"
 # Plot all simulated trees
 Rscript ana/plot-trees-all.R -d $dir -b 0 -t "all" -l "xlim"  # >& /dev/null
 # Plot simulated tree with the number of mutations on the branch
-Rscript ana/plot-trees-all.R -d $dir -b 1 -t "all" # >& /dev/null
+Rscript ana/plot-trees-all.R -d $dir -b 1 -t "all" -l "xlim" # >& /dev/null
 Rscript ana/plot-cns.R -d $dir -b ana/bin_locations_4401.Rdata # >& /dev/null
 
 

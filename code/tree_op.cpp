@@ -24,6 +24,7 @@ bool is_tip_age_valid(const vector<double>& node_ages, const vector<double>& tob
   return true;
 }
 
+
 // check if node_ages and node_times are consistent
 bool is_age_time_consistent(const vector<double>& node_times, const vector<double>& node_ages){
   double max_age = *max_element(node_ages.begin(), node_ages.end());
@@ -349,8 +350,12 @@ void test_evo_tree(const evo_tree& tree){
 // generate neutral coalescent trees
 // here nsample is the number of cancer samples (not including germline node)
 // here we directly calculate the edges in the tree
-void generate_coal_tree(const int& nsample, gsl_rng* r, long unsigned (*fp_myrng)(long unsigned), vector<int>& edges, vector<double>& lengths, vector<double>& epoch_times, vector<double>& times, const int& Ne, const double& beta, const double& gtime){
+void generate_coal_tree(const int& nsample, gsl_rng* r, long unsigned (*fp_myrng)(long unsigned), vector<int>& edges, vector<double>& lengths, vector<double>& epoch_times, vector<double>& times, const ITREE_PARAM& itree_param){
   vector<int> nodes;
+
+  int Ne = itree_param.Ne;
+  double beta = itree_param.beta;
+  double gtime = itree_param.gtime;
 
   // For compatibility with ape in R, root node must be labelled
   // 0 to nsample-1 are leaf, nsample is germline, nsample + 1 is root
@@ -361,11 +366,10 @@ void generate_coal_tree(const int& nsample, gsl_rng* r, long unsigned (*fp_myrng
   for(int i = 0; i < nsample; ++i) nodes.push_back(i);
 
   // create vector of event times
-  // total nodes = 2*(nsample + 1) -1
-  for(int i = 0; i < (2*nsample + 1); ++i) times.push_back(0.0);
+  for(int i = 0; i < (2 * nsample + 1); ++i) times.push_back(0.0);
 
-  double t_tot = 0;
-  double curr_time = 0;
+  double t_tot = 0.0;
+  double curr_time = 0.0;
   int nlin = nsample;
   while(nlin > 1){
     // sample a time from Exp( combinations(k,2) )
@@ -376,7 +380,7 @@ void generate_coal_tree(const int& nsample, gsl_rng* r, long unsigned (*fp_myrng
     double t = tn;
     if(beta > 0){  // simulate exponential growth
         // t = (log(1 + beta * tn * exp(- beta * t_tot))) / beta;  // Formula in book "Gene Genealogies, Variation and Evolution", P99
-        t = ((log(exp(beta*t_tot) + beta * tn)) / beta)- t_tot;    // Formula in CoalEvol7.3.5.c, equivalent to the one above
+        t = ((log(exp(beta * t_tot) + beta * tn)) / beta)- t_tot;    // Formula in CoalEvol7.3.5.c, equivalent to the one above
     }
     // cout << "Exponential coalescence time  " << t << endl;
 
@@ -413,7 +417,7 @@ void generate_coal_tree(const int& nsample, gsl_rng* r, long unsigned (*fp_myrng
   double t = tn;
   if(beta > 0){  // simulate exponential growth
       // t = (log(1 + beta * tn * exp(- beta * t_tot))) / beta;
-      t = ((log(exp(beta*t_tot) + beta * tn)) / beta)- t_tot;    // Formula in CoalEvol7.3.5.c
+      t = ((log(exp(beta * t_tot) + beta * tn)) / beta)- t_tot;    // Formula in CoalEvol7.3.5.c
   }
   t_tot += t;
   epoch_times.push_back(t_tot);
@@ -452,14 +456,18 @@ void generate_coal_tree(const int& nsample, gsl_rng* r, long unsigned (*fp_myrng
 
 
 // Scale the total time by given time
-evo_tree generate_coal_tree(const int& nsample, gsl_rng* r, long unsigned (*fp_myrng)(long unsigned), int Ne, double beta, double gtime){
+evo_tree generate_coal_tree(const int& nsample, gsl_rng* r, long unsigned (*fp_myrng)(long unsigned), const ITREE_PARAM& itree_param){
    int debug = 0;
    if(debug) cout << "GENERATING COALESCENCE TREE" << endl;
    vector<int> edges;
    vector<double> lengths;
    vector<double> epoch_times;
-   vector<double> times;
+   vector<double> times(2 * nsample + 1, 0.0);
    vector<int> nodes;
+
+   int Ne = itree_param.Ne;
+   double beta = itree_param.beta;
+   double gtime = itree_param.gtime;
 
    // For compatibility with ape in R, root node must be labelled
    // 0 to nsample-1 are leaf, nsample is germline, nsample + 1 is root
@@ -469,11 +477,7 @@ evo_tree generate_coal_tree(const int& nsample, gsl_rng* r, long unsigned (*fp_m
    // create leaf nodes
    for(int i = 0; i < nsample; ++i) nodes.push_back(i);
 
-   // create vector of event times
-   // total nodes = 2*(nsample + 1) -1
-   for(int i = 0; i < (2 * nsample + 1); ++i) times.push_back(0.0);
-
-   double t_tot = 0;
+   double t_tot = 0.0;
    int nlin = nsample;
    while(nlin > 1){
      // sample a time from Exp( combinations(k,2) )
@@ -484,7 +488,7 @@ evo_tree generate_coal_tree(const int& nsample, gsl_rng* r, long unsigned (*fp_m
      double t = tn;
      if(beta > 0){  // simulate exponential growth
          // t = (log(1 + beta * tn * exp(- beta * t_tot))) / beta;  // Formula in book "Gene Genealogies, Variation and Evolution", P99
-         t = ((log(exp(beta*t_tot) + beta * tn)) / beta)- t_tot;    // Formula in CoalEvol7.3.5.c, equivalent to the one above
+         t = ((log(exp(beta * t_tot) + beta * tn)) / beta)- t_tot;    // Formula in CoalEvol7.3.5.c, equivalent to the one above
      }
      if(debug) cout << "exponential coalescence time  " << t << endl;
      t_tot += t;
@@ -522,7 +526,7 @@ evo_tree generate_coal_tree(const int& nsample, gsl_rng* r, long unsigned (*fp_m
    double t = tn;
    if(beta > 0){  // simulate exponential growth
        // t = (log(1 + beta * tn * exp(- beta * t_tot))) / beta;  // Formula in book "Gene Genealogies, Variation and Evolution", P99
-       t = ((log(exp(beta*t_tot) + beta * tn)) / beta)- t_tot;    // Formula in CoalEvol7.3.5.c, equivalent to the one above
+       t = ((log(exp(beta * t_tot) + beta * tn)) / beta)- t_tot;    // Formula in CoalEvol7.3.5.c, equivalent to the one above
    }
    if(debug) cout << "exponential coalescence time  " << t << endl;
    t_tot += t;
@@ -581,10 +585,10 @@ void assign_tip_times(double delta_t, int Ns, gsl_rng* r, vector<double>& tobs, 
             int ind = 0;
 
             if(!assign0){
-            ind = 0;
-            assign0 = true;
+              ind = 0;
+              assign0 = true;
             }else{
-            ind = gsl_rng_uniform_int(r, num_diff);
+              ind = gsl_rng_uniform_int(r, num_diff);
             }
 
             double stime = ind * delta_t;
@@ -598,19 +602,19 @@ void assign_tip_times(double delta_t, int Ns, gsl_rng* r, vector<double>& tobs, 
 }
 
 
-evo_tree generate_random_tree(int Ns, gsl_rng* r, long unsigned (*fp_myrng)(long unsigned), int Ne, int age, double beta, double gtime, double delta_t, int cons, int debug){
+evo_tree generate_random_tree(int Ns, gsl_rng* r, long unsigned (*fp_myrng)(long unsigned), int age, const ITREE_PARAM& itree_param, double delta_t, int cons, int debug){
     vector<int> edges;
     vector<double> lengths;
     vector<double> epoch_times;
     vector<double> node_times;
 
     cout << "Generating random coalescence trees" << endl;
-    cout << " The effective population size is " << Ne << endl;
-    cout << " The generation time is " << gtime << endl;
-    if(beta > 0){
-        cout << " The exponential growth rate is " << beta << endl;
+    cout << " The effective population size is " << itree_param.Ne << endl;
+    cout << " The generation time is " << itree_param.gtime << endl;
+    if(itree_param.beta > 0){
+        cout << " The exponential growth rate is " << itree_param.beta << endl;
     }
-    generate_coal_tree(Ns, r, fp_myrng, edges, lengths, epoch_times, node_times, Ne, beta, gtime);
+    generate_coal_tree(Ns, r, fp_myrng, edges, lengths, epoch_times, node_times, itree_param);
 
     if(debug){
       cout << "Initial coalescence tree: " << endl;
@@ -634,7 +638,7 @@ evo_tree generate_random_tree(int Ns, gsl_rng* r, long unsigned (*fp_myrng)(long
     if(cons && old_tree_height > age){
       double min_height = *max_element(tobs.begin(), tobs.end());
       double max_height = age + min_height;
-      double tree_height = runiform(r, min_height, max_height);    
+      double tree_height = runiform(r, min_height, max_height);
       double ratio = tree_height / old_tree_height;
 
       if(delta_t > 0){
@@ -1169,7 +1173,7 @@ evo_tree read_tree_info(const string& filename, const int& Ns, int debug){
         if( !(length > 0) && end != Ns + 1 ){
           cout << "Invalid branch length: " << id << "\t" << start << "\t" << end << "\t" << length << endl;
           exit(EXIT_FAILURE);
-          // length = 1;        
+          // length = 1;
         }
 
       	edges.push_back(edge(id - 1, start - 1, end - 1, length));
@@ -1244,7 +1248,7 @@ evo_tree read_parsimony_tree(const string& tree_file, const int& Ns, const vecto
         double min_height = *max_element(tobs.begin(), tobs.end());
         double max_height = age - min_height;  // allow adding extra time at the tips
         assert(min_height < max_height);
-        double tree_height = runiform(r, min_height, max_height);       
+        double tree_height = runiform(r, min_height, max_height);
         double ratio = tree_height / old_tree_height;
         rtree.scale_time(ratio);
     }
@@ -1263,6 +1267,73 @@ evo_tree read_parsimony_tree(const string& tree_file, const int& Ns, const vecto
 
     return rtree;
 }
+
+
+evo_tree get_tree_from_file(const string& tree_file, int Ns, vector<double>& rates, double max_tobs, int age, int cons){
+    if(tree_file == ""){
+      cout << "An input tree must be provided!" << endl;
+      exit(EXIT_FAILURE);
+    }
+
+    cout << "\nReading the tree from file " << tree_file << endl;
+    // string format = tree_file.substr(tree_file.find_last_of(".") + 1);
+    // cout << "Format of the input tree file is " << format << endl;
+
+    // if(format == "txt"){
+    evo_tree tree = read_tree_info(tree_file, Ns);
+    restore_mutation_rates(tree, rates);
+    // }
+    // if(format == "nex"){
+    //     tree = read_nexus(tree_file);
+    // }
+
+    // cout << "Node times: ";
+    // for(int i = 0; i < tree.nodes.size(); i++){
+    //     cout << "\t" << tree.nodes[i].time;
+    // }
+    // cout<< endl;
+
+    cout << tree.make_newick() << endl;
+
+    if(!is_tree_valid(tree, max_tobs, age, cons)){
+      cout << "The input tree does not satifisty the timing constaints!" << endl;
+      exit(EXIT_FAILURE);
+    }
+
+    return tree;
+}
+
+
+void initialize_knodes(vector<int>& knodes, int Ns){
+  // nodes are in an order suitable for dynamic programming (lower nodes at first, which may be changed after topolgy change)
+  int nleaf = Ns + 1;
+  int i = 0;
+  for(int k = (nleaf + 1); k < (2 * nleaf - 1); ++k){
+    knodes[i] = k;
+    i++;
+  }
+  knodes[i] = nleaf;
+}
+
+
+// The node IDs of input tree may not follow the specifics in sveta, eg. ML trees obtained by hill climbing
+vector<int> get_inodes_bottom_up(evo_tree& tree, int debug){
+  vector<int> inodes;
+  Node* root = &(tree.nodes[tree.root_node_id]);
+  tree.get_inodes_postorder(root, inodes);
+
+  if(debug){
+      cout << "root of the tree: " << tree.root_node_id << endl;
+      cout << "Internal nodes in post order:";
+      for(auto n: inodes){
+          cout << "\t" << n;
+      }
+      cout << endl;
+  }
+
+  return inodes;
+}
+
 
 
 // vector<double> get_blens_from_intervals(evo_tree& rtree, double *x){

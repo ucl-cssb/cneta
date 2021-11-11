@@ -34,7 +34,7 @@ group_by_all(tdp) %>% tally() -> sp
 
 write.table(sp, out_file, row.names = F, col.names = T, sep = "\t")
 
-# get maximum state changes  
+# get maximum state changes
 last = max(d$sample)
 sp$max_site_change <- NA
 ploidy = 2

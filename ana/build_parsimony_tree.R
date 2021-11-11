@@ -57,7 +57,7 @@ get_bootstrap_phydata <- function(data_cn){
   # check the convertion is right by converting cns_wide back to original data
   # cns_wide$sid = 1:nrow(cns_wide)
   # pos_names = setdiff(names(cns_wide), c("sid"))
-  # cns_wide %>% gather(pos_names, key = "pos", value = "cn") %>% separate(pos, sep="_", into = c("chr", "seg")) %>% mutate(chr = as.integer(chr), seg = as.integer(seg))%>% arrange(sid, chr, seg) -> dcn
+  # cns_wide %>% gather(all_of(pos_names), key = "pos", value = "cn") %>% separate(pos, sep="_", into = c("chr", "seg")) %>% mutate(chr = as.integer(chr), seg = as.integer(seg))%>% arrange(sid, chr, seg) -> dcn
 
   return(list(phydata = phydata, cns_bs = cns_bs))
 }
@@ -68,7 +68,7 @@ get_bootstrap_cn <- function(cns_bs, fcn){
   # encode segment ID to keep the order (optional)
   cns_bs$sid = 1:nrow(cns_bs)
   pos_names = setdiff(names(cns_bs), c("sid"))
-  cns_bs %>% gather(pos_names, key = "pos", value = "cn") %>% separate(pos, sep="_", into = c("chr", "seg")) %>% mutate(chr = as.integer(chr), seg = as.integer(seg))%>% arrange(sid, chr) -> dcn_bs
+  cns_bs %>% gather(all_of(pos_names), key = "pos", value = "cn") %>% separate(pos, sep="_", into = c("chr", "seg")) %>% mutate(chr = as.integer(chr), seg = as.integer(seg))%>% arrange(sid, chr) -> dcn_bs
 
   # check segment ID orders are the same across samples
   # dcn_bs %>% filter(sid == 1) %>% select(seg) -> seg1
@@ -205,7 +205,7 @@ get_cn <- function(file_cn, incl_normal, is_allele_specific){
 
 option_list = list(
   make_option(c("-f", "--file_cn"), type="character", default="",
-              help="input copy number file [default=%default]", metavar="character"),
+              help="input copy number file (only absolute copy numbers are allowed) [default=%default]", metavar="character"),
   make_option(c("-b", "--bootstrap"), type="integer", default=0,
               help="Whether or not to generate bootstrap samples (0: not; 1: yes)  [default=%default]", metavar="number"),
   make_option(c("-i", "--input_format"), type="integer", default=0,

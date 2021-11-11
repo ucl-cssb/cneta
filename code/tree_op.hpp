@@ -12,6 +12,13 @@
 // using namespace std;
 
 
+// paramters for generating the initial coalescence tree
+struct ITREE_PARAM{
+  int Ne;
+  double beta;
+  double gtime;
+};
+
 // Scaling tree height to 1/HEIGHT_SCALE if the current height is larger than the upper bound (patient age at last sample)
 const int HEIGHT_SCALE = 3;
 // // The difference from minmial height
@@ -106,18 +113,18 @@ void test_evo_tree(const evo_tree& tree);
 // generate neutral coalescent trees
 // here nsample is the number of cancer samples (not including germline node)
 // here we directly calculate the edges in the tree
-void generate_coal_tree(const int& nsample, gsl_rng* r, long unsigned (*fp_myrng)(long unsigned), vector<int>& edges, vector<double>& lengths, vector<double>& epoch_times, vector<double>& times, const int& Ne, const double& beta = 0, const double& gtime = 0.002739726);
+void generate_coal_tree(const int& nsample, gsl_rng* r, long unsigned (*fp_myrng)(long unsigned), vector<int>& edges, vector<double>& lengths, vector<double>& epoch_times, vector<double>& times, const ITREE_PARAM& itree_param);
 
 
 // Scale the total time by given time
-evo_tree generate_coal_tree(const int& nsample, gsl_rng* r, long unsigned (*fp_myrng)(long unsigned), int Ne = 1, double beta = 0, double gtime = 0.002739726);
+evo_tree generate_coal_tree(const int& nsample, gsl_rng* r, long unsigned (*fp_myrng)(long unsigned), const ITREE_PARAM& itree_param);
 
 
 void assign_tip_times(double delta_t, int Ns, gsl_rng* r, vector<double>& tobs, const vector<int>& edges, vector<double>& lengths);
 
 
 // Simulate a random tree for mutataion generations
-evo_tree generate_random_tree(int Ns, gsl_rng* r, long unsigned (*fp_myrng)(long unsigned), int Ne, int age, double beta, double gtime, double delta_t, int cons, int debug = 0);
+evo_tree generate_random_tree(int Ns, gsl_rng* r, long unsigned (*fp_myrng)(long unsigned), int age, const ITREE_PARAM& itree_param, double delta_t, int cons, int debug = 0);
 
 
 // Create a new tree with the same topology as input tree but different branch lengths
@@ -217,6 +224,13 @@ void adjust_tip_time(evo_tree& rtree, const vector<double>& tobs, int Ns, int sa
 // Read parsimony trees built by other tools as starting trees, assign timings to tip nodes and initialize mutation rates
 evo_tree read_parsimony_tree(const string& tree_file, const int& Ns, const vector<double>& rates, const vector<double>& tobs, gsl_rng* r, int age, int cons);
 
+
+evo_tree get_tree_from_file(const string& tree_file, int Ns, vector<double>& rates, double max_tobs, int age, int cons);
+
+
+void initialize_knodes(vector<int>& knodes, int Ns);
+
+vector<int> get_inodes_bottom_up(evo_tree& tree, int debug);
 
 // vector<double> get_blens_from_intervals(evo_tree& rtree, double *x){
 //     vector<double> intervals;
