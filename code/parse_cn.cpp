@@ -196,7 +196,6 @@ vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int& num_tot
         }
       }
 
-
       vector<int> vcn{chr, sid, cn};
       s_info[sample - 1].push_back(vcn);
 
@@ -513,7 +512,7 @@ vector<vector<int>> group_segs(const vector<vector<int>>& segs, const vector<vec
         bool valid = true;
 
         for(int j = 0; j < Ns; ++j){
-          for(int k=segs[i][1]; k < (segs[i][2]+1); ++k){
+          for(int k = segs[i][1]; k < (segs[i][2]+1); ++k){
                  av_cn[j] += s_info[j][k][2];
           }
           av_cn[j] = av_cn[j]/( segs[i][2] - segs[i][1] + 1);

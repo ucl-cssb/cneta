@@ -1182,7 +1182,6 @@ int main(int argc, char** const argv){
     int Nchar = 0;  // number of sites
     int num_invar_bins = 0;   // number of invariant sites
 
-
     print_desc(cons, maxj, correct_bias, use_repeat, optim, model, is_total, age, only_seg);
     INPUT_PROPERTY input_prop{is_total, is_rcn, is_bin, incl_all};
 
@@ -1280,7 +1279,6 @@ int main(int argc, char** const argv){
           cout << "   The log likelihood of the real tree is " << lnl << endl;          
       }
 
-
       // nodes are in an order suitable for dynamic programming (lower nodes at first, which may be changed after topolgy change)
       initialize_knodes(lnl_type.knodes, Ns);
       ITREE_PARAM itree_param{Ne, beta, gtime};
@@ -1344,19 +1342,19 @@ int main(int argc, char** const argv){
             double lnl = 0.0;
             if(model == DECOMP){
                lnl = reconstruct_marginal_ancestral_state_decomp(tree, vobs, inodes, comps, obs_decomp, use_repeat, infer_wgd, infer_chr, cn_max, ofile, is_total);
-           }else{
+            }else{
                lnl = reconstruct_marginal_ancestral_state(tree, vobs, inodes, model, cn_max, use_repeat, is_total, ofile);
-           }
-           cout << "The log likelihood of the input tree computed during state reconstruction is " << lnl << endl;
+            }
+            cout << "The log likelihood of the input tree computed during state reconstruction is " << lnl << endl;
         }
 
         if(infer_joint_state){
             cout << "\tInferring joint ancestral states" << endl;
             if(model == DECOMP){
                reconstruct_joint_ancestral_state_decomp(tree, vobs, inodes, comps, max_decomp, use_repeat, cn_max, ofile, is_total);
-           }else{
+            }else{
                reconstruct_joint_ancestral_state(tree, vobs, inodes, model, cn_max, use_repeat, is_total, m_max, ofile);
-           }
+            }
         }
     }
 

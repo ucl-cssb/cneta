@@ -13,18 +13,16 @@ void print_tree_state(const evo_tree& rtree, const vector<vector<int>>& S_sk_k, 
     }
 }
 
-void extract_tree_ancestral_state(const evo_tree& rtree, const set<vector<int>>& comps, const vector<vector<double>>& L_sk_k, const vector<vector<int>>& S_sk_k, int model, int cn_max, int is_total, int m_max, map<int, int> &asr_states){
-    int debug = 0;
 
-    int Ns = rtree.nleaf - 1;
-    int max_id = 2 * Ns;
+void extract_tree_ancestral_state(const evo_tree& rtree, const vector<int>& knodes, const set<vector<int>>& comps, const vector<vector<double>>& L_sk_k, const vector<vector<int>>& S_sk_k, int model, int cn_max, int is_total, int m_max, map<int, int> &asr_states){
+    int debug = 0;
 
     if(debug){
         cout << "Get most likely joint estimation of ancestral nodes" << endl;
         // No computation on root
         // cout << "likelihood at root:";
-        // for(int j = 0; j < L_sk_k[Ns + 1].size(); ++j){
-        //   cout << "\t" << L_sk_k[Ns + 1][j];
+        // for(int j = 0; j < L_sk_k[rtree.nleaf].size(); ++j){
+        //   cout << "\t" << L_sk_k[rtree.nleaf][j];
         // }
         // cout << endl;
     }
@@ -46,13 +44,17 @@ void extract_tree_ancestral_state(const evo_tree& rtree, const set<vector<int>>&
     }else{
         parent_state = NORM_PLOIDY;
     }
-    asr_states[Ns + 1] = parent_state;
+    asr_states[rtree.nleaf] = parent_state;   // for root
 
     // Traverse the tree from root to tips, need to know the parent of each node
-    for(int nid = max_id; nid > Ns + 1; nid--){
+    for(int i = knodes.size() - 2; i >= 0; i--){  // starting from node ID for MRCA
+        int nid = knodes[i];
         // Find the parent node of current node
         int parent = rtree.nodes[nid].parent;
-        assert(asr_states.find(parent) != asr_states.end());
+        if(asr_states.find(parent) == asr_states.end()){
+            cout << "Cannot find state for the parent of node " << nid + 1 << ", " << parent + 1 << endl;
+            exit(EXIT_FAILURE);
+        }
         parent_state = asr_states[parent];
 
         int state = S_sk_k[nid][parent_state];
@@ -447,7 +449,7 @@ void get_ancestral_states_site(vector<vector<double>>& L_sk_k, vector<vector<int
   }
 
   int Ns = rtree.nleaf - 1;
-  for(int kn = 0; kn < knodes.size() - 1; ++kn){
+  for(int kn = 0; kn < knodes.size() - 1; ++kn){   // not include root which is always normal
     int k = knodes[kn];
     int np = rtree.edges[rtree.nodes[k].e_in].start;
     double blen = rtree.edges[rtree.nodes[k].e_in].length;
@@ -843,7 +845,6 @@ double reconstruct_marginal_ancestral_state_decomp(const evo_tree& rtree, map<in
       int nchr = vcn.first;     
       if(debug) cout << "Computing likelihood on Chr " << nchr << endl;
       double site_logL = 0.0;   // log likelihood for all sites on a chromosome
-      // cout << " chromosome number change is " << 0 << endl;
       for(int nc = 0; nc < vobs[nchr].size(); nc++){    // for each segment on the chromosome
           // cout << "Number of sites for this chr " << vobs[nchr].size() << endl;
           // for each site of the chromosome (may be repeated)
@@ -1034,7 +1035,7 @@ void reconstruct_joint_ancestral_state_decomp(const evo_tree& rtree, map<int, ve
     ofstream fout(ofile_joint);
 
     int Ns = rtree.nleaf - 1;
-    int max_id = 2 * Ns;
+    int max_id = 2 * Ns;   // node ID for MRCA
 
     int ntotn = 2 * rtree.nleaf - 1;
     int nstate = comps.size();
@@ -1042,7 +1043,6 @@ void reconstruct_joint_ancestral_state_decomp(const evo_tree& rtree, map<int, ve
     PMAT_DECOMP pmat_decomp;
     DIM_DECOMP dim_decomp;
 
-    // knodes.pop_back();  // no need to reconstruct root which is always normal
     set_pmat_decomp(rtree, max_decomp, nstate, knodes, dim_decomp, pmat_decomp, fout);
 
     map<vector<int>, vector<vector<double>>> sites_lnl_map;
@@ -1073,7 +1073,7 @@ void reconstruct_joint_ancestral_state_decomp(const evo_tree& rtree, map<int, ve
           }
 
           map<int, int> asr_states;
-          extract_tree_ancestral_state(rtree, comps, L_sk_k, S_sk_k, DECOMP, cn_max, is_total, max_decomp.m_max, asr_states);
+          extract_tree_ancestral_state(rtree, knodes, comps, L_sk_k, S_sk_k, DECOMP, cn_max, is_total, max_decomp.m_max, asr_states);
           for(int nid = max_id; nid > Ns + 1; nid--){
                 int state = asr_states[nid];
 
@@ -1201,7 +1201,7 @@ void reconstruct_joint_ancestral_state(const evo_tree& rtree, map<int, vector<ve
 
         map<int, int> asr_states;     // The state ID used in rate matrix
         set<vector<int>> comps;    // empty containtor for argument
-        extract_tree_ancestral_state(rtree, comps, L_sk_k, S_sk_k, model, cn_max, is_total, m_max, asr_states);
+        extract_tree_ancestral_state(rtree, knodes, comps, L_sk_k, S_sk_k, model, cn_max, is_total, m_max, asr_states);
 
         if(!is_repeated){        
             // int best_state = asr_states[Ns + 1];

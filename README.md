@@ -109,7 +109,7 @@ You may use the provided bash scripts to run the programs.
 > bash run-svtreemcmc.sh
 ```
 
-The most recent Mac switched to zsh. In that case, please replace `bash` with `zsh` in the commands above.
+The most recent Mac switches to zsh. In that case, please replace `bash` with `zsh` in the commands above.
 
 
 
@@ -118,8 +118,8 @@ SVETA simulates structural variations that alter copy numbers along a phylogenet
 
 1. Each node in the tree corresponds to the genome of a sample, which is represented by a consecutive set of pre-specified sites.
 
-2. Each site is considered as a segment of unknown size.
-These sites can be seen as the segments obtained by segmentation methods when calling copy numbers from real data.
+2. Each site is considered as a segment of unknown size or a bin of fixed size.
+These sites can be seen as segments or bins obtained by segmentation methods or fixed-size sliding windows when calling copy numbers from real data.
 
 3. The tip dates can be adjusted to reflect different sampling times.
 
@@ -182,7 +182,7 @@ Please see run-sveta.sh to learn how to set different parameters.
 * *-rel-times.txt: The sampling time of tip nodes
 * *-allele-cn.txt.gz: The allele-specific copy number at each site for each sample
 * *-rcn.txt.gz: The relative total copy number at each site for each sample
-* *-baseline-rcn.txt.gz: The processed allele-specific copy number by normalizing with a baseline at each site for each sample
+* *-allele-rcn.txt.gz: The processed allele-specific copy number by normalizing with a baseline at each site for each sample
 * *-inode-cn.txt.gz: The copy number at each site for each internal node in the tree
 * *-info.txt: The time of each node and the total number of mutations simulated on each branch of the tree, grouped by lineages of tip nodes.
 * *-mut.txt: The list of simulated mutations on each branch of the tree.
@@ -190,9 +190,9 @@ Please see run-sveta.sh to learn how to set different parameters.
 * *-tree.nex: The simulated tree in NEWICK format, with branch length representing calender time
 * *-tree-nmut.nex: The simulated tree in NEWICK format, with branch length representing number of mutations
 
-File *-cn.txt.gz can serve as the input to a tree building program that used integer total copy number.
+File *-cn.txt.gz (*-rcn.txt.gz) can serve as the input to a tree building program that used absolute (relative) integer total copy number.
 
-File *-allele-cn.txt.gz can serve as the input to a tree building program that used integer allele-specific copy number.
+File *-allele-cn.txt.gz (*-allele-rcn.txt.gz) can serve as the input to a tree building program that used absolute (relative) integer allele-specific copy number.
 
 File *-rel-times.txt can provide the timing information of tip nodes to allow estimation of divergence time and mutation rates.
 
@@ -213,9 +213,12 @@ The initial trees for tree searching can be obtained by maximum parsimony method
 * (Required) A file containing integer absolute copy numbers for all the patient samples and/or the normal sample (*-cn.txt.gz or *-allele-cn.txt.gz).
 
    Either compressed file or uncompressed file is fine.
-   There need to be four columns, separated by space, in this file: sample_ID, chr_ID, bin_ID, CN. Each column is an integer.
-   The sample_ID has to be ordered from 1 to n (the number of patient samples).
-   For allele-specific CN, there will be 5 columns, with the last two being cnA, cnB.
+   There need to be at least four columns, separated by space, in this file: sample_ID, chr_ID, site_ID, CN.
+   Each column is an integer.
+   The sample_ID has to be ordered from 1 to the number of patient samples.
+   The chr_ID and site_ID together determine a unique site along the genome of a sample.
+   The site_ID can be consecutive numbers from 1 to the total number of sites along the genome, or consecutive numbers from 1 to the total number of sites along each chromosome of the genome.
+   For allele-specific CN, there need to be at least five columns, with the last two being cnA, cnB.
    If the total CN is larger than the specified maximum CN allowed by the program,
    the total CN will be automatically decreased to the maximum CN when the input is total CN and the program will exit when the input is allele-specific CN.
 
@@ -242,8 +245,8 @@ There are 3 tree searching method:
 Please see run-svtreeml.sh to learn how to set different parameters
 
 There are four Markov models of evolution for building trees from the copy number profiles:
-* model 0: Mk model
-* model 1: bounded model of total copy number
+* model 0: Mk model (deprecated)
+* model 1: bounded model of total copy number (deprecated)
 * model 2: bounded model of allele-specific copy number
 * model 3: independent Markov chain model (with 3 chains)
 

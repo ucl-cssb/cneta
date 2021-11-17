@@ -362,7 +362,6 @@ evo_tree& evo_tree::operator=(const evo_tree& _t2){
 }
 
 
-
 // create nodes from edges
 void evo_tree::generate_nodes(){
   this->nodes.clear();

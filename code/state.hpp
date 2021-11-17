@@ -14,7 +14,7 @@ void print_tree_state(const evo_tree& rtree, const vector<vector<int>>& S_sk_k, 
 
 // Get the states of the tree from likelihood table at one site, starting from MRCA
 // Step 5 of algorithm of Pupko (2000)
-void extract_tree_ancestral_state(const evo_tree& rtree, const set<vector<int>>& comps, const vector<vector<double>>& L_sk_k, const vector<vector<int>>& S_sk_k, int model, int cn_max, int is_total, int m_max, map<int, int> &asr_states);
+void extract_tree_ancestral_state(const evo_tree& rtree, const vector<int>& knodes, const set<vector<int>>& comps, const vector<vector<double>>& L_sk_k, const vector<vector<int>>& S_sk_k, int model, int cn_max, int is_total, int m_max, map<int, int> &asr_states);
 
 // Create likelihood vectors and state vectors at the tip node for reconstructing joint ancestral state
 // L_sk_k (S_sk_k) has one row for each tree node and one column for each possible state
