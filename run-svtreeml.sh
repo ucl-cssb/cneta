@@ -20,6 +20,7 @@ if [[ ! -f $input ]]; then
   echo "Input file $input does not exit!"
   exit 0
 fi
+seg_file=$idir/"$prefix"-segs.txt
 
 is_total=1    # If yes (1), the input is total copy number; or else (0), the input is allele-specific
 # input=$idir/"$prefix"-allele-cn.txt.gz
@@ -107,7 +108,7 @@ if [[ $mode -eq 0 ]]; then
 
   echo "seed $seed" > $dir/std_svtreeml_"$suffix"
   # valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all --track-origins=yes -v
-  /usr/bin/time code/svtreeml -c $input -t "$times" --tree_file "$tree_file" --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change --is_bin $is_bin --incl_all $incl_all -s $Ns -p $Npop -g $Ngen -e $Nstop -r $tolerance -o $mltree -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $estmu --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode --speed_nni $speed_nni --seed $seed 2>&1 >> $dir/std_svtreeml_"$suffix"
+  /usr/bin/time code/svtreeml -c $input --seg_file $seg_file -t "$times" --tree_file "$tree_file" --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change --is_bin $is_bin --incl_all $incl_all -s $Ns -p $Npop -g $Ngen -e $Nstop -r $tolerance -o $mltree -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $estmu --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode --speed_nni $speed_nni --seed $seed 2>&1 >> $dir/std_svtreeml_"$suffix"
   # #
   #
   echo "Finish running svtreeml"
@@ -119,7 +120,7 @@ if [[ $mode -eq 0 ]]; then
   # cmp_dist=$dir/cmp_dist-"$suffix".txt
   # Rscript test/tree_comparison/compare_trees.R -r "$tree_file" -i $mltree -o $cmp_plot -s $cmp_dist -p 1
 
-  bootstrap=1
+  bootstrap=0
   if [[ $bootstrap -eq 1 ]]; then
     echo "Run bootstrapping"
     # Do bootstrapping
@@ -153,12 +154,13 @@ elif [[ $mode -eq 3 ]]; then
   mltree=$dir/MaxL-"$suffix".txt
   mltree2=$dir/MaxL-"$suffix"-fixt.txt
   echo "Estimating the branch lengths (and mutation rates) of the given tree $mltree"
-  if [[ ! -f $mltree ]]; then 
+  if [[ ! -f $mltree ]]; then
   echo "$mltree does not exist!"
   exit
   fi
 
-  code/svtreeml --tree_file "$mltree" -o $mltree2 -c $input -t "$times" --is_bin $is_bin --incl_all $incl_all -s $Ns --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $estmu --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode > $dir/std_svtreeml_"$suffix"-mode"$mode"
+  # valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all --track-origins=yes -v
+  /usr/bin/time code/svtreeml --tree_file "$mltree" -o $mltree2 -c $input -t "$times" --is_bin $is_bin --incl_all $incl_all -s $Ns --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $estmu --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode > $dir/std_svtreeml_"$suffix"-mode"$mode"
 
   # plot the new tree
   Rscript ana/plot-trees-all.R -f $mltree2 -b 0 -t "single" -l "xlim" --time_file "$times"  #>& /dev/null
@@ -174,26 +176,22 @@ elif [[ $mode -eq 3 ]]; then
       echo $i
       ofile=$bsdir2/MaxL-"$suffix"-btree-$i.txt
 
+      # valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all --track-origins=yes -v /usr/bin/time
       code/svtreeml --tree_file "$mltree" -o $ofile -c $input -t "$times" --is_bin $is_bin --incl_all $incl_all -s $Ns  --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change  -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $estmu --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode -b 1 > $bsdir2/std_svtreeml_"$suffix"-btree-$i
     done
 
     # Draw the ML tree with confidence intervals
-    Rscript ana/plot-trees-all.R -s $bsdir1 -f $mltree2 -o $dir/MaxL-tree-"$suffix"-fixt-bootstrap.pdf -t "bootstrap" -l "ci" --time_file "$times" -p "MaxL-"$suffix"-btree-*txt" --bstrap_dir2 $bsdir2
+    ci_dup=`Rscript ana/compute_ci.R $fdup 4`
+    ci_del=`Rscript ana/compute_ci.R $fdel 4`
+
+    Rscript ana/plot-trees-all.R -s $bsdir1 -f $mltree2 -o $dir/MaxL-tree-"$suffix"-fixt-bootstrap.pdf -t "bootstrap" -l "ci" --time_file "$times" -p "MaxL-"$suffix"-btree-*txt" --bstrap_dir2 $bsdir2 --title "duplication rate $ci_dup; deletion rate $ci_del"
   fi
 
 elif [[ $mode -eq 4 ]]; then  # Inferring ancestral states of a given tree from copy number profile
   # In this mode, the mutation rates have to be specified
   suffix=m$model-o"$opt"-s"$tree_search"-cons${cons}-estmu${estmu}-"$prefix"
   mltree=$dir/MaxL-"$suffix".txt
-  # mltree=$tree_file
   echo "Inferring ancestral states of the given tree $mltree"
 
-  code/svtreeml -c $input -t "$times" -o "$mltree" --is_bin $is_bin --incl_all $incl_all -s $Ns --tree_file "$mltree" --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change -d $model --cn_max $cn_max --only_seg $only_seg --constrained $cons --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode  --seed $seed > $dir/std_svtreeml_state_"$suffix"
+  code/svtreeml -c $input -t "$times" --tree_file "$mltree" -o "$mltree" --is_bin $is_bin --incl_all $incl_all -s $Ns --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change -d $model --cn_max $cn_max --only_seg $only_seg --constrained $cons --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode  --seed $seed > $dir/std_svtreeml_state_"$suffix"
 fi
-
-
-# Estimating mutation rates given the tree
-# mutree=$dir/results-mu-tree-"$suffix".txt
-# code/svtreemu -c $input -t "$times" -p  $mltree -s $Ns -x $mut -l 0.5  -d $model -o $mutree -m 2000 -r 0.01 > $dir/std_svtreemu_"$suffix"
-# #Rscript ana/plot-trees-single.R $dir/MaxL-mu-tree.txt 0 #>& /dev/null
-# Rscript ana/plot-trees-all.R -f $mutree -b 0 -t "single" #>& /dev/null

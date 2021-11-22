@@ -99,7 +99,6 @@ if(in_file != ""){
   plot_type <- "single"
 }
 
-bin_file = "d:/Gdrive/git/sveta/ana/bin_locations_4401.Rdata"
 load(bin_file)
 
 
@@ -115,7 +114,7 @@ if(plot_type == "all"){
   for(f in files){
     fname = file.path(dir, f)
     cat(paste0("Plotting file ", fname, "\n"))
-    out_file = get.outfile.name(in_file)
+    out_file = get.outfile.name(fname)
     plot.cn(fname, out_file, bins_4401)
   }
 }else{    # plot_type == "single"

@@ -1305,7 +1305,10 @@ evo_tree get_tree_from_file(const string& tree_file, int Ns, vector<double>& rat
 
 
 void initialize_knodes(vector<int>& knodes, int Ns){
-  assert(knodes.size() == Ns);
+  if(knodes.size() != Ns){
+      cout << "There are " << knodes.size() << " internal nodes, but " << Ns << " tips!" << endl;
+      exit(EXIT_FAILURE);
+  }
   // nodes are in an order suitable for dynamic programming (lower nodes at first, which may be changed after topolgy change)
   int nleaf = Ns + 1;
   int i = 0;

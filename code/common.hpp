@@ -52,11 +52,27 @@ const int WGD_CUTOFF = 3;    // genome ploidy to determine WGD
 typedef map<int, map<int, int>> copy_number;
 
 
+// read-only
 struct INPUT_PROPERTY{
+  int Ns;
+  int cn_max;
+  int model;
+
   int is_total;
   int is_rcn;
   int is_bin;
   int incl_all;
+};
+
+// obtained from input file
+struct INPUT_DATA{
+  int num_invar_bins;
+  int num_total_bins;
+  int seg_size;  // Nchar
+
+  vector<int> obs_num_wgd;
+  vector<vector<int>> obs_change_chr;
+  vector<int> sample_max_cn;
 };
 
 

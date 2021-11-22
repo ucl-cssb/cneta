@@ -2071,7 +2071,7 @@ int main (int argc, char ** const argv) {
     double lambda, sigma_blen, lambda_all, lambda_topl, sigma_height;
     double dirichlet_param, tlen_shape, tlen_scale;
     double rate_shape, rate_scale;
-    string datafile, timefile, trace_param_file, trace_tree_file, rtreefile, config_file;
+    string datafile, timefile, trace_param_file, trace_tree_file, rtreefile, config_file, seg_file;
     string dirichlet_alpha;
     int sample_prior, fix_topology;
     double rmu, rdup_rate, rdel_rate, rgain_rate, rloss_rate, rwgd_rate;
@@ -2112,6 +2112,7 @@ int main (int argc, char ** const argv) {
 
             ("trace_param_file", po::value<string>(&trace_param_file)->default_value("trace-mcmc-params.txt"), "output trace file of parameter values")
             ("trace_tree_file", po::value<string>(&trace_tree_file)->default_value("trace-mcmc-trees.txt"), "output trace file of trees")
+            ("seg_file", po::value<string>(&seg_file)->default_value(""), "output file with the postprocessed copy number matrix for tree building ")
             ("n_burnin,r", po::value<int>(&n_burnin)->default_value(9000), "number of burnin samples")
             ("n_draws,n", po::value<int>(&n_draws)->default_value(10000), "number of posterior draws to keep")
             ("n_gap", po::value<int>(&n_gap)->default_value(1), "sampling every kth samples ")
@@ -2219,7 +2220,6 @@ int main (int argc, char ** const argv) {
 
     fp_myrng = &myrng;
 
-    INPUT_PROPERTY input_prop{is_total, 0, is_bin, incl_all};
     ITREE_PARAM itree_param{epop, beta, gtime};
 
     if(model == MK){
@@ -2269,7 +2269,19 @@ int main (int argc, char ** const argv) {
             cout << "   Using variable input segments " << endl;
         }
     }
-    data = read_data_var_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins, Nchar, obs_num_wgd, obs_change_chr, sample_max_cn, model, input_prop, debug);
+
+    INPUT_PROPERTY input_prop{Ns, cn_max, model, is_total, 0, is_bin, incl_all};
+    INPUT_DATA input_data{num_invar_bins, num_total_bins, Nchar, obs_num_wgd, obs_change_chr, sample_max_cn};
+    data = read_data_var_regions_by_chr(datafile, input_prop, input_data, seg_file, debug);
+
+    // assign variables back for those changed during input parsing
+    num_invar_bins = input_data.num_invar_bins;
+    num_total_bins = input_data.num_total_bins;
+    Nchar = input_data.seg_size;
+    obs_num_wgd = input_data.obs_num_wgd;
+    obs_change_chr = input_data.obs_change_chr;
+    sample_max_cn = input_data.sample_max_cn;
+
     vobs = get_obs_vector_by_chr(data, Ns);
 
     int nleaf = Ns + 1;

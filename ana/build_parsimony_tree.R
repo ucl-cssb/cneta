@@ -167,12 +167,19 @@ get_nwk_trees <- function(phydata, dir_nwk, num_generate, num_select, output_for
 # Get input CNs, add normal sample if required
 get_cn <- function(file_cn, incl_normal, is_allele_specific){
   data_cn <- read.table(file_cn)
+  # only pick the first 4 or 5 columns
   if(is_allele_specific){
+    if(ncol(data_cn) > 5){
+      data_cn = data_cn[, 1:5]
+    }
     names(data_cn) = c("sid", "chr", "seg", "cnA", "cnB")
     data_cn %>% select(sid, chr, seg, cn = cnA) -> cnA
     data_cn %>% select(sid, chr, seg, cn = cnB) %>% mutate(seg = paste0(seg, "_2")) -> cnB
     data_cn = rbind(cnA, cnB)
   }else{
+    if(ncol(data_cn) > 4){
+      data_cn = data_cn[, 1:4]
+    }
     names(data_cn) = c("sid", "chr", "seg", "cn")
   }
   

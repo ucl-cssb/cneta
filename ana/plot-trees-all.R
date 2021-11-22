@@ -9,6 +9,7 @@ suppressMessages(library(ggplot2))
 suppressMessages(library(optparse))
 suppressMessages(library(ggrepel))
 suppressMessages(library(ggpubr))
+# suppressMessages(library(aplot))
 
 # This script is used to plot phylogenetic trees:
 # 1) plotting a single tree file with tips as 1 to n or with provided labels
@@ -29,17 +30,22 @@ theme1 = theme(legend.position = "none",
                axis.title.x = element_blank(),
                axis.ticks.x = element_blank(),
                axis.ticks.y = element_blank(),
-               panel.grid.minor=element_blank(),
-               panel.grid.major=element_blank(),
-               panel.spacing.y=unit(0, "lines"),
-               panel.spacing.x=unit(0, "lines"),
+               panel.grid.minor = element_blank(),
+               panel.grid.major = element_blank(),
+               panel.spacing.y = unit(0, "lines"),
+               panel.spacing.x = unit(0, "lines"),
                panel.border = element_rect(color = "#d8d8d8", fill = NA, size = .2),
-               panel.background=element_rect(fill = "#f0f0f0")
+               panel.background = element_rect(fill = "#f0f0f0")
 )
 
-cn_colors1 = c("#6283A9","#bdd7e7","#f0f0f0","#FCAE91", "#B9574E", "#76000D", "#8B0000", "#000000")
+# cn_colors1 = c("#6283A9","#bdd7e7","#f0f0f0","#FCAE91", "#B9574E", "#76000D", "#8B0000", "#000000")
 # Max CN to show in heatmap
-MAX_CN = 7
+MAX_CN = 8
+# For absolute CN 0 to 8
+cn_colors1 = c("#6283A9","#bdd7e7","#f0f0f0", '#fdd49e', '#fdbb84','#fc8d59','#ef6548','#d7301f','#990000')
+# For relative CN -4 to 4
+cn_colors2 = c('#08519c','#3182bd', '#6baed6', '#9ecae1', "#f0f0f0", '#fdd49e','#fc8d59','#d7301f','#990000')
+
 
 MIN_BLEN = 1e-3
 TIP_OFFSET = 0.5
@@ -113,35 +119,186 @@ get.tree <- function(tree_file, branch_num = 0, labels = c(), scale_factor = 1){
 }
 
 
+get_cyto_band <- function(fcyto){
+  cyto = read.table(fcyto, header=FALSE)
+  names(cyto) <- c("chrom", "start", "end", "cytoband", "stain")
+  
+  # Find the boundary between two arms
+  arm_boudaries = data.frame()
+  chr_ends = data.frame()
+  for (i in 1:(nrow(cyto)-1)) {
+    chr1 = cyto[i,]$chrom
+    arm1 = substr(cyto[i,]$cytoband, 1, 1)
+    chr2 = cyto[i+1,]$chrom
+    arm2 = substr(cyto[i+1,]$cytoband, 1, 1)
+    
+    if(chr1 == chr2 && arm1 != arm2){
+      item = data.frame(chrom = chr1, boundary = cyto[i+1,]$start)
+      arm_boudaries = rbind(arm_boudaries, item)
+      # print(paste("chrom", chr1, "arm boundary", cyto[i+1,]$start))
+    }
+    if(chr1 != chr2){
+      item = data.frame(chrom=chr1, cend = cyto[i,]$end)
+      chr_ends = rbind(chr_ends, item)
+    }
+    if(i == nrow(cyto) - 1){
+      item = data.frame(chrom=chr2, cend = cyto[i+1,]$end)
+      chr_ends = rbind(chr_ends, item)      
+    }
+  }
+  
+  merge(chr_ends, arm_boudaries, by="chrom") -> chr_end_arm
+  
+  return(chr_end_arm)
+}
+
+
+get_hg_ends <- function(fcyto){
+  chr_end_arm_hg = get_cyto_band(fcyto)
+  
+  chr_end_arm_hg %>% filter(chrom!="chrX" & chrom!="chrY") -> chr_end_arm_hg_short
+  # Use cumsum to convert coordinates in the data
+  chr_end_arm_hg_short$chrID = gsub("chr", "", chr_end_arm_hg_short$chrom)
+  chr_end_arm_hg_short %>% arrange(as.numeric(chrID)) -> chr_end_arm_hg_short
+  csize = cumsum(as.numeric(chr_end_arm_hg_short$cend)+1)
+  chr_end_arm_hg_short$csize = c(0, csize[1:length(csize)-1])
+  chr_end_arm_hg_short %>% select(chromosome = chrID, cend, csize, boundary) -> chr_end_arm_hg_short
+  
+  return(chr_end_arm_hg_short)
+}
+
+
+# add missing segments 
+get_normal_segs <- function(d_withpos, chr_end_arm){
+  samples = data.frame(sample = unique(d_withpos$sample))
+  
+  d_noindex = d_withpos  %>% select(-index)
+  
+  # get the end of intermediate intervals first
+  df_invar = d_noindex %>% dplyr::mutate(end = lead(start) - 1) 
+  df_invar$start = d_withpos$end + 1
+  df_invar = df_invar %>% filter(end > start)
+  df_invar$cn = 2
+  
+  # Update interval at the end of each chr
+  # Find the current end in the data for each chr
+  d_withpos %>% group_by(chromosome) %>% dplyr::summarise(start = max(end)) -> pos_max
+  seg_max = merge(pos_max, chr_end_arm, by = c("chromosome")) %>% dplyr::mutate(start = start + 1) %>% select(chromosome, start, end = cend) %>% filter(start < end)
+  cnT_max = merge(seg_max, samples, all = T) %>% arrange(sample, chromosome, start)
+  cnT_max$cn = 2
+  
+  
+  # add intervals at the beginning of each chr
+  d_withpos %>% group_by(chromosome) %>% dplyr::summarise(end = min(start)) -> pos_min
+  seg_min = pos_min %>% dplyr::mutate(start = 1, end = end - 1) %>% filter(start < end)
+  cnT_min = merge(seg_min, samples, all = T) %>% arrange(sample, chromosome, start)
+  cnT_min$cn = 2 
+  
+  # Remove interval at the end which has wrong boundaries
+  max_ends = pos_max$start + 1
+  min_ends = pos_min$end - 1
+  row2del = df_invar %>% filter(start %in% max_ends | end %in% min_ends)
+  df_invar_mid = anti_join(df_invar, row2del)
+  
+  # add missing full chr
+  chrs = unique(d_withpos$chromosome)
+  all_chrs = unique(chr_end_arm$chromosome)
+  miss_chrs = setdiff(all_chrs, chrs)
+  seg_chm = data.frame()
+  for(ch in miss_chrs){
+    seg_df = chr_end_arm %>% filter(chromosome == ch) %>% dplyr::mutate(chromosome = as.numeric(chromosome), start = 1) %>% select(chromosome, start, end = cend) 
+    cnT_df = merge(seg_df, samples, all = T) 
+    cnT_df$cn = 2 
+    seg_chm = rbind(seg_chm, cnT_df)
+  }
+  
+  # Add Seg for all regions
+  cn_all = rbind(d_noindex, cnT_min, df_invar_mid, cnT_max, seg_chm) %>% arrange(sample, chromosome, start) %>% group_by(sample) %>% dplyr::mutate(index = row_number()) %>% select(sample, chromosome, index, start, end, cn)
+  
+  return(cn_all)
+}
+
+
 # combine CNP with position information to get a file with the format: sample, chrom, start, end, cn
 # use chr and site index to bind the two datasets
-get.cn.data.by.pos <- function(in_file, pos_file, labels, ordered_nodes, add_normal = T){
-  d <- read.table(in_file, header=FALSE)
-  names(d) <- c("sample", "chromosome", "index", "cn")
-  nsample <- length(unique(d$sample))
+get.cn.data.by.pos <- function(cn_file, pos_file, seg_file, cyto_file, labels, ordered_nodes, add_normal = T){
+  # reconstructed states
+  dans <- read.table(cn_file, header=FALSE)
+  names(dans) <- c("sample", "chromosome", "index", "cn")
+  ans_nodes = unique(dans$sample) %>% unlist()
+  ans_labels = data.frame(sample=ans_nodes, name = ans_nodes)
   
+  # original input, used to get sample names and original positions
   dpos <- read.table(pos_file, header=FALSE)
   names(dpos) <- c("sample", "chromosome", "index", "cn", "start", "end")
-  # add normal samples
-  if(add_normal){
-    # add a normal sample, use filter() to get segments
-    dpos %>% filter(sample == 1) -> s1
-    s1$cn = 2
-    s1$sample = length(unique(dpos$sample)) + 1
-    dpos = rbind(dpos, s1)
-  }
-  # replace node IDs with sample names 
+  
+  samples = unique(dpos$sample) %>% unlist()
   tip_labels = data.frame(sample = 1:length(labels), name = labels)
-  dpos_rname = merge(dpos, tip_labels, by = c("sample")) %>% select(-sample) %>% select(sample = name, chromosome, index, start, end, cn)
   
   # extract positions for all sites
   dpos %>% select(chromosome, index, start, end) %>% unique() -> site_pos
   
-  d_withpos = merge(d, site_pos, by = c("chromosome", "index"), all.x = T) %>% select(all_of(names(dpos))) %>% arrange(sample)
+  # read segment file for original input as invariable bins are excluded and consecutive bins may be merged
+  if(seg_file == ""){
+    stop("a segment file must be provided!")
+  }
   
-  d_all = rbind(dpos_rname, d_withpos)
+  dseg <- read.table(seg_file, header=FALSE)
+  segs = dseg[, c(1,4,5)]
+  names(segs) = c("chromosome", "index", "index2")
+  # first get positions for segment start
+  segs_pos = merge(segs, site_pos, by = c("chromosome", "index"), all.x = T)
+  # then get positions for segment end
+  segs_pos2 = merge(segs_pos, site_pos, by.x = c("chromosome", "index2"), by = c("chromosome", "index"), all.x = T)
+  segs_pos_all = segs_pos2 %>% select(chromosome, start = start.x, end = end.y) %>% arrange(start, end) %>% group_by(chromosome)  %>%  mutate(index = 1:n())
+  
+  # convert segment into cn matrix to have consistent segments in both input and reconstructed states
+  # wide format to long format 
+  dseg_cn = dseg[, -c(3,4,5)]
+  # add "s" to avoid taking first n columns when using gather
+  names(dseg_cn) = c("chromosome", "index", paste0("s", all_of(samples)))
+  dseg_cn_long = dseg_cn %>% gather(paste0("s", all_of(samples)), key = "sample", value = "cn") %>% mutate(sample = str_replace(sample, "s","")) %>% group_by(sample, chromosome)  %>%  mutate(index = 1:n()) %>% select(sample, chromosome, index, cn)
+  dseg_cn_long$sample = as.numeric(dseg_cn_long$sample)
+  
+  # add normal samples
+  if(add_normal){
+    # add a normal sample, use filter() to get segments
+    dseg_cn_long %>% filter(sample == 1) -> s1
+    s1$cn = 2
+    s1$sample = length(unique(dseg_cn_long$sample)) + 1
+    dseg_cn_long = rbind(dseg_cn_long, s1)
+  }
+
+  d_binded = rbind(dans, dseg_cn_long)
+  
+  # get reconstructed states with position
+  d_all = merge(d_binded, segs_pos_all, by = c("chromosome", "index"), all.x = T) %>% select(all_of(names(dpos))) %>% arrange(sample) 
+  # }else{ # using initial bins
+  #   # add normal samples
+  #   if(add_normal){
+  #     # add a normal sample, use filter() to get segments
+  #     dpos %>% filter(sample == 1) -> s1
+  #     s1$cn = 2
+  #     s1$sample = length(unique(dpos$sample)) + 1
+  #     dpos = rbind(dpos, s1)
+  #   }
+  # 
+  #   d_ans = merge(dans, site_pos, by = c("chromosome", "index"), all.x = T) %>% select(all_of(names(dpos))) %>% arrange(sample)
+  #   d_all = rbind(dpos_rname, d_ans)
+  # }
+  # 
+  # add missing normal segments
+  chr_end_arm = get_hg_ends(cyto_file)
+  d_all = get_normal_segs(d_all, chr_end_arm) 
+  
+  # replace node IDs with sample names 
+  node_labels = rbind(ans_labels, tip_labels)
+  d_all = merge(d_all, node_labels, by = c("sample"), all.x = T) %>% select(-sample) %>% select(sample = name, chromosome, index, start, end, cn)
   d_all$sample = factor(d_all$sample, levels = ordered_nodes)
-  d_seg = d_all %>% select(sample, chrom = chromosome , start, end, cn)
+  
+  # d_all %>% group_by(chromosome , sample) %>% tally() %>% select(-sample) %>% unique() %>% print()
+  
+  d_seg = d_all %>% select(sample, chrom = chromosome, start, end, cn)
   
   return(d_seg)
 }
@@ -226,10 +383,16 @@ get.ci.tree <- function(tree_file_nex, bstrap_dir, labels, has_bstrap = F){
     # print(i)
     # print(lbl)
     times = ntimes_all[, lbl]
-    smu = mean(times)
-    error = qnorm(0.975) * sd(times) / sqrt(length(times))
-    left = smu - error
-    right = smu + error
+    
+    # smu = mean(times)
+    # error = qnorm(0.975) * sd(times) / sqrt(length(times))
+    # left = smu - error
+    # right = smu + error
+    sorted_times = sort(times)
+    ci95 = quantile(sorted_times, probs = c(0.025, 0.975))
+    left = ci95[1]
+    right = ci95[2]
+    
     # [&time_95%_CI={4.50612194676725E-002,1.10259531669597E-001}]
     if(i == start_inode){
       marker = ";"
@@ -485,7 +648,7 @@ plot.tree.ci.node <- function(tree_ci, time_file, title = "", lextra = 3, rextra
   # colnames(edge)=c("parent", "node", "edge_num", "edge_len")
   # p <- p %<+% edge + geom_text(aes(x = branch, label = edge_len), nudge_y = 0.1, nudge_x = res_age$tshift)
 
-  p <- p + geom_range('time_0.95_CI', color='red', size=3)
+  p <- p + geom_range('time_0.95_CI', color='red', size=3, alpha = 0.3)
   p <- p + xlim(xl, tree_max) + xlab("Patient age (years)")
 
   if(nrow(da) > 0){
@@ -528,10 +691,10 @@ plot.cn.heatmap <- function(d_seg, main, type="absolute", theme = theme1, cn_col
   
   p <- ggplot(data=d_seg, aes(x=pos, y=sample, width=width)) +
     geom_tile(aes(fill=cn)) +
-    facet_grid(sample ~ chrom, scales="free", space = "free", switch='y') +
-    scale_color_manual(values=cn_colors, limits=cn_vals) +
-    scale_fill_manual(values=cn_colors, limits=cn_vals) +
-    scale_y_discrete(breaks=unique(d_seg$sample), expand = c(0,0))+
+    facet_grid(sample ~ chrom, scales="free", space = "free", switch='both') +
+    scale_color_manual(values = cn_colors, limits=cn_vals) +
+    scale_fill_manual(values = cn_colors, limits=cn_vals) +
+    scale_y_discrete(breaks = unique(d_seg$sample), expand = c(0,0))+
     scale_x_discrete(expand = c(0,0)) + theme
   p = p + ggtitle(main)
   
@@ -572,6 +735,10 @@ option_list = list(
               help="The file which contains the copy numbers of internal nodes [default=%default]", metavar="character"),
   make_option(c("", "--pos_file"), type="character", default="",
               help="The file which contains the positions of each site along with the copy numbers of tip nodes [default=%default]", metavar="character"),
+  make_option(c("", "--seg_file"), type="character", default="",
+              help="The file which contains the segment start and end ID in the input copy number file [default=%default]", metavar="character"),
+  make_option(c("", "--cyto_file"), type="character", default="",
+              help="The file which contains the chromosome boundaries in human reference genome (e.g. hg19) [default=%default]", metavar="character"),
   make_option(c("-d", "--tree_dir"), type="character", default="",
               help="The directory containing all the tree files to plot [default=%default]", metavar="character"),
   make_option(c("-s", "--bstrap_dir"), type="character", default="",
@@ -615,6 +782,8 @@ out_file = opt$out_file
 time_file = opt$time_file
 cn_file = opt$cn_file
 pos_file = opt$pos_file
+seg_file = opt$seg_file
+cyto_file = opt$cyto_file
 plot_type = opt$plot_type
 tree_dir = opt$tree_dir
 pattern = opt$pattern
@@ -702,6 +871,7 @@ if(plot_type == "all"){
 }else if(plot_type == "bootstrap"){
   cat(paste0("Plotting bootstrap values for the tree in ", tree_file, "\n"))
 
+  # when the tree is read from txt file, the internal node labels follow the same order as input CNs
   mytree = get.tree(tree_file, branch_num, labels, scale_factor)
   mytree = get.bootstrap.tree(mytree, bstrap_dir, pattern)
 
@@ -725,12 +895,12 @@ if(plot_type == "all"){
     if(with_cn){
       d = fortify(tree_ci@phylo)
       ordered_nodes = d$label[order(d$y, decreasing = T)]
-      
-      d_seg = get.cn.data.by.pos(cn_file, pos_file, labels, ordered_nodes, T)
+      d_seg = get.cn.data.by.pos(cn_file, pos_file, seg_file, cyto_file, labels, ordered_nodes, T)
       # get the node order of the tree and reorder heatmap
       phmap = plot.cn.heatmap(d_seg, "")
       
-      pc = ggarrange(p, phmap, nrow = 1)  
+      pc = ggarrange(p, phmap, nrow = 1, widths = c(6.5, 9.5))  
+      p#pc = phmap %>% insert_left(p, width = 0.6)
       ggsave(out_file, pc, width = 16, height = 5)
     }else{
       ggsave(out_file, p, width = 8, height = 5)

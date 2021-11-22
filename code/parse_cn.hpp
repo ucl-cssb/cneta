@@ -39,7 +39,7 @@ inline bool is_equal_vector(const vector<int>& bin1, const vector<int>& bin2){
 // Convert the allele-specific state (ordered by 0/0	0/1	1/0	0/2	 1/1	2/0	0/3	 1/2 2/1	3/0	 0/4 1/3 2/2 3/1	4/0) to total copy number
 int state_to_total_cn(int state, int cn_max);
 
-// Convert the allele-specific state (ordered by 0/0	0/1	1/0	0/2	 1/1	2/0	0/3	 1/2 2/1	3/0	 0/4 1/3 2/2 3/1	4/0) to total copy number
+// Convert the allele-specific state (ordered by 0/0	0/1	1/0	0/2	 1/1	2/0	0/3	 1/2 2/1	3/0	 0/4 1/3 2/2 3/1	4/0) to allele-specific copy number
 int state_to_allele_cn(int state, int cn_max, int& cnA, int& cnB);
 
 // Change the allele specific copy number to the state used in substitution rate matrix
@@ -69,7 +69,15 @@ vector<vector<int>> get_invar_segs(const vector<vector<vector<int>>>& s_info, in
 
 vector<vector<int>> get_all_segs(const vector<vector<vector<int>>>& s_info, int Ns, int num_total_bins, int& num_invar_bins, int incl_all, int is_total = 1, int debug = 0);
 
-map<int, vector<vector<int>>>  group_segs_by_chr(const vector<vector<int>>& segs, const vector<vector<vector<int>>>& s_info, int Ns, int cn_max, int debug = 0);
+// read segments and copy numbers into different data structures for further processing
+int get_segs_cn(vector<vector<vector<int>>>& s_info, vector<vector<int>>& segs, const string& filename, const INPUT_PROPERTY& input_prop, INPUT_DATA& input_data, int debug);
+
+
+// Compute the average copy number of a segment
+vector<double> compute_segment_cn(int i, const vector<vector<int>>& segs, const vector<vector<vector<int>>>& s_info, int Ns, int cn_max, int debug);
+
+
+map<int, vector<vector<int>>>  group_segs_by_chr(const vector<vector<int>>& segs, const vector<vector<vector<int>>>& s_info, int Ns, int cn_max, const string& seg_file, int debug = 0);
 
 vector<vector<int>> group_segs(const vector<vector<int>>& segs, const vector<vector<vector<int>>>& s_info, int Ns, int cn_max, int debug = 0);
 
@@ -93,11 +101,11 @@ vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int &num_tot
 
 
 // Read the input copy numbers
-vector<vector<int>> read_data_var_regions(const string& filename, const int& Ns, const int& cn_max, int& num_invar_bins, int& num_total_bins, int& seg_size, vector<int>&  obs_num_wgd, vector<vector<int>>& obs_change_chr, vector<int>& sample_max_cn, int model, int is_total = 1, int is_rcn = 0, int debug = 0);
+vector<vector<int>> read_data_var_regions(const string& filename, const INPUT_PROPERTY& input_prop, INPUT_DATA& input_data, int debug = 0);
 
 
 // Read the input copy numbers and group them by chromosome
-map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filename, const int& Ns, const int& cn_max, int& num_invar_bins, int& num_total_bins, int &seg_size, vector<int>&  obs_num_wgd, vector<vector<int>>& obs_change_chr, vector<int>& sample_max_cn, int model, INPUT_PROPERTY input_prop, int debug = 0);
+map<int, vector<vector<int>>> read_data_var_regions_by_chr(const string& filename, const INPUT_PROPERTY& input_prop, INPUT_DATA& input_data, const string& seg_file, int debug = 0);
 
 
 #endif

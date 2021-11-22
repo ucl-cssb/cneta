@@ -1049,15 +1049,12 @@ int main(int argc, char** const argv){
 
     OPT_TYPE opt_type;
 
-    // a list of nodes to loop over for bottom-up likelihood computation, and the root is last
-    vector<int> knodes(Ns, 0);
-
     int Npop, Ngen, Ne;
     int max_static, bootstrap, optim, mode, tree_search, init_tree;
     double ssize;
     double mu, dup_rate, del_rate, chr_gain_rate, chr_loss_rate, wgd_rate, max_rate;
     double beta, gtime;
-    string datafile, timefile, ofile, tree_file, dir_itrees;
+    string datafile, timefile, ofile, tree_file, dir_itrees, seg_file;
     int is_bin, incl_all, is_rcn;
     int infer_marginal_state, infer_joint_state;
     // double min_asr;
@@ -1078,7 +1075,7 @@ int main(int argc, char** const argv){
 
     ("nsample,s", po::value<int>(&Ns)->default_value(5), "number of samples or regions")
     ("ofile,o", po::value<string>(&ofile)->default_value("maxL-tree.txt"), "output tree file with maximum likelihood")
-    // ("ofile_nex,o", po::value<string>(&ofile_nex)->default_value("maxL-tree.nex"), "output tree file with maximum likelihood in NEXUS format")
+    ("seg_file", po::value<string>(&seg_file)->default_value(""), "output file with the postprocessed copy number matrix for tree building ")
 
     ("tree_file", po::value<string>(&tree_file)->default_value(""), "input tree file")
 
@@ -1183,7 +1180,6 @@ int main(int argc, char** const argv){
     int num_invar_bins = 0;   // number of invariant sites
 
     print_desc(cons, maxj, correct_bias, use_repeat, optim, model, is_total, age, only_seg);
-    INPUT_PROPERTY input_prop{is_total, is_rcn, is_bin, incl_all};
 
     // tobs already defined globally
     if(timefile != ""){
@@ -1199,7 +1195,7 @@ int main(int argc, char** const argv){
 
     map<int, vector<vector<int>>> data;
     cout << "\nReading input copy numbers" << endl;
-    if(is_bin){
+    if(is_bin){  // site as segment
         cout << "   Merging consecutive bins in the input" << endl;
     }else{
         if(incl_all){
@@ -1209,7 +1205,19 @@ int main(int argc, char** const argv){
             cout << "   Using variable input segments " << endl;
         }
     }
-    data = read_data_var_regions_by_chr(datafile, Ns, cn_max, num_invar_bins, num_total_bins, Nchar, obs_num_wgd, obs_change_chr, sample_max_cn, model, input_prop, debug);
+
+    INPUT_PROPERTY input_prop{Ns, cn_max, model, is_total, is_rcn, is_bin, incl_all};
+    INPUT_DATA input_data{num_invar_bins, num_total_bins, Nchar, obs_num_wgd, obs_change_chr, sample_max_cn};
+    data = read_data_var_regions_by_chr(datafile, input_prop, input_data, seg_file, debug);
+
+    // assign variables back for those changed during input parsing
+    num_invar_bins = input_data.num_invar_bins;
+    num_total_bins = input_data.num_total_bins;
+    Nchar = input_data.seg_size;
+    obs_num_wgd = input_data.obs_num_wgd;
+    obs_change_chr = input_data.obs_change_chr;
+    sample_max_cn = input_data.sample_max_cn;
+
     cout << "\nNumber of invariant bins after reading input is: " << num_invar_bins << endl;
     if(num_total_bins == num_invar_bins){
         cout << "There are no variant segments in the input data!" << endl;
@@ -1241,6 +1249,8 @@ int main(int argc, char** const argv){
     }
 
     max_tobs = *max_element(tobs.begin(), tobs.end());
+    // a list of nodes to loop over for bottom-up likelihood computation, and the root is last
+    vector<int> knodes(Ns, 0);
     lnl_type = {model, cn_max, is_total, cons, max_tobs, age, use_repeat, correct_bias, num_invar_bins, only_seg, infer_wgd, infer_chr, knodes};
 
     obs_decomp = {m_max, max_wgd, max_chr_change, max_site_change, obs_num_wgd, obs_change_chr};
@@ -1276,7 +1286,7 @@ int main(int argc, char** const argv){
         //   cout << " the string representation is " << real_tstring << endl;
 
           double lnl = compute_tree_likelihood(real_tree, vobs, obs_decomp, comps, lnl_type, debug);
-          cout << "   The log likelihood of the real tree is " << lnl << endl;          
+          cout << "   The log likelihood of the real tree is " << lnl << endl;
       }
 
       // nodes are in an order suitable for dynamic programming (lower nodes at first, which may be changed after topolgy change)
@@ -1290,11 +1300,11 @@ int main(int argc, char** const argv){
           exit(EXIT_FAILURE);
         }
         cout << "Running test on tree " << tree_file << endl;
-        int num_invar_bins0 = 0;
-        int num_total_bins0 = 0;
-        int Nchar0 = 0;
+        input_data.num_invar_bins = 0;
+        input_data.num_total_bins = 0;
+        input_data.seg_size = 0;
         cout << "Running data without grouping by chromosome" << endl;
-        vector<vector<int>> data0 = read_data_var_regions(datafile, Ns, cn_max, num_invar_bins0, num_total_bins0, Nchar0, obs_num_wgd, obs_change_chr, sample_max_cn, model, is_total, debug);
+        vector<vector<int>> data0 = read_data_var_regions(datafile, input_prop, input_data, debug);
         // Construct the CN matrix
         // cout << "The number of sites used in vobs0: " << data0.size() << endl;
         vector<vector<int>> vobs0;
@@ -1306,7 +1316,7 @@ int main(int argc, char** const argv){
           vobs0.push_back(obs);
         }
 
-        run_test(tree_file, Ns, num_total_bins, Nchar, vobs0, Nchar0, rates, ssize, tolerance, miter, vobs, obs_decomp, comps, lnl_type, opt_type, debug);
+        run_test(tree_file, Ns, num_total_bins, Nchar, vobs0, input_data.seg_size, rates, ssize, tolerance, miter, vobs, obs_decomp, comps, lnl_type, opt_type, debug);
 
     }else if(mode == 2){
         cout << "Computing the likelihood of a given tree from copy number profile " << endl;
