@@ -28,7 +28,6 @@ This package is mostly written in C++. There are a few scripts written in R and 
 * Required R libraries for postprocessing
   * `optparse`
   * `copynumber`
-  * `reshape`
   * `tools`
   * `tidyverse`
   * `ggtree`
@@ -74,7 +73,6 @@ BiocManager::install("ggtree")
 
 install.packages("optparse")
 install.packages("tidyverse")
-install.packages("reshape")
 install.packages("ape")
 install.packages("phangorn")
 
@@ -178,7 +176,7 @@ Please see run-sveta.sh to learn how to set different parameters.
 
 
 ## Output
-* *-cn.txt.gz: The total copy number at each site for each sample
+* *-cn.txt.gz: The total copy number at each site for each sample, including the normal sample
 * *-rel-times.txt: The sampling time of tip nodes
 * *-allele-cn.txt.gz: The allele-specific copy number at each site for each sample
 * *-rcn.txt.gz: The relative total copy number at each site for each sample

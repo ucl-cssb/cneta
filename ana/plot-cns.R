@@ -1,71 +1,23 @@
 #!/usr/bin/env Rscript
 
-suppressMessages(library(copynumber))
-suppressMessages(library(reshape))
-suppressMessages(library(tools))
-suppressMessages(library(tidyverse))
 suppressMessages(library(optparse))
+suppressMessages(library(tidyverse))
 
-
-get.cn.data.by.bin <- function(d, bins_4401){
-  md <- melt(d, id=c("sample","chromosome","index"))
-  data <- cast(md, chromosome + index ~ sample)
-  data %>% group_by(chromosome) %>% count() -> bin_count
-  bins_4401 %>% group_by(chromosome) %>% count() -> ref_bin_count
-
-  if(sum(bin_count$n) == sum(ref_bin_count$n)){
-    # When the input data have 4401 bins
-    data <- cbind(bins_4401, data)
+# from https://stackoverflow.com/questions/47044068/get-the-path-of-current-script/47045368
+getCurrentFileLocation <-  function(){
+  this_file <- commandArgs() %>% 
+    tibble::enframe(name = NULL) %>%
+    tidyr::separate(col=value, into=c("key", "value"), sep="=", fill='right') %>%
+    dplyr::filter(key == "--file") %>%
+    dplyr::pull(value)
+  if (length(this_file)==0)
+  {
+    this_file <- rstudioapi::getSourceEditorContext()$path
   }
-  else{ # When the data have less bins
-    # Change reference bins to the desired number
-    # adapted from https://jennybc.github.io/purrr-tutorial/ls12_different-sized-samples.html
-    nested_bins <- bins_4401 %>%
-      group_by(chromosome) %>%   # prep for work by Species
-      nest() %>%              # --> one row per Species
-      ungroup() %>%
-      mutate(n=bin_count$n) # add sample sizes
-
-    sampled_bins <- nested_bins %>%
-      mutate(samp = map2(data, n, sample_n))
-
-    sampled_bins %<>%
-      select(-data) %>%
-      unnest(samp) %>% arrange(chromosome, start) %>% select(-c(n))
-
-    data <- cbind(sampled_bins, data)
- }
-
-  data <- data[,-c(3,4,5)]
-
-  return(data)
+  return(dirname(this_file))
 }
 
-
-
-get.outfile.name <- function(in_file){
-  dir <- dirname(in_file)
-  stub <- file_path_sans_ext(basename(in_file), compression = T)
-
-  fout <- file.path(dir, paste("plot-",stub,".pdf",sep=""))
-
-  return(fout)
-}
-
-
-# Plot CNP as segment lines
-plot.cn <- function(in_file, out_file, bins_4401){
-  d <- read.table(in_file, header=FALSE)
-  names(d) <- c("sample", "chromosome", "index", "cn")
-  nsample <- length(unique(d$sample))
-
-  data <- get.cn.data.by.bin(d, bins_4401)
-
-  #par(ask=F)
-  pdf(out_file, height=10, width=20)
-  plotGenome(data=data, ylab="copy number", layout=c(2,3), sample=c(1:nsample), equalRange=FALSE, q=0, col="red" )
-  dev.off()
-}
+source(file.path(getCurrentFileLocation(), "plot-util.R"))
 
 
 
@@ -75,7 +27,7 @@ option_list = list(
   make_option(c("-b", "--bin_file"), type="character", default="",
               help="The file which contains the location of each bin when the bin size is 500 Kbp [default=%default]", metavar="character"),
   # make_option(c("", "--pos_file"), type="character", default="",
-              # help="The file which contains the positions of each site [default=%default]", metavar="character"),  
+              # help="The file which contains the positions of each site [default=%default]", metavar="character"),
   make_option(c("-o", "--out_file"), type="character", default="",
               help="The name of output file [default=%default]", metavar="character"),
   make_option(c("-d", "--data_dir"), type="character", default="",

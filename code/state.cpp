@@ -76,8 +76,8 @@ void initialize_asr_table(const vector<int>& obs, const evo_tree& rtree, const v
         for(auto b : blens){
             cout << "\t" << b;
         }
-        cout << endl;  
-    }       
+        cout << endl;
+    }
 
     for(int i = 0; i < rtree.nleaf - 1; ++i){
         // cout << "node " << i + 1  << ", observed CN " << obs[i] << endl;
@@ -119,7 +119,7 @@ void initialize_asr_table(const vector<int>& obs, const evo_tree& rtree, const v
             for(int m = 0; m < tip_states.size(); ++m){
                 int k = tip_states[m];
                 if(debug){
-                    cout << "parent state " << j << ", child state " << k << endl;                   
+                    cout << "parent state " << j << ", child state " << k << endl;
                 }
                 double li = 0.0;
                 if(model == MK){
@@ -591,13 +591,13 @@ void set_pmat(const evo_tree& rtree, int Ns, int nstate, int model, int cn_max, 
       for(auto b : blens){
           cout << "\t" << b;
       }
-      cout << endl;  
-         
+      cout << endl;
+
       for(int i = 0; i < pmat_per_blen.size(); ++i){
           double blen = blens[i];
           cout << "Pmatrix for branch length " << blen << endl;
           r8mat_print(nstate, nstate, pmat_per_blen[i], "  P matrix:");
-      }     
+      }
   }
 
   delete [] qmat;
@@ -748,43 +748,43 @@ string get_prob_line(const vector<vector<double>>& L_sk_k, int nid, int nchr, in
     //    + "\t" + to_string(cn) + "\t" + to_string(max_ln);
     // cout << line;
 
-    // need to convert state probability to cn probability 
-    if(is_total){       
+    // need to convert state probability to cn probability
+    if(is_total){
         vector<double> Lsk_cn(cn_max + 1, 0.0);  // aggregate probabilities over the same total CN
         for(int i = 0; i < L_sk_k[nid].size(); i++){
             // cout << "\t" << to_string(L_sk_k[nid][i]);
             int cni = state_to_total_cn(i, cn_max);
             Lsk_cn[cni] += L_sk_k[nid][i];
-        }  
+        }
         // change to relative probability
         double sum_prob = accumulate(Lsk_cn.begin(), Lsk_cn.end(), 0.0);
         for(int i = 0; i < Lsk_cn.size(); i++){
             double rprob = Lsk_cn[i] / sum_prob;
             line += "\t" + to_string(rprob);
-        }          
+        }
     }else{
+        double sum_prob = accumulate(L_sk_k[nid].begin(), L_sk_k[nid].end(), 0.0);
         for(int i = 0; i < L_sk_k[nid].size(); i++){
-            line += "\t" + to_string(L_sk_k[nid][i]);
+            double rprob = L_sk_k[nid][i] / sum_prob;
+            line += "\t" + to_string(rprob);
         }
     }
-
-    // cout << endl;
 
     return line;
 }
 
 
 void get_site_cnp(const vector<vector<double>>& L_sk_k, int nid, int nchr, int nc, int is_total, int cn_max, copy_number& cnp){
-    // need to convert state probability to cn probability 
-    if(is_total){       
+    // need to convert state probability to cn probability
+    if(is_total){
         vector<double> Lsk_cn(cn_max + 1, 0.0);
         for(int i = 0; i < L_sk_k[nid].size(); i++){
             int cni = state_to_total_cn(i, cn_max);
             Lsk_cn[cni] += L_sk_k[nid][i];
-        }     
+        }
         // get the most likely total CN
         int tcn = distance(Lsk_cn.begin(), max_element(Lsk_cn.begin(), Lsk_cn.end()));
-        cnp[nchr][nc] = tcn;        
+        cnp[nchr][nc] = tcn;
     }else{
         // get the most likely allele-specific CN
         int state = distance(L_sk_k[nid].begin(), max_element(L_sk_k[nid].begin(), L_sk_k[nid].end()));
@@ -808,11 +808,11 @@ void print_node_cnp(ofstream& fout, const copy_number& cnp, int nid, int cn_max,
                 int cnA;
                 int cnB;
                 int state = seg.second;
-                state_to_allele_cn(state, cn_max, cnA, cnB);             
+                state_to_allele_cn(state, cn_max, cnA, cnB);
                 line_cn += to_string(cnA) + "\t" + to_string(cnB);
             }
-            fout << line_cn << endl;  
-        }  
+            fout << line_cn << endl;
+        }
     }
 }
 
@@ -823,7 +823,7 @@ double reconstruct_marginal_ancestral_state_decomp(const evo_tree& rtree, map<in
     if(debug) cout << "\treconstruct marginal ancestral state with independent chain model" << endl;
 
     string ofile_mrca = ofile + ".mrca.state";
-    ofstream fout(ofile_mrca);   
+    ofstream fout(ofile_mrca);
 
     int Ns = rtree.nleaf - 1;
     vector<int> cn_mrca; // CNs for MRCA
@@ -842,7 +842,7 @@ double reconstruct_marginal_ancestral_state_decomp(const evo_tree& rtree, map<in
 
     // for each chromosome
     for(auto vcn : vobs){
-      int nchr = vcn.first;     
+      int nchr = vcn.first;
       if(debug) cout << "Computing likelihood on Chr " << nchr << endl;
       double site_logL = 0.0;   // log likelihood for all sites on a chromosome
       for(int nc = 0; nc < vobs[nchr].size(); nc++){    // for each segment on the chromosome
@@ -921,21 +921,22 @@ double reconstruct_marginal_ancestral_state(const evo_tree& rtree, map<int, vect
     if(debug) cout << "\treconstruct marginal ancestral state" << endl;
 
     string ofile_mrca = ofile + ".mrca.state";
-    ofstream fout(ofile_mrca);   
-    string header="node\tsite";
-    for(int i = 0; i <= cn_max; i++){
-        header += "\tprobablity_" + to_string(i);
-    }
-    fout << header << endl;
+    ofstream fout(ofile_mrca);
 
     string ofile_mrca_cn = ofile + ".mrca.cn";
-    ofstream fout_cn(ofile_mrca_cn);   
+    ofstream fout_cn(ofile_mrca_cn);
 
     int Ns = rtree.nleaf - 1;
+    int nid = 2 * Ns;    // node ID for MRCA
     // For copy number instantaneous changes
     int nstate = cn_max + 1;
     if(model == BOUNDA) nstate = (cn_max + 1) * (cn_max + 2) / 2;
-    int nid = 2 * Ns;    // node ID for MRCA
+
+    string header="node\tsite";
+    for(int i = 0; i < nstate; i++){
+        header += "\tprobablity_" + to_string(i);
+    }
+    fout << header << endl;
 
     // Find the transition probability matrix for each branch
     vector<double> blens;
@@ -949,11 +950,11 @@ double reconstruct_marginal_ancestral_state(const evo_tree& rtree, map<int, vect
 
     // for each chromosome
     for(auto vcn : vobs){
-      int nchr = vcn.first;      
+      int nchr = vcn.first;
       if(debug) cout << "Computing likelihood for chr " << nchr << " with  " << vobs[nchr].size() << " sites" << endl;
       double site_logL = 0.0;   // log likelihood for all sites on a chromosome
-      
-      for(int nc = 0; nc < vobs[nchr].size(); nc++){    // for each segment on the chromosome        
+
+      for(int nc = 0; nc < vobs[nchr].size(); nc++){    // for each segment on the chromosome
           // for each site of the chromosome (may be repeated)
           vector<int> obs = vobs[nchr][nc];
           vector<vector<double>> L_sk_k(2 * rtree.nleaf - 1, vector<double>(nstate, 0.0));
@@ -979,24 +980,11 @@ double reconstruct_marginal_ancestral_state(const evo_tree& rtree, map<int, vect
           site_logL += extract_tree_lnl(L_sk_k, Ns, model);
 
           if(!is_repeated){
-            string line = get_prob_line(L_sk_k, nid, nchr, nc, model, cn_max);
+            string line = get_prob_line(L_sk_k, nid, nchr, nc, is_total, cn_max);
             // fout << setprecision(dbl::max_digits10) << line << endl;
             fout << line << endl;
-
-        //     // output tip nodes to use plotting function in R 
-        //     for(int j = 0; j < Ns; j++){
-        //         line = to_string(j + 1) + "\t" + to_string(nchr) + "_" + to_string(nc + 1);
-        //         for(int i = 0; i <= cn_max; i++){
-        //             if(obs[j] == i){
-        //                 line += "\t1"; 
-        //             }else{
-        //                 line += "\t0"; 
-        //             }
-        //         }
-        //         fout << line << endl;
-        //     }
           }
-          get_site_cnp(L_sk_k, nid, nchr, nc, model, cn_max, cn_mrca);
+          get_site_cnp(L_sk_k, nid, nchr, nc, is_total, cn_max, cn_mrca);
       }
 
       logL += site_logL;
@@ -1030,7 +1018,7 @@ double reconstruct_marginal_ancestral_state(const evo_tree& rtree, map<int, vect
 void reconstruct_joint_ancestral_state_decomp(const evo_tree& rtree, map<int, vector<vector<int>>>& vobs,  vector<int>& knodes, const set<vector<int>>& comps, MAX_DECOMP& max_decomp, int use_repeat, int cn_max, string ofile, int is_total){
     int debug = 0;
     if(debug) cout << "\treconstruct joint ancestral state with independent chain model" << endl;
-   
+
     string ofile_joint = ofile + ".joint.state";
     ofstream fout(ofile_joint);
 
@@ -1049,9 +1037,9 @@ void reconstruct_joint_ancestral_state_decomp(const evo_tree& rtree, map<int, ve
 
     // for(int nchr = 1; nchr <= vobs.size(); nchr++){     // for each chromosome
     for(auto vcn : vobs){
-      int nchr = vcn.first;  
+      int nchr = vcn.first;
       if(debug) cout << "Computing likelihood on Chr " << nchr << " with " << vobs[nchr].size() << " sites " << endl;
-      
+
       for(int nc = 0; nc < vobs[nchr].size(); nc++){    // for each segment on the chromosome
           if(debug) cout << "\tfor site " << nc << " on chromosome " << nchr << endl;
           // for each site of the chromosome (may be repeated)
@@ -1118,16 +1106,16 @@ void reconstruct_joint_ancestral_state_decomp(const evo_tree& rtree, map<int, ve
 void reconstruct_joint_ancestral_state(const evo_tree& rtree, map<int, vector<vector<int>>>& vobs, vector<int>& knodes, int model, int cn_max, int use_repeat, int is_total, int m_max, string ofile){
     int debug = 0;
     if(debug) cout << "\treconstruct joint ancestral state" << endl;
-   
+
     string ofile_joint = ofile + ".joint.state";
     ofstream fout(ofile_joint);
     string header;
     if(is_total){
         header = "node\tsite\tcn";
     }else{
-        header = "node\tsite\tstate";
+        header = "node\tsite\tcnA\tcnB";
     }
-    
+
     fout << header << endl;
 
     string ofile_joint_cn = ofile + ".joint.cn";
@@ -1136,7 +1124,7 @@ void reconstruct_joint_ancestral_state(const evo_tree& rtree, map<int, vector<ve
     int Ns = rtree.nleaf - 1;
     // For copy number instantaneous changes
     int nstate = cn_max + 1;
-    if(model == BOUNDA) nstate = (cn_max + 1) * (cn_max + 2) / 2;  
+    if(model == BOUNDA) nstate = (cn_max + 1) * (cn_max + 2) / 2;
     int max_id = 2 * Ns;    // node ID for MRCA
 
     // Find the transition probability matrix for each branch
@@ -1152,7 +1140,7 @@ void reconstruct_joint_ancestral_state(const evo_tree& rtree, map<int, vector<ve
         }
         cout << endl;
     }
-    
+
     int ntotn = 2 * rtree.nleaf - 1;
     map<vector<int>, vector<vector<double>>> sites_lnl_map;   // ignore chr ID as the likelihood is the same
     map<vector<int>, vector<vector<int>>> sites_state_map;
@@ -1161,7 +1149,7 @@ void reconstruct_joint_ancestral_state(const evo_tree& rtree, map<int, vector<ve
 
     // for each chromosome
     for(auto vcn : vobs){
-      int nchr = vcn.first;  
+      int nchr = vcn.first;
       if(debug) cout << "Computing likelihood on Chr " << nchr << " with " << vobs[nchr].size() << " sites" << endl;
 
       for(int nc = 0; nc < vobs[nchr].size(); nc++){    // for each segment on the chromosome
@@ -1196,14 +1184,14 @@ void reconstruct_joint_ancestral_state(const evo_tree& rtree, map<int, vector<ve
           if(debug){
             cout << " Get the likelihood table of all internal nodes" << endl;
             print_tree_lnl(rtree, L_sk_k, nstate);
-            print_tree_state(rtree, S_sk_k, nstate);             
+            print_tree_state(rtree, S_sk_k, nstate);
           }
 
         map<int, int> asr_states;     // The state ID used in rate matrix
         set<vector<int>> comps;    // empty containtor for argument
         extract_tree_ancestral_state(rtree, knodes, comps, L_sk_k, S_sk_k, model, cn_max, is_total, m_max, asr_states);
 
-        if(!is_repeated){        
+        if(!is_repeated){
             // int best_state = asr_states[Ns + 1];
             // cout << "optimal state at node "  << Ns + 1 << " is " << best_state << endl;
             // double prob = L_sk_k[max_id][best_state];  // posterior probability of optimal reconstruction
@@ -1219,22 +1207,22 @@ void reconstruct_joint_ancestral_state(const evo_tree& rtree, map<int, vector<ve
             for(int nid = max_id; nid > Ns + 1; nid--){
                 int state = asr_states[nid];  // state assigned to nid when its parent is optimal
                 string line = to_string(nid + 1) + "\t" + to_string(nchr) + "_" + to_string(nc + 1);
-        
+
                 if(is_total){
                     int tcn = state_to_total_cn(state, cn_max);
-                    line += "\t" + to_string(tcn); 
+                    line += "\t" + to_string(tcn);
                 }else{
                     int cnA, cnB;
                     state_to_allele_cn(state, cn_max, cnA, cnB);
-                    line += "\t" + to_string(cnA) + "\t" + to_string(cnB); 
+                    line += "\t" + to_string(cnA) + "\t" + to_string(cnB);
                 }
 
                 // line += "\t" + to_string(prob_rel);
-               
+
                 // fout << setprecision(dbl::max_digits10) << line << endl;
                 fout << line << endl;
             }
-        } 
+        }
         // For all sites
         for(int nid = max_id; nid > Ns + 1; nid--){
             int state = asr_states[nid];
@@ -1245,9 +1233,10 @@ void reconstruct_joint_ancestral_state(const evo_tree& rtree, map<int, vector<ve
             }else{
                 cnps[nid][nchr][nc] = state;
             }
-        }         
+        }
       }
     } // for each chromosome
+
      for(int nid = max_id; nid > Ns + 1; nid--){
         print_node_cnp(fout_cn, cnps[nid], nid, cn_max, is_total);
      }
@@ -1260,7 +1249,7 @@ void reconstruct_joint_ancestral_state(const evo_tree& rtree, map<int, vector<ve
             ofstream fout3("./pat_all");
             // for each chromosome
             for(auto vcn : vobs){
-                int nchr = vcn.first;  
+                int nchr = vcn.first;
                 for(int nc = 0; nc < vobs[nchr].size(); nc++){    // for each segment on the chromosome
                     // for each site of the chromosome (may be repeated)
                     vector<int> obs = vobs[nchr][nc];
@@ -1278,8 +1267,8 @@ void reconstruct_joint_ancestral_state(const evo_tree& rtree, map<int, vector<ve
                 vector<int> key = sm.first;
                 for(auto c : key){
                     fout1 << "\t" << c;
-                }  
-                fout1 << endl;        
+                }
+                fout1 << endl;
             }
             fout1.close();
 
@@ -1289,10 +1278,10 @@ void reconstruct_joint_ancestral_state(const evo_tree& rtree, map<int, vector<ve
             //     fout2 << sd.second;
             //     for(auto c : sd.first){
             //         fout2 << "\t" << c;
-            //     }  
-            //     fout2 << endl;             
+            //     }
+            //     fout2 << endl;
             // }
-            // fout2.close();           
+            // fout2.close();
         }
     }
 
