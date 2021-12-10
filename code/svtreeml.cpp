@@ -326,7 +326,7 @@ void do_hill_climbing(evo_tree& min_nlnl_tree, int Ns, int Npop, int Ngen, int i
     if(Ns <= LARGE_TREE)   max_tree_num = NUM_TREES[Ns - 1];
 
     // initialize candidate tree set
-    vector<evo_tree> trees = get_initial_trees(init_tree, dir_itrees, Ns, max_tree_num, rates, tobs, max_tobs, age, max_tree_num, cons, itree_param, debug);
+    vector<evo_tree> trees = get_initial_trees(init_tree, dir_itrees, Ns, Npop, rates, tobs, max_tobs, age, max_tree_num, cons, itree_param, debug);
     int num2init = trees.size();
     vector<double> lnLs(num2init, 0.0);
     vector<int> index(num2init, 0);      // index of trees starting from 0

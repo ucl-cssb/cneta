@@ -1243,20 +1243,19 @@ evo_tree read_parsimony_tree(const string& tree_file, const int& Ns, const vecto
         rtree.print();
     }
 
-    double old_tree_height = get_tree_height(rtree.get_node_times());
-    if(cons && old_tree_height > age){
+    // bool non_zero = std::any_of(tobs.begin(), tobs.end(), [](double i) { return i > 0.0; });
+    if(cons){
+      double old_tree_height = get_tree_height(rtree.get_node_times());
+      if(old_tree_height > age){
         double min_height = *max_element(tobs.begin(), tobs.end());
         double max_height = age - min_height;  // allow adding extra time at the tips
         assert(min_height < max_height);
         double tree_height = runiform(r, min_height, max_height);
         double ratio = tree_height / old_tree_height;
         rtree.scale_time(ratio);
-    }
-
-    bool non_zero = std::any_of(tobs.begin(), tobs.end(), [](double i) { return i > 0.0; });
-    if(non_zero){
-        adjust_tip_time(rtree, tobs, Ns, 1, debug);
-    }
+      }
+      adjust_tip_time(rtree, tobs, Ns, 1, debug);
+    }    
 
     if(debug){
         cout << "adjusted tree: " << rtree.make_newick() << endl;

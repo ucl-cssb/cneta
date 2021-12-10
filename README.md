@@ -246,7 +246,7 @@ There are four Markov models of evolution for building trees from the copy numbe
 * model 0: Mk model (deprecated)
 * model 1: bounded model of total copy number (deprecated)
 * model 2: bounded model of allele-specific copy number
-* model 3: independent Markov chain model (with 3 chains)
+* model 3: independent Markov chain model (with 3 chains, in development)
 
 The first three models are the same as those for simulation.
 The last one (model of independent Markov chains) should be used for tree reconstruction on data with chromosome gain/loss and WGD.

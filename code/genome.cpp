@@ -777,8 +777,10 @@ int generate_duplication(genome& g, int c, int seg_id, int mean_dup_size, int mo
     if(u < 0.5){
         // randomly select a position at the same chr?
         if(debug) cout << "Interspersed duplication" << endl;
-        ins_chr = gsl_rng_uniform_int(r, g.chrs.size());
-        ins_start = gsl_rng_uniform_int(r, g.chrs[ins_chr].size());
+        while(g.chrs[ins_chr].size() <= 0){
+            ins_chr = gsl_rng_uniform_int(r, g.chrs.size());
+            ins_start = gsl_rng_uniform_int(r, g.chrs[ins_chr].size());
+        }
     }else{ 
         if(debug) cout << "Tandem duplication" << endl;
         ins_start = orig_end;
