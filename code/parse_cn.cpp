@@ -322,8 +322,6 @@ void get_sample_mcn(const vector<vector<vector<int>>>& s_info, vector<int>& samp
 }
 
 
-
-
 void get_var_bins(const vector<vector<vector<int>>>& s_info, int Ns, int num_total_bins, int& num_invar_bins, vector<int>& var_bins, int is_total, int debug){
     for(int k = 0; k < num_total_bins; ++k){
         // using sum of CNs across samples to detect variant bins does not work for special cases
@@ -373,8 +371,8 @@ vector<vector<int>> get_invar_segs(const vector<vector<vector<int>>>& s_info, in
     get_var_bins(s_info, Ns, num_total_bins, num_invar_bins, var_bins, is_total, debug);
 
     vector<vector<int>> segs;
-    for(int k = 0; k < num_total_bins;){  // only invariable bins are considered
-        if(var_bins[k]){
+    for(int k = 0; k < num_total_bins;){  
+        if(var_bins[k]){ // only starting from variable bins
           int chr = s_info[0][k][0];
           int seg_start = s_info[0][k][1];
           int id_start = k;
@@ -387,7 +385,7 @@ vector<vector<int>> get_invar_segs(const vector<vector<vector<int>>>& s_info, in
           // Check the subsequent bins
           bool const_cn = true;
           k++;
-          while(k < num_total_bins && var_bins[k] && const_cn){
+          while(k < num_total_bins && var_bins[k] && const_cn){ // break if next bin is invarible or has different CN
               vector<int> curr_bin;
               for(int j = 0; j < Ns; ++j) curr_bin.push_back(s_info[j][k][2]);
               if(is_equal_vector(prev_bin, curr_bin) && s_info[0][k][0] == chr){
@@ -423,7 +421,7 @@ vector<vector<int>> get_all_segs(const vector<vector<vector<int>>>& s_info, int 
     get_var_bins(s_info, Ns, num_total_bins, num_invar_bins, var_bins, is_total, debug);
 
     vector<vector<int>> segs;
-    if(incl_all){   // bins with normal CNs across all samples are also included
+    if(incl_all){   // bins with normal CNs across all samples are also included in the CN matrix
         for(int k = 0; k < num_total_bins; k++){
             int chr = s_info[0][k][0];
             int seg_start = s_info[0][k][1];
@@ -433,7 +431,7 @@ vector<vector<int>> get_all_segs(const vector<vector<vector<int>>>& s_info, int 
             vector<int> seg{chr, id_start, id_end, seg_start, seg_end};
             segs.push_back(seg);
         }
-    }else{
+    }else{  // normal sites will be accounted for based on the count
         for(int k = 0; k < num_total_bins; k++){
             if(var_bins[k]){
                 int chr = s_info[0][k][0];

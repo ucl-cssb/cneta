@@ -359,7 +359,7 @@ void generate_coal_tree(const int& nsample, gsl_rng* r, long unsigned (*fp_myrng
 
   // For compatibility with ape in R, root node must be labelled
   // 0 to nsample-1 are leaf, nsample is germline, nsample + 1 is root
-  // all other nodes ids start from here
+  // all other node ids start from nsample + 2
   int node_count = nsample + 2;
 
   // create leaf nodes
@@ -417,7 +417,7 @@ void generate_coal_tree(const int& nsample, gsl_rng* r, long unsigned (*fp_myrng
   double t = tn;
   if(beta > 0){  // simulate exponential growth
       // t = (log(1 + beta * tn * exp(- beta * t_tot))) / beta;
-      t = ((log(exp(beta * t_tot) + beta * tn)) / beta)- t_tot;    // Formula in CoalEvol7.3.5.c
+      t = ((log(exp(beta * t_tot) + beta * tn)) / beta) - t_tot;    // Formula in CoalEvol7.3.5.c
   }
   t_tot += t;
   epoch_times.push_back(t_tot);

@@ -1233,7 +1233,7 @@ int main (int argc, char** const argv) {
       ("nregion,r", po::value<int>(&Ns)->default_value(5), "number of regions")
       ("age,a", po::value<int>(&age)->default_value(MAX_AGE), "age of the patient to simulate")
 
-      ("mode", po::value<int>(&mode)->default_value(0), "running mode of the program (0: simulating genome in fix-sized bins (4401 bins of size 500 Kbp by default), 1: simulating genome in segments of unknown size, 2 to 4: test)")
+      ("mode", po::value<int>(&mode)->default_value(0), "running mode of the program (0: simulating genome in fix-sized bins (4401 bins of size 500 Kbp by default), 1: simulating genome in segments of variable size, 2 to 4: test)")
       ("method", po::value<int>(&method)->default_value(0), "method of simulation (0: simulating waiting times, 1: simulating sequences directly)")
       ("model,d", po::value<int>(&model)->default_value(0), "model of evolution (0: Mk, 1: one-step bounded (total), 2: one-step bounded (allele-specific), 3: infinite sites)")
 
