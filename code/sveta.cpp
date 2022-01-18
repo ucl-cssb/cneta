@@ -398,7 +398,7 @@ void print_sequences(map<int, copy_number>& cn_matrix, int cn_max, int model, in
 
 
 // Simulate mutations under different models by simulating waiting times of a Markov chain
-// Each mutation occur at some sites on one chromosome (allele-specific)
+// Each mutation occur at some sites on one chromosome (haplotype-specific)
 vector<mutation> generate_mutation_by_model(genome& g, const int& edge_id, const double& blength, const double& node_time, const vector<int>& chr_lengths, const vector<double>& rate_consts, const SV_SIZE& sv_size, int model, int cn_max, int& num_fail, int debug){
     if(debug){
         cout << "\tGenerate_mutations at node ID " << g.node_id + 1 << " (time " << node_time << "), edge ID " << edge_id + 1 << " with branch length:" << "\t" << blength << endl;
@@ -1235,7 +1235,7 @@ int main (int argc, char** const argv) {
 
       ("mode", po::value<int>(&mode)->default_value(0), "running mode of the program (0: simulating genome in fix-sized bins (4401 bins of size 500 Kbp by default), 1: simulating genome in segments of variable size, 2 to 4: test)")
       ("method", po::value<int>(&method)->default_value(0), "method of simulation (0: simulating waiting times, 1: simulating sequences directly)")
-      ("model,d", po::value<int>(&model)->default_value(0), "model of evolution (0: Mk, 1: one-step bounded (total), 2: one-step bounded (allele-specific), 3: infinite sites)")
+      ("model,d", po::value<int>(&model)->default_value(0), "model of evolution (0: Mk, 1: one-step bounded (total), 2: one-step bounded (haplotype-specific), 3: infinite sites)")
 
       // for generating random coalescence tree
       ("epop,e", po::value<int>(&Ne)->default_value(2), "effective population size of cell populations")
@@ -1261,7 +1261,7 @@ int main (int argc, char** const argv) {
 
       // output options
       ("prefix,p", po::value<string>(&prefix)->default_value(""), "prefix of output file (sim-data-N if not specified")
-      ("print_allele", po::value<int>(&print_allele)->default_value(1), "whether or not to output allele-specific copy numbers")
+      ("print_allele", po::value<int>(&print_allele)->default_value(1), "whether or not to output haplotype-specific copy numbers")
       ("print_mut", po::value<int>(&print_mut)->default_value(1), "whether or not to output the list of mutations")
       ("print_nex", po::value<int>(&print_nex)->default_value(1), "whether or not to output the tree in NEXUS format")
       ("print_relative", po::value<int>(&print_relative)->default_value(0), "whether or not to print relative copy numbers, similar to output of CGHcall: -2 (double deletion), -1 (single deletion), 0 (normal), 1 (gain), 2 (double gain)")
@@ -1361,9 +1361,9 @@ int main (int argc, char** const argv) {
             }
         }
         cout << "Number of segments simulated is " << num_seg << endl;
-    }else{    // When simulating waiting times, only simulate allele-specific model
+    }else{    // When simulating waiting times, only simulate haplotype-specific model
       if(model == BOUNDT){
-          cout << "When simulating waiting times, only allele-specific model is allowed" << endl;
+          cout << "When simulating waiting times, only haplotype-specific model is allowed" << endl;
           model = BOUNDA;
       }
     }

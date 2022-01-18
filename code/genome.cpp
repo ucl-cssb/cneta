@@ -173,18 +173,18 @@ void genome::calculate_cn(){
 }
 
 
-// Compute allele-specific copy number
+// Compute haplotype-specific copy number
 void genome::calculate_allele_cn(){
   int size = reset_cn(allele_cn_profile);
   if(size != num_site * 2){
-      cout << "Wrong allele-specific CNP!" << endl;
+      cout << "Wrong haplotype-specific CNP!" << endl;
       print_cnp(allele_cn_profile);
       for(auto cnp: allele_cn_profile){
           cout << cnp.second.size() << endl;
       }      
   }
   
-  // cout << "Computing allele-specific copy number " << endl;
+  // cout << "Computing haplotype-specific copy number " << endl;
   int total_chr = NUM_CHR * NORM_PLOIDY;
   // i is from 0 to total_chr - 1 given that chr gain/loss or WGD will only lead to empty chr vector
   for(int i = 0; i < chrs.size(); ++i){
@@ -282,7 +282,7 @@ void genome::write_allele_rcn(ogzstream& of, gsl_rng* r){
     // std::cout << "Number of WGD events is " << nwgd << ", so ploidy is " << ploidy << endl;
     int allele_ploidy = ploidy / 2;
 
-    // cout << "Writing allele-specific copy number " << endl;
+    // cout << "Writing haplotype-specific copy number " << endl;
     for(int i = 0; i < allele_cn_profile.size() / 2; i++){
         map<int, int> segs1 = allele_cn_profile[i];
         map<int, int> segs2 = allele_cn_profile[i + NUM_CHR];
@@ -305,7 +305,7 @@ void genome::write_allele_rcn(ogzstream& of, gsl_rng* r){
 void genome::write_allele_cn(ogzstream& of){
   int debug = 0;
   assert(allele_cn_profile.size() == 2 * NUM_CHR);
-  // cout << "Writing allele-specific copy number " << endl;
+  // cout << "Writing haplotype-specific copy number " << endl;
   for(int i = 0; i < NUM_CHR; i++){
      map<int, int> segs1 = allele_cn_profile[i];
      map<int, int> segs2 = allele_cn_profile[i + NUM_CHR];

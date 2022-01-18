@@ -104,7 +104,7 @@ void initialize_asr_table(const vector<int>& obs, const evo_tree& rtree, const v
               for(int k = si; k <= ei; k++){
                  tip_states.push_back(k);
               }
-          }else{ // With allele-specific copy number, only the specific site needs to be filled
+          }else{ // With haplotype-specific copy number, only the specific site needs to be filled
               tip_states.push_back(obs[i]);
           }
         }
@@ -786,7 +786,7 @@ void get_site_cnp(const vector<vector<double>>& L_sk_k, int nid, int nchr, int n
         int tcn = distance(Lsk_cn.begin(), max_element(Lsk_cn.begin(), Lsk_cn.end()));
         cnp[nchr][nc] = tcn;
     }else{
-        // get the most likely allele-specific CN
+        // get the most likely haplotype-specific CN
         int state = distance(L_sk_k[nid].begin(), max_element(L_sk_k[nid].begin(), L_sk_k[nid].end()));
         cnp[nchr][nc] = state;
     }

@@ -793,7 +793,7 @@ double compute_tree_likelihood(evo_tree& tree, map<int, vector<vector<int>>>& vo
       if(debug) cout << "\nComputing the likelihood based on independent Markov chain model " << endl;
       Ls = get_likelihood_decomp(tree, vobs, obs_decomp, comps, lnl_type);
     }else{
-      if(debug) cout << "\nComputing the likelihood based on allele-specific model " << endl;
+      if(debug) cout << "\nComputing the likelihood based on haplotype-specific model " << endl;
       Ls = get_likelihood_revised(tree, vobs, lnl_type);
     }
 
@@ -975,7 +975,7 @@ void print_desc(int cons, int maxj, int correct_bias, int use_repeat, int optim,
           break;
       }
       case BOUNDA:{
-          cout << "\nAssuming One-step bounded model of allele-specific copy number" << endl;
+          cout << "\nAssuming One-step bounded model of haplotype-specific copy number" << endl;
           break;
       }
       case DECOMP:{
@@ -1079,10 +1079,10 @@ int main(int argc, char** const argv){
 
     ("tree_file", po::value<string>(&tree_file)->default_value(""), "input tree file")
 
-    ("mode", po::value<int>(&mode)->default_value(1), "running mode of the program (0: Compute maximum likelihood tree from copy number profile; 1: Test on example data; 2: Compute the likelihood of a given tree with branch length; 3: Compute the maximum likelihood of a given tree; 4: Infer ancestral states of a given tree from copy number profile)")
+    ("mode", po::value<int>(&mode)->default_value(0), "running mode of the program (0: Compute maximum likelihood tree from copy number profile; 1: Test on example data; 2: Compute the likelihood of a given tree with branch length; 3: Compute the maximum likelihood of a given tree; 4: Infer ancestral states of a given tree from copy number profile)")
     ("bootstrap,b", po::value<int>(&bootstrap)->default_value(0), "doing bootstrap or not")
 
-    ("model,d", po::value<int>(&model)->default_value(2), "model of evolution (0: Mk, 1: one-step bounded (total), 2: one-step bounded (allele-specific), 3: independent Markov chains)")
+    ("model,d", po::value<int>(&model)->default_value(2), "model of evolution (0: Mk, 1: one-step bounded (total), 2: one-step bounded (haplotype-specific), 3: independent Markov chains)")
     ("constrained", po::value<int>(&cons)->default_value(1), "constraints on branch length (0: none, 1: fixed total time)")
     ("estmu,u", po::value<int>(&maxj)->default_value(0), "estimation of mutation rate (0: mutation rate fixed to be the given value, 1: estimating mutation rate)")
     ("optim", po::value<int>(&optim)->default_value(1), "method of optimization (0: Simplex, 1: L-BFGS-B)")

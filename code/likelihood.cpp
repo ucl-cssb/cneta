@@ -33,7 +33,7 @@ void initialize_lnl_table(vector<vector<double>>& L_sk_k, const vector<int>& obs
                 for(int k = si; k <= ei; k++){
                     L_sk_k[i][k] = 1.0;
                 }
-            }else{ // With allele-specific copy number, only the specific site needs to be filled
+            }else{ // With haplotype-specific copy number, only the specific site needs to be filled
                 L_sk_k[i][obs[i]] = 1.0;
             }
         }
@@ -151,7 +151,7 @@ vector<vector<double>> initialize_lnl_table_decomp(vector<int>& obs, OBS_DECOMP&
 }
 
 
-// Assume the likelihood table is for each allele-specific copy number
+// Assume the likelihood table is for each haplotype-specific copy number
 double get_prob_children_decomp(vector<vector<double>>& L_sk_k, const evo_tree& rtree, map<int, set<vector<int>>>& decomp_table, int sk, int cn_max, int nstate, PROB_DECOMP& prob_decomp, DIM_DECOMP& dim_decomp, int ni, int nj, int bli, int blj, int is_total){
     int debug = 0;
     int s_wgd, s_chr, s_seg;
@@ -782,7 +782,7 @@ double get_likelihood_revised(evo_tree& rtree, map<int, vector<vector<int>>>& vo
       // Suppose the value is 2 for all samples
       int normal_cn = 2;
       if(!is_total){
-          normal_cn = 4;    // state ID for allele-specific CN 1/1
+          normal_cn = 4;    // state ID for haplotype-specific CN 1/1
       }
 
       vector<int> obs(rtree.nleaf - 1, normal_cn);
@@ -851,7 +851,7 @@ double get_likelihood_revised(evo_tree& rtree, map<int, vector<vector<int>>>& vo
 }
 
 // Computing likelihood when WGD and chr gain/loss are incorporated
-// Assume likelihood is for allele-specific information
+// Assume likelihood is for haplotype-specific information
 double get_likelihood_decomp(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type){
   int debug = 0;
   if(debug) cout << "\tget_likelihood from multiple chains" << endl;

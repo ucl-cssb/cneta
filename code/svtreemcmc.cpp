@@ -2118,7 +2118,7 @@ int main (int argc, char ** const argv) {
             ("n_gap", po::value<int>(&n_gap)->default_value(1), "sampling every kth samples ")
             ("sample_prior", po::value<int>(&sample_prior)->default_value(0), "whether or not to sample from the prior only")
 
-            ("model,d", po::value<int>(&model)->default_value(2), "model of evolution (0: Mk, 1: one-step bounded (total), 2: one-step bounded (allele-specific), 3: independent Markov chains")
+            ("model,d", po::value<int>(&model)->default_value(2), "model of evolution (0: Mk, 1: one-step bounded (total), 2: one-step bounded (haplotype-specific), 3: independent Markov chains")
             ("clock", po::value<int>(&clock)->default_value(0), "model of molecular clock (0: strict global, 1: random local clock)")
             ("fix_topology", po::value<int>(&fix_topology)->default_value(0), "whether or not to fix the topology of the tree")
             ("cons", po::value<int>(&cons)->default_value(1), "constraints on branch length (0: none, 1: fixed total time)")
@@ -2226,7 +2226,7 @@ int main (int argc, char ** const argv) {
         cout << "Assuming Mk model " << endl;
     }
     if(model == BOUNDT) cout << "Assuming One-step Bounded model " << endl;
-    if(model == BOUNDA) cout << "Assuming One-step allele-specific model " << endl;
+    if(model == BOUNDA) cout << "Assuming One-step haplotype-specific model " << endl;
 
     if(!cons){
         cout << "Assuming the tree is unconstrained " << endl;

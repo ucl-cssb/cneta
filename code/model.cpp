@@ -393,7 +393,7 @@ void insert_tuple_order(map<int, set<vector<int>>>& decomp_table, set<vector<int
 }
 
 
-// Get possible allele-specific combinations for a total copy number
+// Get possible haplotype-specific combinations for a total copy number
 void insert_tuple_allele_specific(map<int, set<vector<int>>>& decomp_table, set<vector<int>>& comps, int cn_max, int m_max, int i, int j1, int j2, int k1, int k2){
     int sum = pow(2, i + 1) + j1 + j2 + k1 + k2;
     // cout << i << "\t" << j1 << "\t" << j2 << "\t" << k1 << "\t" << k2 << "\t" << sum << endl;

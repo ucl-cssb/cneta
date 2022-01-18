@@ -10,7 +10,7 @@ library(optparse)
 
 option_list = list(
   make_option(c("-i", "--file_cn"), type = "character", default = "",
-              help = "input allele-specific copy number file [default=%default]", metavar = "character"),
+              help = "input haplotype-specific copy number file [default=%default]", metavar = "character"),
   make_option(c("-o", "--file_out"), type = "character", default = "",
               help = "The output TSV file to be used as input to MEDICC2 [default=%default]", metavar = "character")
 );

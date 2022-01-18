@@ -39,6 +39,8 @@ option_list = list(
               help="The file which contains the segment start and end ID in the input copy number file [default=%default]", metavar="character"),
   make_option(c("", "--cyto_file"), type="character", default="",
               help="The file which contains the chromosome boundaries in human reference genome (e.g. hg19) [default=%default]", metavar="character"),
+  make_option(c("", "--bin_file"), type="character", default="",
+              help="The file which contains the positions of bins used for calling copy numbers in human reference genome (e.g. hg19) [default=%default]", metavar="character"),
   make_option(c("-d", "--tree_dir"), type="character", default="",
               help="The directory containing all the tree files to plot [default=%default]", metavar="character"),
   make_option(c("-s", "--bstrap_dir"), type="character", default="",
@@ -70,7 +72,10 @@ option_list = list(
   make_option(c("-t", "--plot_type"), type="character", default="single",
               help="The type of plot, including: all (plotting all tree files in a directory), single (plotting a single tree file), bootstrap (plotting a single tree file with bootstrapping support) [default=%default]", metavar="character"),
   make_option(c("-l", "--tree_style"), type="character", default="simple",
-              help="The style of tree plot, including: simple (a simple tree with tip labels and branch lengths), xlim (adding xlim to the tree), age (x-axis as real age of the patient), and ci (plotting a single tree file with confidence interval of node ages) [default=%default]", metavar="character")
+              help="The style of tree plot, including: simple (a simple tree with tip labels and branch lengths), xlim (adding xlim to the tree), age (x-axis as real age of the patient), and ci (plotting a single tree file with confidence interval of node ages) [default=%default]", metavar="character"),
+  make_option(c("", "--seed"), type="numeric", default = NA,
+              help="The seed used for sampling sites in the genomes [default=%default]", metavar="numeric")
+  
 );
 
 opt_parser = OptionParser(option_list = option_list);
@@ -84,6 +89,7 @@ cn_file = opt$cn_file
 pos_file = opt$pos_file
 seg_file = opt$seg_file
 cyto_file = opt$cyto_file
+bin_file = opt$bin_file
 plot_type = opt$plot_type
 tree_dir = opt$tree_dir
 pattern = opt$pattern
@@ -99,6 +105,9 @@ del_rate = opt$del_rate
 with_title = opt$with_title
 with_cn = opt$with_cn
 title = opt$title
+seed = opt$seed
+
+if(!is.na(seed)) set.seed(seed)
 
 # cat("Parameters used here:\n")
 # cat("tree_file:", tree_file, "\n")
@@ -195,7 +204,7 @@ if(plot_type == "all"){
     if(with_cn){
       d = fortify(tree_ci@phylo)
       ordered_nodes = d$label[order(d$y, decreasing = T)]
-      d_seg = get.cn.data.by.pos(cn_file, pos_file, seg_file, cyto_file, labels, ordered_nodes, F)
+      d_seg = get.cn.data.by.pos(cn_file, pos_file, seg_file, cyto_file, labels, ordered_nodes, F, bin_file, seed)
       # get the node order of the tree and reorder heatmap
       phmap = plot.cn.heatmap(d_seg, "")
       

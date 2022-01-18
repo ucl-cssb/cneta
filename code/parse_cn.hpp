@@ -36,10 +36,10 @@ inline bool is_equal_vector(const vector<int>& bin1, const vector<int>& bin2){
 }
 
 
-// Convert the allele-specific state (ordered by 0/0	0/1	1/0	0/2	 1/1	2/0	0/3	 1/2 2/1	3/0	 0/4 1/3 2/2 3/1	4/0) to total copy number
+// Convert the haplotype-specific state (ordered by 0/0	0/1	1/0	0/2	 1/1	2/0	0/3	 1/2 2/1	3/0	 0/4 1/3 2/2 3/1	4/0) to total copy number
 int state_to_total_cn(int state, int cn_max);
 
-// Convert the allele-specific state (ordered by 0/0	0/1	1/0	0/2	 1/1	2/0	0/3	 1/2 2/1	3/0	 0/4 1/3 2/2 3/1	4/0) to allele-specific copy number
+// Convert the haplotype-specific state (ordered by 0/0	0/1	1/0	0/2	 1/1	2/0	0/3	 1/2 2/1	3/0	 0/4 1/3 2/2 3/1	4/0) to haplotype-specific copy number
 int state_to_allele_cn(int state, int cn_max, int& cnA, int& cnB);
 
 // Change the allele specific copy number to the state used in substitution rate matrix

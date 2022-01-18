@@ -225,7 +225,7 @@ option_list = list(
               help="The file to store copy number data obtained from bootstrapping", metavar="character"),
   make_option(c("-m", "--incl_normal"), action="store_true", default=FALSE,
               help="Whether or not normal sample is included in the input [default=%default]"),            
-  make_option(c("-a", "--is_allele_specific"), action="store_true", default=FALSE,                                             help="Whether or not the input copy numbers are allele-specific [default=%default]"),    
+  make_option(c("-a", "--is_haplotype_specific"), action="store_true", default=FALSE,                                             help="Whether or not the input copy numbers are haplotype-specific [default=%default]"),    
   make_option(c("-n", "--num_generate"), type="integer", default=100,
               help="The number of trees to generate [default=%default]", metavar="number"),
   make_option(c("-s", "--num_select"), type="integer", default=100,

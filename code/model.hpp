@@ -83,7 +83,7 @@ void insert_tuple_order(map<int, set<vector<int>>>& decomp_table, set<vector<int
 // Get possible combinations for a total copy number with ordering of different types of events considered (at most 1 WGD), mainly before and after WGD (seem problematic)
 void insert_tuple_order_withm(map<int, set<vector<int>>>& decomp_table, set<vector<int>>& comps, int cn_max, int m_max, int m1, int m2, int i, int j, int k, int j0, int k0);
 
-// Get possible allele-specific combinations for a total copy number (not used in practice for now)
+// Get possible haplotype-specific combinations for a total copy number (not used in practice for now)
 void insert_tuple_allele_specific(map<int, set<vector<int>>>& decomp_table, set<vector<int>>& comps, int cn_max, int m_max, int i, int j1, int j2, int k1, int k2);
 
 // Adjust the value of m_max based on the maximum copy number for a sample, not used for now

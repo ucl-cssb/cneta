@@ -255,6 +255,9 @@ get.site.coord <- function(pos_file, cyto_file, bin_file = "", seed = NA){
     names(dpos) <- c("sample", "chromosome", "index", "cn")
     nsite = dpos %>% group_by(sample) %>% tally() %>% select(n) %>% unique()
     if(nsite == 4401){   # read bin file to get positions
+      if(bin_file == ""){
+        stop("Please provide the file of bin locations!")
+      }
       bins = load(bin_file)
       chr_sites_full = bins_4401
     }else{

@@ -11,7 +11,7 @@ library(optparse)
 
 option_list = list(
   make_option(c("-i", "--file_cn"), type = "character", default = "",
-              help = "input allele-specific copy number file [default=%default]", metavar = "character"),
+              help = "input haplotype-specific copy number file [default=%default]", metavar = "character"),
   make_option(c("-d", "--dir_out"), type = "character", default = "",
               help = "The directory to store results [default=%default]", metavar = "character")
 );

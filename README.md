@@ -138,7 +138,7 @@ In bounded model, duplication rate may be different from deletion rate. Once a c
 
 There are two ways of simulating mutations along a tree:
 1. Simulating waiting times along a branch (default). A random waiting time is generated from the exponential distribution with mean `1/r`. Here, `r` is the total mutation rate across the genome, obtained by adding up the duplication and deletion rates across all sites in the genome, chromosomal gain or loss rates across all chromosomes and whole genome doubling rate. When a mutation is generated, its type is randomly chosen based on the relative rates of different types of mutational events.
-2. Simulating sequences at the end of a branch. This is appropriate when the mutational events are not of interest. Only duplication and deletion are supported. 
+2. Simulating sequences at the end of a branch. This is appropriate when the mutational events are not of interest. Only duplication and deletion are supported.
 
 Note that when simulating waiting times, only haplotype-specific model is allowed. If model of total copy number is specified, it will automatically be converted to model of haplotype-specific copy number.
 The copy number changes can be caused by at most five types of mutational events (duplication, deletion, chromosomal gain, chromosomal loss and whole genome doubling) along this tree for now. The mutation process is the same at all branches and across all sites.
@@ -269,19 +269,32 @@ You may check the copy number counts in the input data using similar command as 
   sample_ID, time relative to 1st sample in year (float number), patient age at the time of sampling (integer).
   The sample_ID has to be ordered from 1 to n (the number of patient samples).
 
-* (Optional) A folder containing initial trees for tree searching, which may obtained by parsimony-based methods. 
+* (Optional) A folder containing initial trees for tree searching, which may obtained by parsimony-based methods.
 
     It is recommended when the tree is large to avoid local optima.
 
 ## Output
-* *-tree.txt: The reconstructed tree in tab-delimited format
-* *-tree.nex: The reconstructed tree in NEWICK format, with branch length representing calendar time
+* *-tree.txt: The reconstructed tree in tab-delimited format.
+* *-tree.nex: The reconstructed tree in NEWICK format, with branch length representing calendar time.
 * *-tree.nmut.nex: The reconstructed tree in NEWICK format, with branch length representing number of mutations.
 
+## Ancestral state reconstruction
+Only the implementation under the bounded model of haplotype-specific copy number has been fully tested so far.
+
+## Input
+* (Required) A file containing integer absolute copy numbers for all the patient samples and/or the normal sample (*-cn.txt.gz or *-allele-cn.txt.gz).
+* (Required) *-tree.txt: A tree file in tab-delimited format.
+* (Required) --dup_rate dup_rate --del_rate del_rate: The mutation rates of the input tree.
+* (Optional) A file containing the timing information of patient samples (*-rel-times.txt).
+
+## Output
+* *.(mrca|joint).cn: The reconstructed copy numbers in tab-delimited format for the most recent common ancestor node of all tumour samples (mrca) and all internal nodes (joint) respectively. When the input are total copy numbers, there are four columns:  node ID, chromosome ID, site ID, CN. When the input are haplotype-specific copy numbers, there are five columns: node ID, chromosome ID, site ID, cnA, cnB.
+* *.mrca.state: A tab-delimited file containing the posterior probability of each possible copy number state on a site for MRCA node. The columns are: node ID, site ID (chromosomeID_siteID), probability_stateID. The copy number state ID is the same as the state index in the rate matrix of the Markov model.
+* *.joint.state: A tab-delimited file containing the possible copy number state on a site for all internal nodes. The columns are: node ID, site ID (chromosomeID_siteID), cn_stateID.
 
 
 
-# Tree building with MCMC 
+# Tree building with MCMC
 
 Only basic MCMC algorithm is implemented here and not comprehensively tested.
 

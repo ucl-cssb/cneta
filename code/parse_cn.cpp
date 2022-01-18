@@ -178,7 +178,7 @@ vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int& num_tot
         }else{
             if(split.size() != 5){
                 cout << "Current file has " << split.size() << " columns " << endl;
-                cout << "There should be 5 columns in the file for allele-specific copy numbers" << endl;
+                cout << "There should be 5 columns in the file for haplotype-specific copy numbers" << endl;
                 exit(EXIT_FAILURE);
             }
             int cn1 = atoi(split[3].c_str());  // copy number
@@ -188,7 +188,7 @@ vector<vector<vector<int>>> read_cn(const string& filename, int Ns, int& num_tot
                 exit(EXIT_FAILURE);
             }
             int tcn = cn1 + cn2;
-            if(tcn > cn_max){   // a bit hard to decease allele-specific CNs
+            if(tcn > cn_max){   // a bit hard to decease haplotype-specific CNs
                 cout << "total copy number " << tcn << " is larger than " << cn_max << "! Please adjust input accordingly!";
               //   int larger_cn = (cn1 > cn2) ? cn1 : cn2;
               //   int diff = tcn - cn_max;
@@ -335,7 +335,7 @@ void get_var_bins(const vector<vector<vector<int>>>& s_info, int Ns, int num_tot
 
         if(is_total){
             is_invar = all_of(cns.begin(), cns.end(), [&] (int i) {return i == NORM_PLOIDY;});
-        }else{ // For allele-specific CN, normal state is 1/1, with ID 4
+        }else{ // For haplotype-specific CN, normal state is 1/1, with ID 4
             is_invar = all_of(cns.begin(), cns.end(), [&] (int i) {return i == NORM_ALLElE_STATE;});
         }
 

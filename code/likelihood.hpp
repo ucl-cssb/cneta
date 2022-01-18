@@ -192,7 +192,7 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, const evo_tree& r
 
 
 // Incorporate chromosome gain/loss and WGD
-// Model 2: Treat total copy number as the observed data and the allele-specific information is missing
+// Model 2: Treat total copy number as the observed data and the haplotype-specific information is missing
 // additional parameters moved to lnl_type to facilitate calling in optimization
 double get_likelihood_revised(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, LNL_TYPE& lnl_type);
 
@@ -238,7 +238,7 @@ void get_likelihood_site_decomp(vector<vector<double>>& L_sk_k, const evo_tree& 
 double get_likelihood_chr_decomp(map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const evo_tree& rtree, const set<vector<int>>& comps, const vector<int>& knodes, PMAT_DECOMP& pmat_decomp, DIM_DECOMP& dim_decomp, int infer_wgd, int infer_chr, int use_repeat, int cn_max, int is_total);
 
 // Computing likelihood when WGD and chr gain/loss are incorporated
-// Assume likelihood is for allele-specific information
+// Assume likelihood is for haplotype-specific information
 double get_likelihood_decomp(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type);
 
 // Get the likelihood of the tree from likelihood table of state combinations

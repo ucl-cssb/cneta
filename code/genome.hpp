@@ -81,14 +81,14 @@ public:
   void initialize_cnp();    // initialize CNP at the beginning so that all positions are recorded
   int reset_cn(copy_number& cnp);   // reset counter to 0 for recounting after CN changes without losing positions
   void calculate_cn();   // Compute total copy number
-  void calculate_allele_cn();   // Compute allele-specific copy number
+  void calculate_allele_cn();   // Compute haplotype-specific copy number
 
   void print_muts(ostream& stream) const;
   void print() const;
   void print_cn() const;
   void write(ogzstream& of);
   void write_rcn(ogzstream& of, gsl_rng* r);
-  // write allele-specific relative CNs
+  // write haplotype-specific relative CNs
   void write_allele_rcn(ogzstream& of, gsl_rng* r);
   void write_allele_cn(ogzstream& of);
 
