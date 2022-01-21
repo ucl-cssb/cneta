@@ -5,7 +5,7 @@ suppressMessages(library(tidyverse))
 
 # from https://stackoverflow.com/questions/47044068/get-the-path-of-current-script/47045368
 getCurrentFileLocation <-  function(){
-  this_file <- commandArgs() %>% 
+  this_file <- commandArgs() %>%
     tibble::enframe(name = NULL) %>%
     tidyr::separate(col=value, into=c("key", "value"), sep="=", fill='right') %>%
     dplyr::filter(key == "--file") %>%
@@ -34,7 +34,7 @@ option_list = list(
   make_option(c("", "--cn_file"), type="character", default="",
               help="The file which contains the copy numbers of internal nodes [default=%default]", metavar="character"),
   make_option(c("", "--pos_file"), type="character", default="",
-              help="The file which contains the positions of each site along with the copy numbers of tip nodes [default=%default]", metavar="character"),
+              help="The file which contains the positions of each site along with the copy numbers of tip nodes (the index needs to start from 1 for each chromosome) [default=%default]", metavar="character"),
   make_option(c("", "--seg_file"), type="character", default="",
               help="The file which contains the segment start and end ID in the input copy number file [default=%default]", metavar="character"),
   make_option(c("", "--cyto_file"), type="character", default="",
@@ -49,10 +49,12 @@ option_list = list(
               help="The directory containing all the bootstrapping tree files when tree topology is fixed [default=%default]", metavar="character"),
   make_option(c("-p", "--pattern"), type="character", default="",
               help="The naming pattern of tree files [default=%default]", metavar="character"),
+  make_option(c("", "--nex_pattern"), type="character", default=".nex",
+              help="The naming pattern of bootstrap tree files when topology is fixed, used to get node time confidence intervals [default=%default]", metavar="character"),
 	make_option(c("-b", "--branch_num"), type="integer", default = 0,
               help="The type of values on branches (0: time in year, 1: mutation number) [default=%default]", metavar="integer"),
   make_option(c("", "--scale_factor"), type="numeric", default = 1,
-              help="The scale factor to convert branch length unit [default=%default]", metavar="numeric"),
+              help="The scale factor to convert branch length unit from #mutations to size of copy number changes [default=%default]", metavar="numeric"),
   make_option(c("", "--lextra"), type="numeric", default = 3,
               help="The left margin for the plot [default=%default]", metavar="numeric"),
   make_option(c("", "--rextra"), type="numeric", default = 3,
@@ -67,6 +69,8 @@ option_list = list(
               help="Showing title [default=%default]", metavar="logical"),
   make_option(c("", "--with_cn"), default = FALSE, action = "store_true",
               help="Plotting copy numbers [default=%default]", metavar="logical"),
+  make_option(c("", "--has_normal"), default = FALSE, action = "store_true",
+              help="Whether the input has copy numbers for normal sample [default=%default]", metavar="logical"),
   make_option(c("", "--title"), type="character", default="",
               help="The title of the plot [default=%default]", metavar="character"),
   make_option(c("-t", "--plot_type"), type="character", default="single",
@@ -75,7 +79,7 @@ option_list = list(
               help="The style of tree plot, including: simple (a simple tree with tip labels and branch lengths), xlim (adding xlim to the tree), age (x-axis as real age of the patient), and ci (plotting a single tree file with confidence interval of node ages) [default=%default]", metavar="character"),
   make_option(c("", "--seed"), type="numeric", default = NA,
               help="The seed used for sampling sites in the genomes [default=%default]", metavar="numeric")
-  
+
 );
 
 opt_parser = OptionParser(option_list = option_list);
@@ -93,6 +97,7 @@ bin_file = opt$bin_file
 plot_type = opt$plot_type
 tree_dir = opt$tree_dir
 pattern = opt$pattern
+nex_pattern = opt$nex_pattern
 bstrap_dir = opt$bstrap_dir
 bstrap_dir2 = opt$bstrap_dir2
 tree_style = opt$tree_style
@@ -104,6 +109,7 @@ dup_rate = opt$dup_rate
 del_rate = opt$del_rate
 with_title = opt$with_title
 with_cn = opt$with_cn
+has_normal = opt$has_normal
 title = opt$title
 seed = opt$seed
 
@@ -171,8 +177,19 @@ if(plot_type == "all"){
     p = print.single.tree(mytree, tree_style, time_file, title, lextra, rextra, da)
   }else{
     # cat(paste0("Plotting confidence intervals for the tree in ", tree_file_nex, " with bootstrap trees in folder ", bstrap_dir2, "\n"))
-    tree_ci = get.ci.tree(tree_file_nex, bstrap_dir2, labels)
-    p = plot.tree.ci.node(tree_ci, time_file, title, lextra, rextra, da)
+    has_bstrap = F # assume no branch support value in the tree
+    if(branch_num == 0){
+      tree_ci = get.ci.tree(fbs, bstrap_dir2, labels, has_bstrap, nex_pattern)
+      p = plot.tree.ci.node(tree_ci, time_file, title, lextra, rextra, da, T, T)
+    }else{
+      if(scale_factor == 1){
+        ci_prefix = "nmut_0.95_CI"
+      }else{
+        ci_prefix = "mutsize_0.95_CI"
+      }
+      tree_ci = get.ci.tree(fbs, bstrap_dir2, labels, has_bstrap, nex_pattern, ci_prefix)
+      p = plot.tree.ci.node.mut(tree_ci, time_file, title, lextra, rextra, da, T, T, scale_factor)
+    }
   }
 
   ggsave(out_file, p, width = 8, height = 5)
@@ -188,6 +205,9 @@ if(plot_type == "all"){
     if(time_file == ""){
       stop("The file containing the sampling time information is not provided!")
     }
+    if(branch_num != 0){
+      stop("The value in branch must be time in year!")
+    }
     p = plot.tree.bootstrap.age(mytree, time_file, title, lextra, rextra, da)
   }else if(tree_style == "ci"){
     if(time_file == ""){
@@ -195,28 +215,38 @@ if(plot_type == "all"){
     }
     # write bootstrap tree to a nex file
     fbs = str_replace(tree_file, ".txt", ".bstrap.nex")
-    write.nexus(mytree, file = fbs)
     # the tree has correct tip labels after using write.nexus
-    tree_ci = get.ci.tree(fbs, bstrap_dir2, labels, T)
-    
-    p = plot.tree.ci.node(tree_ci, time_file, title, lextra, rextra, da, T, T)
-    
+    write.nexus(mytree, file = fbs)
+
+    if(branch_num == 0){
+      tree_ci = get.ci.tree(fbs, bstrap_dir2, labels, T, nex_pattern)
+      p = plot.tree.ci.node(tree_ci, time_file, title, lextra, rextra, da, T, T)
+    }else{
+      if(scale_factor == 1){
+        ci_prefix = "nmut_0.95_CI"
+      }else{
+        ci_prefix = "mutsize_0.95_CI"
+      }
+      tree_ci = get.ci.tree(fbs, bstrap_dir2, labels, T, nex_pattern, ci_prefix)
+      p = plot.tree.ci.node.mut(tree_ci, time_file, title, lextra, rextra, da, T, T, scale_factor)
+    }
+
     if(with_cn){
       d = fortify(tree_ci@phylo)
       ordered_nodes = d$label[order(d$y, decreasing = T)]
-      d_seg = get.cn.data.by.pos(cn_file, pos_file, seg_file, cyto_file, labels, ordered_nodes, F, bin_file, seed)
+      d_seg = get.cn.data.by.pos(cn_file, pos_file, seg_file, cyto_file, labels, ordered_nodes, has_normal, bin_file, seed)
       # get the node order of the tree and reorder heatmap
       phmap = plot.cn.heatmap(d_seg, "")
-      
-      pc = ggarrange(p, phmap, nrow = 1, widths = c(6.5, 9.5))  
+
+      pc = ggarrange(p, phmap, nrow = 1, widths = c(6.5, 9.5))
       # pc = phmap %>% insert_left(p, width = 0.6)  # not work for internal nodes
       ggsave(out_file, pc, width = 16, height = 5)
     }else{
       ggsave(out_file, p, width = 8, height = 5)
     }
-    
+
   }else{
-    p = plot.tree.bootstrap(mytree, title, rextra, da)
+    p = plot.tree.bootstrap(mytree, title, rextra, da, scale_factor)
     ggsave(out_file, p, width = 8, height = 5)
   }
 

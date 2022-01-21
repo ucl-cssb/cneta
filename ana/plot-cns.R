@@ -5,7 +5,7 @@ suppressMessages(library(tidyverse))
 
 # from https://stackoverflow.com/questions/47044068/get-the-path-of-current-script/47045368
 getCurrentFileLocation <-  function(){
-  this_file <- commandArgs() %>% 
+  this_file <- commandArgs() %>%
     tibble::enframe(name = NULL) %>%
     tidyr::separate(col=value, into=c("key", "value"), sep="=", fill='right') %>%
     dplyr::filter(key == "--file") %>%

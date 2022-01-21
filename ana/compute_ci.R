@@ -19,7 +19,7 @@ if(is_normal == "Y"){
   left = smu - error
   right = smu + error
 }else{
-  # using 2.5th and 97.5th percentile 
+  # using 2.5th and 97.5th percentile
   sorted_data = sort(data)
   ci95 = quantile(sorted_data, probs = c(0.025, 0.975))
   left = ci95[1]
@@ -29,4 +29,3 @@ if(is_normal == "Y"){
 
 ci_str = paste0("(", round(left, digit), ", ", round(right, digit), ")")
 cat(ci_str)
-

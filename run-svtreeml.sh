@@ -22,7 +22,7 @@ if [[ ! -f $input ]]; then
 fi
 seg_file=$idir/"$prefix"-segs.txt
 
-is_total=1    # If yes (1), the input is total copy number; or else (0), the input is allele-specific
+is_total=1    # If yes (1), the input is total copy number; or else (0), the input is haplotype-specific
 # input=$idir/"$prefix"-allele-cn.txt.gz
 # whether or not the input copy number is for each bin. If not, the input copy number is read as it is. Or else, consecutive bins will be merged
 is_bin=0
@@ -40,7 +40,7 @@ if [[ ! -f $times ]]; then
   times=""
 fi
 
-model=2  # Model of evolution.  0: Mk model, 1: bounded model for total copy number, 2: bounded model for allele-specific copy number, 3: independent Markov chain model
+model=2  # Model of evolution.  0: Mk model, 1: bounded model for total copy number, 2: bounded model for haplotype-specific copy number, 3: independent Markov chain model
 # Parameters for independent Markov chain model
 max_wgd=0
 max_chr_change=0

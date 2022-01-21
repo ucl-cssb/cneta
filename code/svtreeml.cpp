@@ -1179,8 +1179,6 @@ int main(int argc, char** const argv){
     int Nchar = 0;  // number of sites
     int num_invar_bins = 0;   // number of invariant sites
 
-    print_desc(cons, maxj, correct_bias, use_repeat, optim, model, is_total, age, only_seg);
-
     // tobs already defined globally
     if(timefile != ""){
         tobs = read_time_info(timefile, Ns, age);
@@ -1205,6 +1203,8 @@ int main(int argc, char** const argv){
             cout << "   Using variable input segments " << endl;
         }
     }
+
+    print_desc(cons, maxj, correct_bias, use_repeat, optim, model, is_total, age, only_seg);
 
     INPUT_PROPERTY input_prop{Ns, cn_max, model, is_total, is_rcn, is_bin, incl_all};
     INPUT_DATA input_data{num_invar_bins, num_total_bins, Nchar, obs_num_wgd, obs_change_chr, sample_max_cn};
