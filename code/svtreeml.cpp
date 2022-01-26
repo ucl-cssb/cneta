@@ -801,74 +801,10 @@ double compute_tree_likelihood(evo_tree& tree, map<int, vector<vector<int>>>& vo
 }
 
 
-// Given a tree, compute its maximum likelihood
-void maximize_tree_likelihood(evo_tree& tree, const string& ofile, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type, OPT_TYPE& opt_type, int optim, double ssize, int debug){
-    lnl_type.knodes = get_inodes_bottom_up(tree, debug);
-
-    double nlnl = MAX_NLNL;
-    if(optim == GSL){
-        while(!(nlnl < MAX_NLNL)){
-            nlnl = MAX_NLNL;
-            max_likelihood(tree, vobs, lnl_type, opt_type, nlnl, ssize);
-        }
-    }else{
-        while(!(nlnl < MAX_NLNL)){
-            nlnl = MAX_NLNL;
-            max_likelihood_BFGS(tree, vobs, obs_decomp, comps, lnl_type, opt_type, nlnl);
-        }
-    }
-    cout << "\nMinimised negative log likelihood: " << nlnl << endl;
-
-    tree.print();
-    if(opt_type.maxj){
-        cout << "Estimated mutation rates: " << endl;
-    }else{
-        cout << "Pre-specified mutation rates: " << endl;
-    }
-    tree.print_mutation_rates(lnl_type.model, lnl_type.only_seg);
-
-    ofstream out_tree(ofile);
-    tree.write(out_tree);
-    out_tree.close();
-
-    string ofile_nex = ofile + ".nex";
-    ofstream nex_tree(ofile_nex);
-    int precision = 5;
-    string newick = tree.make_newick(precision);
-    tree.write_nexus(newick, nex_tree);
-    nex_tree.close();
-}
-
-
-// Build ML tree from given CNPs
-void find_ML_tree(string real_tstring, int num_total_bins, string ofile, int tree_search, int Ns, int Npop, int Ngen, int init_tree, string dir_itrees, int max_static, double ssize, int optim, const vector<double>& rates, const ITREE_PARAM& itree_param, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type, OPT_TYPE& opt_type, double loglh_epsilon, int speed_nni, int debug){
-    evo_tree min_nlnl_tree;
+void write_min_nlnl_tree(evo_tree& min_nlnl_tree, int num_total_bins, string ofile, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type, int maxj, int debug){ 
     int only_seg = lnl_type.only_seg;
-    int age = lnl_type.patient_age;
     int model = lnl_type.model;
-    int maxj = opt_type.maxj;
-    vector<double>& tobs = opt_type.tobs;
-    double tolerance = opt_type.tolerance;
-    int miter = opt_type.miter;
 
-    if(tree_search == EVOLUTION){
-        cout << "\nSearching tree space with evolutionary algorithm" << endl;
-        do_evolutionary_algorithm(min_nlnl_tree, Ns, Npop, Ngen, init_tree, dir_itrees, rates, ssize, optim, max_static, itree_param, vobs, obs_decomp, comps, lnl_type, opt_type, debug);
-    }else if(tree_search == HILLCLIMB){
-        cout << "\nSearching tree space with hill climbing algorithm" << endl;
-        if(Ns < MIN_NSAMPLE_HCLIMB){
-            cout << "Hill climbing only support trees with at least 5 samples!" << endl;
-            exit(EXIT_FAILURE);
-        }
-        do_hill_climbing(min_nlnl_tree, Ns, Npop, Ngen, init_tree, dir_itrees, rates, ssize, optim, itree_param, vobs, obs_decomp, comps, lnl_type, opt_type, loglh_epsilon, speed_nni, debug);
-    }else{
-        cout << "\nSearching tree space exhaustively (only feasible for small trees)" << endl;
-        // cout << "Parameters: " << Ngen << "\t" << Ns << "\t" << Nchar << "\t" << num_invar_bins << "\t" << model << "\t" << cons << "\t" << cn_max << "\t" << only_seg << "\t" << correct_bias << "\t" << is_total << endl;
-        do_exhaustive_search(min_nlnl_tree, real_tstring, Ns, Ngen, init_tree, dir_itrees, rates, ssize, optim, max_static, itree_param, vobs, obs_decomp, comps, lnl_type, opt_type, debug);
-    }
-
-    if(debug) cout << "Writing results ......" << endl;
-    // Write out the top tree
     cout.precision(PRINT_PRECISION);
     min_nlnl_tree.print();
 
@@ -926,6 +862,61 @@ void find_ML_tree(string real_tstring, int num_total_bins, string ofile, int tre
     newick = min_nlnl_tree.make_newick_nmut(precision, nmuts);
     min_nlnl_tree.write_nexus(newick, nex_tree2);
     nex_tree2.close();
+}
+
+
+// Given a tree, compute its maximum likelihood
+void maximize_tree_likelihood(evo_tree& tree, int num_total_bins, const string& ofile, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type, OPT_TYPE& opt_type, int optim, double ssize, int debug){
+    lnl_type.knodes = get_inodes_bottom_up(tree, debug);
+
+    double nlnl = MAX_NLNL;
+    if(optim == GSL){
+        while(!(nlnl < MAX_NLNL)){
+            nlnl = MAX_NLNL;
+            max_likelihood(tree, vobs, lnl_type, opt_type, nlnl, ssize);
+        }
+    }else{
+        while(!(nlnl < MAX_NLNL)){
+            nlnl = MAX_NLNL;
+            max_likelihood_BFGS(tree, vobs, obs_decomp, comps, lnl_type, opt_type, nlnl);
+        }
+    }
+    cout << "\nMinimised negative log likelihood: " << nlnl << endl;
+
+    write_min_nlnl_tree(tree, num_total_bins, ofile, vobs, obs_decomp, comps, lnl_type, opt_type.maxj, debug);
+}
+
+
+// Build ML tree from given CNPs
+void find_ML_tree(string real_tstring, int num_total_bins, string ofile, int tree_search, int Ns, int Npop, int Ngen, int init_tree, string dir_itrees, int max_static, double ssize, int optim, const vector<double>& rates, const ITREE_PARAM& itree_param, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type, OPT_TYPE& opt_type, double loglh_epsilon, int speed_nni, int debug){
+    evo_tree min_nlnl_tree;
+    int only_seg = lnl_type.only_seg;
+    int age = lnl_type.patient_age;
+    int model = lnl_type.model;
+    int maxj = opt_type.maxj;
+    vector<double>& tobs = opt_type.tobs;
+    double tolerance = opt_type.tolerance;
+    int miter = opt_type.miter;
+
+    if(tree_search == EVOLUTION){
+        cout << "\nSearching tree space with evolutionary algorithm" << endl;
+        do_evolutionary_algorithm(min_nlnl_tree, Ns, Npop, Ngen, init_tree, dir_itrees, rates, ssize, optim, max_static, itree_param, vobs, obs_decomp, comps, lnl_type, opt_type, debug);
+    }else if(tree_search == HILLCLIMB){
+        cout << "\nSearching tree space with hill climbing algorithm" << endl;
+        if(Ns < MIN_NSAMPLE_HCLIMB){
+            cout << "Hill climbing only support trees with at least 5 samples!" << endl;
+            exit(EXIT_FAILURE);
+        }
+        do_hill_climbing(min_nlnl_tree, Ns, Npop, Ngen, init_tree, dir_itrees, rates, ssize, optim, itree_param, vobs, obs_decomp, comps, lnl_type, opt_type, loglh_epsilon, speed_nni, debug);
+    }else{
+        cout << "\nSearching tree space exhaustively (only feasible for small trees)" << endl;
+        // cout << "Parameters: " << Ngen << "\t" << Ns << "\t" << Nchar << "\t" << num_invar_bins << "\t" << model << "\t" << cons << "\t" << cn_max << "\t" << only_seg << "\t" << correct_bias << "\t" << is_total << endl;
+        do_exhaustive_search(min_nlnl_tree, real_tstring, Ns, Ngen, init_tree, dir_itrees, rates, ssize, optim, max_static, itree_param, vobs, obs_decomp, comps, lnl_type, opt_type, debug);
+    }
+
+    if(debug) cout << "Writing results ......" << endl;
+    // Write out the top tree
+    write_min_nlnl_tree(min_nlnl_tree, num_total_bins, ofile, vobs, obs_decomp, comps, lnl_type, maxj, debug);
 }
 
 
@@ -1331,7 +1322,7 @@ int main(int argc, char** const argv){
 
         evo_tree tree = get_tree_from_file(tree_file, Ns, rates, max_tobs, age, cons);
 
-        maximize_tree_likelihood(tree, ofile, vobs, obs_decomp, comps, lnl_type, opt_type, optim, ssize, debug);
+        maximize_tree_likelihood(tree, num_total_bins, ofile, vobs, obs_decomp, comps, lnl_type, opt_type, optim, ssize, debug);
 
     }else{
         cout << "Inferring ancestral states of a given tree from copy number profile " << endl;

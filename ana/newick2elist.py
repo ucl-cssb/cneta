@@ -248,7 +248,7 @@ def convert_nexus_file(tree_file, node_prefix, incl_normal, scaling, root_blen =
 
             tree_renamed, nleaf = newick_to_edgelist(newick, node_prefix, incl_normal, root_blen)
 
-            # print(tree)
+            # print(tree_renamed)
             i += 1
             write_edge_list(tree_file, tree_renamed, nleaf, scaling, i)
 
