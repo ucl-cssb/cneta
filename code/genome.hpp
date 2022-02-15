@@ -121,7 +121,7 @@ void update_chr_gain_rate(genome& g, int c, double& chr_gain_rate, int cn_max);
 void update_chr_loss_rate(genome& g, int c, double& chr_loss_rate);
 
 /*
-Return the rate, q_i = sum(q_{ij}), where i!=j, of segment duplication and deletion at a site
+Return the rate, q_i = sum(q_{ij}), where i!=j, of site duplication and deletion at a site
 stateA, stateB: CNs for allele A and B
 */
 double get_site_rates(const vector<double>& rate_consts, int model, int stateA, int stateB, int cn_max, double& site_dup_rate, double& site_del_rate);
@@ -143,7 +143,7 @@ double get_total_rates_allele_specific(genome& g, vector<double>& site_dup_rates
 int site2chr(int site, int& chr, const vector<int>& chr_lengths, int debug);
 // Randomly choose a haplotype of a chromosome, used in generating chromosome gain/loss
 void select_haplotype(genome& g, int& c, long unsigned (*fp_myrng)(long unsigned));
-// Randomly select a haplotype of a chromosome with the chosen segments, used in generating segment duplication/deletion
+// Randomly select a haplotype of a chromosome with the chosen segments, used in generating site duplication/deletion
 void select_haplotype_by_seg(genome& g, int& c, int seg_id, long unsigned (*fp_myrng)(long unsigned));
 
 int generate_duplication(genome& g, int c, int seg_id, int mean_dup_size, int model, int cn_max, gsl_rng* r, int debug);

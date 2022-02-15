@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# This script is used to run program svtreemcmc.
+# This script is used to run program cnetmcmc.
 
 # Use MCMC to infer tree
 # With configuration file
@@ -42,7 +42,7 @@ if [[ ! -d $odir ]]; then
 fi
 suffix=$prefix
 
-echo "Start running svtreemcmc"
+echo "Start running cnetmcmc"
 
 # Run multiple chains
 for i in {1..2}
@@ -56,10 +56,10 @@ do
 
   echo "seed $seed" > $odir/std_mcmc_"$suffix"_${i}
 
-  code/svtreemcmc -s $Ns --is_total $is_total -c $input -t "$times" --rtree "$rtree" --trace_param_file $trace_param_file --trace_tree_file $trace_tree_file --config_file $config_file --init_tree $init_tree --file_itree $file_itree --seed $seed >> $odir/std_mcmc_"$suffix"_${i}
+  code/cnetmcmc -s $Ns --is_total $is_total -c $input -t "$times" --rtree "$rtree" --trace_param_file $trace_param_file --trace_tree_file $trace_tree_file --config_file $config_file --init_tree $init_tree --file_itree $file_itree --seed $seed >> $odir/std_mcmc_"$suffix"_${i}
 
   # Summarize the sampled trees into a maximum credibility tree with median heights
   # treeannotator -burnin 10 -heights median $trace_tree_file $sum_tree_file
 done
 
-echo "Finish running svtreemcmc"
+echo "Finish running cnetmcmc"

@@ -6,7 +6,7 @@ suppressMessages(library(ggtree))
 suppressMessages(library(optparse))
 
 # This script is used to create a set of maximum parsimony trees in NEWICK format,
-# serving as initial trees for ML tree building in svtreeml
+# serving as initial trees for ML tree building in cnetml
 
 # convert all CNs into a data frame for tree building
 get_phydata <- function(cns_wide){
@@ -53,7 +53,7 @@ get_bootstrap_phydata <- function(data_cn){
   # build step addition trees for bootstrap sample
   phydata = get_phydata(cns_bs)
 
-  # convert data into format required by sveta  c("sid", "chr", "seg", "cn")
+  # convert data into format required by cnets  c("sid", "chr", "seg", "cn")
   # check the convertion is right by converting cns_wide back to original data
   # cns_wide$sid = 1:nrow(cns_wide)
   # pos_names = setdiff(names(cns_wide), c("sid"))
@@ -247,10 +247,10 @@ output_format = ifelse(opt$output_format, "NWK", "NHS")
 # num_generate = 100
 # num_select = 100
 # output_format = "NHS"
-# file_cn = "/Users/ucbtlux/Gdrive/git/cnv_analysis/sveta/test4paper/pisca_patients/data/391-allele-rcn.txt"
+# file_cn = "/Users/ucbtlux/Gdrive/git/cnv_analysis/cnets/test4paper/pisca_patients/data/391-allele-rcn.txt"
 # incl_normal = F
 # is_allele_specific = T
-# original copy number data in the format of sveta
+# original copy number data in the format of cnets
 data_cn = get_cn(file_cn, incl_normal, is_allele_specific)
 
 if(opt$bootstrap){

@@ -1381,8 +1381,8 @@ void evo_tree::print_mutation_rates(int model, int only_seg) const{
     if(model == MK){
       cout << "mutation rate (per allele per site per year):  " << mu << endl;
     }else{
-      cout << "segment duplication rate (per allele per site per year):  " << dup_rate << endl;
-      cout << "segment deletion rate (per allele per site per year):  " << del_rate << endl;
+      cout << "site duplication rate (per allele per site per year):  " << dup_rate << endl;
+      cout << "site deletion rate (per allele per site per year):  " << del_rate << endl;
       if(!only_seg){
           cout << "chromosome gain rate (per chromosome per year):  " << chr_gain_rate << endl;
           cout << "chromosome loss rate (per chromosome per year):  " << chr_loss_rate << endl;

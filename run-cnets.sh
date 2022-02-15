@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# This script is used to run program sveta, which can generate a random colesence tree (of tumor samples from a single patient) and structual variations along the tree branches.
+# This script is used to run program cnets, which can generate a random colesence tree (of tumor samples from a single patient) and structual variations along the tree branches.
 
 seed=$RANDOM  # used for reproducing the results
 verbose=0   # Whether or not to print debug information
@@ -51,24 +51,24 @@ fi
 # prefix=sim-data-1
 prefix=""
 
-echo "Start running sveta"
+echo "Start running cnets"
 
-echo "seed $seed"  > $dir/std_sveta_cons${cons}_model${model}_method${method}
+echo "seed $seed"  > $dir/std_cnets_cons${cons}_model${model}_method${method}
 # valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all --track-origins=yes -v
-/usr/bin/time ./code/sveta --tree_file "${tree_file}" -p "${prefix}" -o $dir -r $Ns -n $Nsim --mode $mode --method $method --fix_nseg $fix_nseg --seg_max $seg_max --cn_max $cn_max --dup_rate $r1 --del_rate $r2 --chr_gain $r3 --chr_loss $r4 --wgd $r5 --dup_size $s1 --del_size $s2 -e $Ne -b $beta --gtime $gtime -t $dt --verbose $verbose --constrained $cons --model $model --age $age --seed $seed >> $dir/std_sveta_cons${cons}_model${model}_method${method}
+/usr/bin/time ./code/cnets --tree_file "${tree_file}" -p "${prefix}" -o $dir -r $Ns -n $Nsim --mode $mode --method $method --fix_nseg $fix_nseg --seg_max $seg_max --cn_max $cn_max --dup_rate $r1 --del_rate $r2 --chr_gain $r3 --chr_loss $r4 --wgd $r5 --dup_size $s1 --del_size $s2 -e $Ne -b $beta --gtime $gtime -t $dt --verbose $verbose --constrained $cons --model $model --age $age --seed $seed >> $dir/std_cnets_cons${cons}_model${model}_method${method}
 
 wait
 
-echo "Finish running sveta"
+echo "Finish running cnets"
 ################################################################################
 
 
 ####################### Plot simulated tree and copy numbers (optional) ########
 # Plot all simulated trees
-Rscript ana/plot-trees-all.R -d $dir -b 0 -t "all" -l "xlim"  # >& /dev/null
+Rscript util/plot-trees-all.R -d $dir -b 0 -t "all" -l "xlim"  # >& /dev/null
 # Plot simulated tree with the number of mutations on the branch
-Rscript ana/plot-trees-all.R -d $dir -b 1 -t "all" -l "xlim" # >& /dev/null
-Rscript ana/plot-cns.R -d $dir -b ana/bin_locations_4401.Rdata # >& /dev/null
+Rscript util/plot-trees-all.R -d $dir -b 1 -t "all" -l "xlim" # >& /dev/null
+Rscript util/plot-cns.R -d $dir -b util/bin_locations_4401.Rdata # >& /dev/null
 
 
 # Plot a single tree
@@ -77,8 +77,8 @@ Rscript ana/plot-cns.R -d $dir -b ana/bin_locations_4401.Rdata # >& /dev/null
 # tfile=$dir/${prefix}-rel-times.txt
 # ofile=$dir/"$prefix"-tree.txt
 # cfile=$dir/"$prefix"-cn.txt.gz
-# Rscript ana/plot-trees-all.R -f $ofile -b 0 -t "single" -l "xlim" --time_file $tfile # >& /dev/null
+# Rscript util/plot-trees-all.R -f $ofile -b 0 -t "single" -l "xlim" --time_file $tfile # >& /dev/null
 # # Plot simulated tree with the number of mutations on the branch
-# Rscript ana/plot-trees-all.R -f $ofile -b 1 -t "single"  # >& /dev/null
-# Rscript ana/plot-cns.R -f $cfile -b ana/bin_locations_4401.Rdata # >& /dev/null
+# Rscript util/plot-trees-all.R -f $ofile -b 1 -t "single"  # >& /dev/null
+# Rscript util/plot-cns.R -f $cfile -b util/bin_locations_4401.Rdata # >& /dev/null
 ################################################################################

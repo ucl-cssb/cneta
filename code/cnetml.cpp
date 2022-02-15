@@ -515,11 +515,11 @@ void do_evolutionary_algorithm(evo_tree& min_nlnl_tree, int Ns, int Npop, int Ng
 
     if( g == 0 ){
       for(int i = 0; i < Npop; ++i){
-	         new_trees.push_back(trees[i]);
+	        new_trees.push_back(trees[i]);
       }
       for(int i = 0; i < Npop; ++i){
-          evo_tree new_tree = perturb_tree_set(trees, r, fp_myrng);
-          new_tree.score = get_likelihood_revised(new_tree, vobs, lnl_type);
+            evo_tree new_tree = perturb_tree_set(trees, r, fp_myrng);
+            new_tree.score = get_likelihood_revised(new_tree, vobs, lnl_type);
     	    new_trees.push_back(new_tree);
       }
 
@@ -934,9 +934,9 @@ void print_desc(int cons, int maxj, int correct_bias, int use_repeat, int optim,
   }else{
     cout << "\nEstimating mutation rates" << endl;
     if(!only_seg){
-      cout << "\tfor segment duplication/deletion, chromosome gain/loss, and whole genome doubling " << endl;
+      cout << "\tfor site duplication/deletion, chromosome gain/loss, and whole genome doubling " << endl;
     }else{
-      cout << "\tfor segment duplication/deletion " << endl;
+      cout << "\tfor site duplication/deletion " << endl;
     }
   }
 
@@ -1146,8 +1146,8 @@ int main(int argc, char** const argv){
           return 1;
       }
       if(vm.count("version")){
-          cout << "svtreeml [version 0.1], a program to build a maximum likelihood phylogenetic tree from copy number profile of multiple (temporal) samples" << endl;
-          cout << "This program can also be used to compute the likelihood of a tree with fixed branch lengths or maximum likelihood of a tree with fixed topology (and/or mutation rates), given the copy number profile." << endl;
+          cout << "cnetml [version 0.1], a program to build a maximum likelihood phylogenetic tree from total or haplotype-specific copy number profiles of multiple (spatio-temporal) samples for a single patient" << endl;
+          cout << "This program can also be used to compute the likelihood and ancestral states of a given tree, maximum likelihood of a tree with fixed topology (and/or mutation rates), given the copy number profiles." << endl;
           return 1;
       }
       po::notify(vm);
@@ -1231,7 +1231,7 @@ int main(int argc, char** const argv){
         // adjust_m_max();
         cout << "maximum number of WGD events is " << max_wgd << endl;
         cout << "maximum number of chromosome gain/loss events on one chromosome is " << max_chr_change << endl;
-        cout << "maximum number of segment duplication/deletion events is " << max_site_change << endl;
+        cout << "maximum number of site duplication/deletion events is " << max_site_change << endl;
         build_decomp_table(decomp_table, comps, cn_max, m_max, max_wgd, max_chr_change, max_site_change, is_total);
         // build_decomp_table_withm(decomp_table, comps, cn_max, m_max, max_wgd, max_chr_change, max_site_change, is_total);
         cout << "\tNumber of states is " << comps.size() << endl;

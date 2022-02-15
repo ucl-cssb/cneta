@@ -198,7 +198,7 @@ def get_root(tree):
 
 
 
-# Rename all node names to integer, order as that is defined in sveta
+# Rename all node names to integer, order as that is defined in cnets
 # num_leaf is the number of leaves in the final tree (plus one when the normal sample is not included)
 def rename_tree(tree, num_leaf, incl_normal, node_prefix=""):
     mapping = {}

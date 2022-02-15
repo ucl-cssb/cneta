@@ -298,7 +298,7 @@ public:
   vector<double> get_node_ages();
 
   void scale_time(double ratio);
-  void scale_time_internal(double ratio);   // used in sveta
+  void scale_time_internal(double ratio);   // used in cnets
 
   // update node ages of a node and its ancestor (after the relevant edge is updated)
   void update_node_age(int node_id, double delta);

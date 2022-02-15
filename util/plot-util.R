@@ -337,7 +337,7 @@ get.all.state <- function(dans, cn_file, seg_file, dpos, pos_file, has_normal = 
     d_all = merge(dstate, segs_pos_all, by = c("chromosome", "index"), all.x = T) %>% select(all_of(names(dpos))) %>% arrange(sample, chromosome, index)
     # d_all %>% filter(sample == 2 & chromosome == 1 & cn != 2) %>% print()
 
-  }else{ # simulated states (normal sample is included by sveta)
+  }else{ # simulated states (normal sample is included by cnets)
     if(pos_file == ""){
       stop("either segment file or input file must be provided!")
     }

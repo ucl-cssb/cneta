@@ -9,7 +9,7 @@ library(treeio, quietly = T)
 library(xml2, quietly = T)
 library(Quartet, quietly = T)
 
-##code from github sveta code
+##code from github cnets code
 make.tree <- function(d){
    nedge <- nrow(d)
    nleaf <- (nedge + 2)/2

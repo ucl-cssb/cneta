@@ -899,7 +899,7 @@ double get_likelihood_decomp(evo_tree& rtree, map<int, vector<vector<int>>>& vob
   }
 
   if(max_site_change > 0){
-      qmat_seg = new double[dim_mat_seg];  // segment duplication/deletion
+      qmat_seg = new double[dim_mat_seg];  // site duplication/deletion
       memset(qmat_seg, 0.0, dim_mat_seg * sizeof(double));
       get_rate_matrix_site_change(qmat_seg, rtree.dup_rate, rtree.del_rate, max_site_change);
   }
@@ -946,7 +946,7 @@ double get_likelihood_decomp(evo_tree& rtree, map<int, vector<vector<int>>>& vob
              }
          }
 
-         // For segment duplication/deletion
+         // For site duplication/deletion
          if(max_site_change > 0){
              if(pmats_seg.find(bli) == pmats_seg.end()){
                  pmati_seg = new double[dim_mat_seg];
@@ -1043,7 +1043,7 @@ double get_likelihood_decomp(evo_tree& rtree, map<int, vector<vector<int>>>& vob
 }
 
 
-// Compute the likelihood without grouping sites by chromosome, only considering segment duplication/deletion
+// Compute the likelihood without grouping sites by chromosome, only considering site duplication/deletion
 /*
 vobs: the observed data matrix
 rtree: the given tree

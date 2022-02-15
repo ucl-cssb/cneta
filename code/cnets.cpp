@@ -89,7 +89,7 @@ void print_cn_state(const copy_number& curr_cn){
 
 
 // Envolving sequences along the tree (available for bounded model, implemented according to approach in book Yang, 2004, P437)
-// only support segment duplication and deletion
+// only support site duplication and deletion
 void evolve_sequences(map<int, copy_number>& cn_matrix, const int& node_id, const evo_tree& tree, double* qmat, int nstate, int num_seg, const vector<double>& rate_consts, map<int, int>& num_muts, int debug){
     if(!tree.nodes[node_id].isRoot){
         double rate = rate_consts[0] + rate_consts[1];
@@ -1201,7 +1201,7 @@ int main (int argc, char** const argv) {
     // five event types: duplication, deletion, chromosome gain, chromosome loss, wgd
     // rates are 1/mean
     double dup_rate, del_rate, chr_gain, chr_loss, wgd;
-    // mean of exp size distributions for segment duplication/deletion
+    // mean of exp size distributions for site duplication/deletion
     double mean_dup_size;
     double mean_del_size;
 
@@ -1282,7 +1282,7 @@ int main (int argc, char** const argv) {
             return 1;
         }
         if(vm.count("version")){
-            cout << "sveta [version 0.1], a program to simulate structural variations along a phylogenetic tree" << endl;
+            cout << "cnets [version 0.1], a program to simulate copy number alterations along a phylogenetic tree" << endl;
             return 1;
         }
         po::notify(vm);
@@ -1373,7 +1373,7 @@ int main (int argc, char** const argv) {
     cout << "\nEvolution model simulated: " << model << endl;
     cout << "\tMaximum copy number of a segment is " << cn_max << endl;
     cout << "\tMutation rates:\t" << rate_consts[0] << "\t" << rate_consts[1]  << "\t" << rate_consts[2]  << "\t" << rate_consts[3]  << "\t" << rate_consts[4] << endl;
-    cout << "\tSizes of segment duplication/deletion:\t" << mean_dup_size << "\t" << mean_del_size << endl;
+    cout << "\tSizes of site duplication/deletion:\t" << mean_dup_size << "\t" << mean_del_size << endl;
 
     ITREE_PARAM itree_param{Ne, beta, gtime};
     SV_SIZE sv_size{mean_dup_size, mean_del_size};

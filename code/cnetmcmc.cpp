@@ -2135,8 +2135,8 @@ int main (int argc, char ** const argv) {
 
             ("rtreefile", po::value<string>(&rtreefile)->default_value(""), "reference tree file")
             ("rmu", po::value<double>(&rmu)->default_value(0.02), "mutation rate of the reference tree")
-            ("rdup_rate", po::value<double>(&rdup_rate)->default_value(0.01), "segment duplication rate of the reference tree")
-            ("rdel_rate", po::value<double>(&rdel_rate)->default_value(0.01), "segment deletion rate of the reference tree")
+            ("rdup_rate", po::value<double>(&rdup_rate)->default_value(0.01), "site duplication rate of the reference tree")
+            ("rdel_rate", po::value<double>(&rdel_rate)->default_value(0.01), "site deletion rate of the reference tree")
             ("rgain_rate", po::value<double>(&rgain_rate)->default_value(0.01), "chromosome gain rate of the reference tree")
             ("rloss_rate", po::value<double>(&rloss_rate)->default_value(0.01), "chromosome loss rate of the reference tree")
             ("rwgd_rate", po::value<double>(&rwgd_rate)->default_value(0.01), "whole genome doubling rate of the reference tree")
@@ -2146,15 +2146,15 @@ int main (int argc, char ** const argv) {
 
             ("only_seg", po::value<int>(&only_seg)->default_value(0), "Whether or not to only consider segment-level mutations (0: include chromosome gain/loss and whole genome doubling, 1: only consider segment-level mutations)")
             ("mu,x", po::value<double>(&mu)->default_value(0.025), "mean of mutation rate")
-            ("dup_rate", po::value<double>(&dup_rate)->default_value(0.01), "mean of segment duplication rate")
-            ("del_rate", po::value<double>(&del_rate)->default_value(0.01), "mean of segment deletion rate")
+            ("dup_rate", po::value<double>(&dup_rate)->default_value(0.01), "mean of site duplication rate")
+            ("del_rate", po::value<double>(&del_rate)->default_value(0.01), "mean of site deletion rate")
             ("chr_gain_rate", po::value<double>(&chr_gain_rate)->default_value(0.001), "mean of chromosome gain rate")
             ("chr_loss_rate", po::value<double>(&chr_loss_rate)->default_value(0.001), "mean of chromosome loss rate")
             ("wgd_rate", po::value<double>(&wgd_rate)->default_value(0.0001), "mean of WGD (whole genome doubling) rate")
 
             ("sigma_mut", po::value<double>(&sigma_mut)->default_value(0.05), "sigma for proposal of mutation rate")
-            ("sigma_dup", po::value<double>(&sigma_dup)->default_value(0.05), "sigma for proposal of segment duplication rate")
-            ("sigma_del", po::value<double>(&sigma_del)->default_value(0.05), "sigma for proposal of segment deletion rate")
+            ("sigma_dup", po::value<double>(&sigma_dup)->default_value(0.05), "sigma for proposal of site duplication rate")
+            ("sigma_del", po::value<double>(&sigma_del)->default_value(0.05), "sigma for proposal of site deletion rate")
             ("sigma_gain", po::value<double>(&sigma_gain)->default_value(0.05), "sigma for proposal of chromosome gain rate")
             ("sigma_loss", po::value<double>(&sigma_loss)->default_value(0.05), "sigma for proposal of chromosome loss rate")
             ("sigma_wgd", po::value<double>(&sigma_wgd)->default_value(0.05), "sigma for proposal of whole genome doubling rate")
@@ -2164,8 +2164,8 @@ int main (int argc, char ** const argv) {
             ("lambda_all,m", po::value<double>(&lambda_all)->default_value(0.5), "lambda for multiplier proposal of all branch lengths")
 
             ("sigma_lmut", po::value<double>(&sigma_lmut)->default_value(0.05), "sigma for prior of log10 of mutation rate")
-            ("sigma_ldup", po::value<double>(&sigma_ldup)->default_value(0.05), "sigma for prior of log10 of segment duplication rate")
-            ("sigma_ldel", po::value<double>(&sigma_ldel)->default_value(0.05), "sigma for prior of log10 of segment deletion rate")
+            ("sigma_ldup", po::value<double>(&sigma_ldup)->default_value(0.05), "sigma for prior of log10 of site duplication rate")
+            ("sigma_ldel", po::value<double>(&sigma_ldel)->default_value(0.05), "sigma for prior of log10 of site deletion rate")
             ("sigma_lgain", po::value<double>(&sigma_lgain)->default_value(0.05), "sigma for prior of log10 of chromosome gain rate")
             ("sigma_lloss", po::value<double>(&sigma_lloss)->default_value(0.05), "sigma for prior of log10 of chromosome loss rate")
             ("sigma_lwgd", po::value<double>(&sigma_lwgd)->default_value(0.05), "sigma for prior of log10 of whole genome doubling rate")
@@ -2197,7 +2197,7 @@ int main (int argc, char ** const argv) {
             }
 
             if(vm.count("version")) {
-                    cout << "svtreemcmc [version 0.1], a program to build a phylogenetic tree from copy number profile with MCMC approach" << endl;
+                    cout << "cnetmcmc [version 0.1], a program to build a phylogenetic tree  from total or haplotype-specific copy number profiles of multiple (spatio-temporal) samples for a single patient with MCMC approach" << endl;
                     cout << "This program can also be used to estimate parameters given a tree of fixed topology." << endl;
                     return 1;
             }
@@ -2248,9 +2248,9 @@ int main (int argc, char ** const argv) {
 
     if(maxj){
         if(!only_seg){
-            cout << "Estimating mutation rates for segment duplication/deletion, chromosome gain/loss, and whole genome doubling " << endl;
+            cout << "Estimating mutation rates for site duplication/deletion, chromosome gain/loss, and whole genome doubling " << endl;
         }else{
-            cout << "Estimating mutation rates for segment duplication/deletion " << endl;
+            cout << "Estimating mutation rates for site duplication/deletion " << endl;
         }
     }
 
@@ -2375,7 +2375,7 @@ int main (int argc, char ** const argv) {
         // adjust_m_max();
         cout << "maximum number of WGD events is " << max_wgd << endl;
         cout << "maximum number of chromosome gain/loss events on one chromosome is " << max_chr_change << endl;
-        cout << "maximum number of segment duplication/deletion events is " << max_site_change << endl;
+        cout << "maximum number of site duplication/deletion events is " << max_site_change << endl;
         build_decomp_table(decomp_table, comps, cn_max, m_max, max_wgd, max_chr_change, max_site_change, is_total);
         // build_decomp_table_withm(decomp_table, comps, cn_max, m_max, max_wgd, max_chr_change, max_site_change, is_total);
         cout << "\tNumber of states is " << comps.size() << endl;

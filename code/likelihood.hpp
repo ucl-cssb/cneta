@@ -197,7 +197,7 @@ double get_likelihood_chr(map<int, vector<vector<int>>>& vobs, const evo_tree& r
 double get_likelihood_revised(evo_tree& rtree, map<int, vector<vector<int>>>& vobs, LNL_TYPE& lnl_type);
 
 
-/* Compute the likelihood without grouping sites by chromosome, only considering segment duplication/deletion (not used)
+/* Compute the likelihood without grouping sites by chromosome, only considering site duplication/deletion (not used)
 Precondition: the tree is valid
 Ns: number of samples
 Nchar: number of characters for each sample

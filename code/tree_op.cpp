@@ -91,8 +91,11 @@ string create_tree_string(const evo_tree& tree){
 }
 
 
-// The string will be unique for different topologies
-// The key is to name the internal node based on tips
+// The string will be unique for different topologies: 
+// nodes separated by ":", children of internal nodes separated by ";" 
+// The key is to name non-root internal node based on tips with n_tip1-tip2
+// e.g. tree (((2:17.1132000000,1:19.1132000000)6:1.5240200000,3:22.6373000000)7:0.2121310000,4:0.0000000000)5
+// sample format of a tree string: :1:2:3:4:5;4;7:n_1-2;1;2:
 string create_tree_string_uniq(const evo_tree& tree){
   int debug = 0;
 
@@ -105,8 +108,7 @@ string create_tree_string_uniq(const evo_tree& tree){
     int nid = tree.nodes[i].id + 1;
     if(nid <= tree.nleaf){
         sstm << nid;
-    }
-    else if(nid == tree.nleaf + 1){  // root
+    }else if(nid == tree.nleaf + 1){  // root
         sstm << nid << ";" << tree.nodes[i].daughters[0] + 1 << ";" << tree.nodes[i].daughters[1] + 1;
     }else{    // internal nodes
         assert((tree.nodes[i].daughters.size() == 2));
@@ -165,7 +167,7 @@ string create_tree_string_uniq(const evo_tree& tree){
 }
 
 
-// for different labeled histories
+// for different labeled histories where node age matters
 string order_tree_string(const string& tree){
   stringstream sstm;
   vector<string> split1;
@@ -1319,7 +1321,7 @@ void initialize_knodes(vector<int>& knodes, int Ns){
 }
 
 
-// The node IDs of input tree may not follow the specifics in sveta, eg. ML trees obtained by hill climbing
+// The node IDs of input tree may not follow the specifics in cnets, eg. ML trees obtained by hill climbing
 vector<int> get_inodes_bottom_up(evo_tree& tree, int debug){
   vector<int> inodes;
   Node* root = &(tree.nodes[tree.root_node_id]);

@@ -646,7 +646,7 @@ void set_pmat_decomp(const evo_tree& rtree, MAX_DECOMP& max_decomp, int nstate, 
     }
 
     if(max_site_change > 0){
-        qmat_seg = new double[(dim_seg)*(dim_seg)];  // segment duplication/deletion
+        qmat_seg = new double[(dim_seg)*(dim_seg)];  // site duplication/deletion
         memset(qmat_seg, 0, (dim_seg)*(dim_seg)*sizeof(double));
         get_rate_matrix_site_change(qmat_seg, rtree.dup_rate, rtree.del_rate, max_site_change);
     }
@@ -691,7 +691,7 @@ void set_pmat_decomp(const evo_tree& rtree, MAX_DECOMP& max_decomp, int nstate, 
             }
         }
 
-        // For segment duplication/deletion
+        // For site duplication/deletion
         if(max_site_change > 0){
             if(pmats_seg.find(bli) == pmats_seg.end()){
                 pmati_seg = new double[(dim_seg)*(dim_seg)];
@@ -1102,7 +1102,7 @@ void reconstruct_joint_ancestral_state_decomp(const evo_tree& rtree, map<int, ve
 }
 
 
-// Infer the copy number of all internal nodes given a tree at a site, assuming only segment duplication/deletion
+// Infer the copy number of all internal nodes given a tree at a site, assuming only site duplication/deletion
 void reconstruct_joint_ancestral_state(const evo_tree& rtree, map<int, vector<vector<int>>>& vobs, vector<int>& knodes, int model, int cn_max, int use_repeat, int is_total, int m_max, string ofile){
     int debug = 0;
     if(debug) cout << "\treconstruct joint ancestral state" << endl;

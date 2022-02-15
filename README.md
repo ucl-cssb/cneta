@@ -1,15 +1,15 @@
-Structural Variation Evolutionary Tree Analysis
+Copy Number Evolutionary Tree Analysis
 =============
 
 # Introduction
-This repository contains a set of programs to simulate and build phylogenetic trees from copy number alterations caused by structural variations (SVs) in tumour genomes from multiple samples of a patient.
+This repository contains a set of programs to simulate and build phylogenetic trees from copy number alterations in tumour genomes from multiple samples of a patient.
 
 NOTE: This repository is still under development and mainly for personal use currently.
 
 There are mainly 3 programs:
-* sveta: simulating SVs along a phylogenetic (coalescence) tree
-* svtreeml: building phylogenetic trees from copy numbers with maximum likelihood approach
-* svtreemcmc: building phylogenetic trees from copy numbers with Bayesian MCMC approach
+* cnets: simulating SVs along a phylogenetic (coalescence) tree
+* cnetml: building phylogenetic trees from copy numbers with maximum likelihood approach
+* cnetmcmc: building phylogenetic trees from copy numbers with Bayesian MCMC approach
 
 
 # Installation
@@ -79,7 +79,7 @@ installed.packages()[, c("Package", "LibPath")]
 ```
 
 ## Building C++ source files
-OpenMP is used to accelerate tree search in svtreeml.
+OpenMP is used to accelerate tree search in cnetml.
 To turned off OpenMP, please set "omp =" in makefile.
 
 To build the C++ code, change into the code directory and type make:
@@ -94,21 +94,21 @@ You may use the provided bash scripts to run the programs.
 
 ```shell
 # Simulating mutations on a coalescence tree
-> bash run-sveta.sh
+> bash run-cnets.sh
 
 # Build a tree from copy number profile with maximum likelihood method
-> bash run-svtreeml.sh
+> bash run-cnetml.sh
 
 # Build a tree from copy number profile with MCMC method
-> bash run-svtreemcmc.sh
+> bash run-cnetmcmc.sh
 ```
 
 The most recent Mac switches to zsh. In that case, please replace `bash` with `zsh` in the commands above.
 
 
 
-# Simulation with sveta
-SVETA simulates structural variations that alter copy numbers along a phylogenetic tree of multiple samples.
+# Simulation with cnets
+cnets simulates structural variations that alter copy numbers along a phylogenetic tree of multiple samples.
 Each tip in the tree corresponds to the genome of a sample, which is represented by a consecutive set of pre-specified sites.
 Each site is considered as a segment of variable size or a bin of fixed size.
 These sites can be seen as segments or bins obtained by segmentation methods or fixed-size sliding windows when calling copy numbers from real data.
@@ -146,7 +146,7 @@ The mutation probability of each site is limited by its current copy number stat
 Chromosomal gain is ONLY possible when the maximum copy number in the chromosome is smaller than the specified maximum copy number.
 The units of mutation rates are different at site, chromosome, and whole genome levels. When computing the relative rates of a specific mutation type, they are summarized at different scales: total duplication/deletion rates obtained by summarizing over all sites, chromosome gain/loss rates obtained by summarizing over all chromosomes.
 
-Please see run-sveta.sh to learn how to set different parameters.
+Please see run-cnets.sh to learn how to set different parameters.
 
 ## Input
 * --epop Ne: Ne (effective population size) is used to scale the tree height so that the branch length is measured in the unit of year, by multiplying each branch length with Ne.
@@ -168,8 +168,8 @@ Please see run-sveta.sh to learn how to set different parameters.
 * *-info.txt: The time of each node and the total number of mutations simulated on each branch of the tree, grouped by lineages of tip nodes.
 * *-mut.txt: The list of simulated mutations on each branch of the tree.
 * *-tree.txt: The simulated tree in tab-delimited format
-* *-tree.nex: The simulated tree in NEWICK format, with branch length representing calender time
-* *-tree-nmut.nex: The simulated tree in NEWICK format, with branch length representing number of mutations
+* *-tree.nex: The simulated tree in NEWICK format, with branch length representing calendar time
+* *-tree-nmut.nex: The simulated tree in NEWICK format, with branch length representing expected number of CNAs per site
 
 File *-cn.txt.gz (*-rcn.txt.gz) can serve as the input to a tree building program that used absolute (relative) integer total copy number.
 
@@ -188,7 +188,7 @@ For whole genome doubling, chr is assigned to 0 and seg_ID is assigned to -1.
 
 
 # Tree building with ML
-There are 4 running modes in svtreeml.
+There are 4 running modes in cnetml.
 * mode 0 (default): building maximum likelihood tree from input copy numbers, using "-b 1" for bootstrapping
 * mode 1: a simple comprehensive test on a simulated tree
 * mode 2: computing likelihood given a tree and its parameters (branch length and mutation rates)
@@ -197,7 +197,7 @@ There are 4 running modes in svtreeml.
 
 The last three modes can be used to validate the computation of likelihood.
 
-Please see run-svtreeml.sh to learn how to set different parameters.
+Please see run-cnetml.sh to learn how to set different parameters.
 
 When estimating branch length, time constraints (in longitudinal samples) can be considered by specifying the following parameters.
 * cons: When cons = 1, optimization is done with time constraints on patient age and/or tip timing. Mutation rates can be estimated when there are considerate time differences among tips.
@@ -222,7 +222,7 @@ There are four models of evolution for building trees from the copy number profi
 
 The first three models are the same as those for simulation.
 The last one (model of independent Markov chains) should be used for tree reconstruction on data with chromosome gain/loss and WGD.
-This model is DIFFERENT from the model used for simulating the data, which is usually model 2 (model of haplotype-specific copy number) in sveta.
+This model is DIFFERENT from the model used for simulating the data, which is usually model 2 (model of haplotype-specific copy number) in cnets.
 Model 2 may also be used but there is a strong assumption of event order, that WGD is followed by chromosomal gain or loss and then duplication or deletion.
 
 There are four important parameters for independent Markov chain model (model 3) to specify the number of states for each chain.
@@ -242,7 +242,7 @@ The site-level CNAs are very likely to overlap, so max_site_change are often lar
 Suppose there is no WGD and chromosome gain/loss, if the maximum copy number in the sample is 5, then max_site_change should be 3 (5 - 2).
 You need to adjust the values of max_site_change according to the input data.
 This can be done via the provided script with the following command:
-`Rscript ana/check_site_pattern.R -c sim1-cn.txt -t sim1-patterns.txt`
+`Rscript util/check_site_pattern.R -c sim1-cn.txt -t sim1-patterns.txt`
 
 You may check the copy number counts in the input data using similar command as below:
 `less sim-data-1-cn.txt.gz | cut -f4 | sort | uniq -c`.
@@ -298,7 +298,7 @@ Only the implementation under the bounded model of haplotype-specific copy numbe
 
 Only basic MCMC algorithm is implemented here and not comprehensively tested.
 
-Please see run-svtreemcmc.sh to learn how to set different parameters
+Please see run-cnetmcmc.sh to learn how to set different parameters
 
 There are two running modes depending on whether a reference tree is provided or not.
 With a reference tree, the tree topolgy is fixed.
@@ -314,8 +314,8 @@ There are two output files in a format similar to that of MrBayes:
 * *.p, which records the traces of parameters
 * *.t, which records the sampled trees
 
-<!-- ## How to analyze the results of svtreemcmc -->
-The output can be analyzed by [RWTY](https://github.com/danlwarren/RWTY). Please see script ana/check_convergence.R for reference.
+<!-- ## How to analyze the results of cnetmcmc -->
+The output can be analyzed by [RWTY](https://github.com/danlwarren/RWTY). Please see script util/check_convergence.R for reference.
 
 *.p can be imported into [Tracer](https://beast.community/tracer) to check the convergence of the chains.
 

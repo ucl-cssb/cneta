@@ -9,8 +9,8 @@ args = commandArgs(trailingOnly=TRUE)
 dir = args[1]
 fout = args[2]
 
-# dir = "D:/Gdrive/git/sveta/example/mcmc"
-# fout = "D:/Gdrive/git/sveta/example/mcmc/mcmc_rwty.pdf"
+# dir = "D:/Gdrive/git/cnets/example/mcmc"
+# fout = "D:/Gdrive/git/cnets/example/mcmc/mcmc_rwty.pdf"
 
 
 
