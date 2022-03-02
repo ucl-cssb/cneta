@@ -59,6 +59,8 @@ option_list = list(
               help="The left margin for the plot [default=%default]", metavar="numeric"),
   make_option(c("", "--rextra"), type="numeric", default = 3,
               help="The left margin for the plot [default=%default]", metavar="numeric"),
+  make_option(c("", "--height"), type="numeric", default = 5,
+              help="The height for the plot [default=%default]", metavar="numeric"),            
   make_option(c("-m", "--mut_rate"), type="numeric", default = 0,
               help="The rate of somatic chromosomal aberrations [default=%default]", metavar="numeric"),
   make_option(c("-u", "--dup_rate"), type="numeric", default = 0,
@@ -112,6 +114,7 @@ with_cn = opt$with_cn
 has_normal = opt$has_normal
 title = opt$title
 seed = opt$seed
+height = opt$height
 
 if(!is.na(seed)) set.seed(seed)
 
@@ -163,7 +166,7 @@ if(plot_type == "all"){
     out_file = get.outfile.name(fname, branch_num)
     mytree = get.tree(fname, branch_num, labels, scale_factor)
     p = print.single.tree(mytree, tree_style, time_file, title, lextra, rextra, da)
-    ggsave(out_file, p, width = 8, height = 5)
+    ggsave(out_file, p, width = 8, height = height)
   }
 
 }else if(plot_type == "single"){
@@ -192,7 +195,7 @@ if(plot_type == "all"){
     }
   }
 
-  ggsave(out_file, p, width = 8, height = 5)
+  ggsave(out_file, p, width = 8, height = height)
 
 }else if(plot_type == "bootstrap"){
   cat(paste0("Plotting bootstrap values for the tree in ", tree_file, "\n"))
@@ -240,14 +243,14 @@ if(plot_type == "all"){
 
       pc = ggarrange(p, phmap, nrow = 1, widths = c(6.5, 9.5))
       # pc = phmap %>% insert_left(p, width = 0.6)  # not work for internal nodes
-      ggsave(out_file, pc, width = 16, height = 5)
+      ggsave(out_file, pc, width = 16, height = height)
     }else{
-      ggsave(out_file, p, width = 8, height = 5)
+      ggsave(out_file, p, width = 8, height = height)
     }
 
   }else{
     p = plot.tree.bootstrap(mytree, title, rextra, da, scale_factor)
-    ggsave(out_file, p, width = 8, height = 5)
+    ggsave(out_file, p, width = 8, height = height)
   }
 
 }else{

@@ -286,7 +286,7 @@ void print_sequences(map<int, copy_number>& cn_matrix, int cn_max, int model, in
     sstm.str("");
 
     if(print_level.print_allele && model == BOUNDA){
-        cout << "Writing allele specific copy number " << endl;
+        cout << "Writing haplotype specific  copy number " << endl;
         sstm << dir << prefix << "-allele-cn.txt.gz";
         ogzstream out_allele_cn(sstm.str().c_str());
         for(int j = 0; j < test_tree.nleaf; ++j){
@@ -308,7 +308,7 @@ void print_sequences(map<int, copy_number>& cn_matrix, int cn_max, int model, in
     }
 
     if(print_level.print_baseline){
-        cout << "Writing allele specific total copy number " << endl;
+        cout << "Writing relative haplotype specific copy number " << endl;
         sstm << dir << prefix << "-allele-rcn.txt.gz";
         ogzstream out_rcn_baseline(sstm.str().c_str());
         for(int j = 0; j < test_tree.nleaf; ++j){
@@ -330,7 +330,7 @@ void print_sequences(map<int, copy_number>& cn_matrix, int cn_max, int model, in
     sstm.str("");
 
     if(print_level.print_allele){
-        cout << "Writing allele specific copy number of internal nodes" << endl;
+        cout << "Writing haplotype specific  copy number of internal nodes" << endl;
         sstm << dir << prefix << "-inodes-allele-cn.txt.gz";
         ogzstream out_allele_cn_inodes(sstm.str().c_str());
         for(int j = test_tree.nleaf; j < ntotn; ++j){
@@ -945,7 +945,7 @@ void print_simulations(int mode, int num_seg, vector<genome>& results, const vec
     sstm.str("");
 
     if(print_level.print_allele){
-        cout << "Writing allele specific copy number " << endl;
+        cout << "Writing haplotype specific  copy number " << endl;
         sstm << dir << prefix << "-allele-cn.txt.gz";
         ogzstream out_allele_cn(sstm.str().c_str());
         for(int j = 0; j < test_tree.nleaf; ++j){
@@ -968,7 +968,7 @@ void print_simulations(int mode, int num_seg, vector<genome>& results, const vec
     }
 
     if(print_level.print_baseline){
-        cout << "Writing allele specific total copy number " << endl;
+        cout << "Writing haplotype specific  total copy number " << endl;
         sstm << dir << prefix << "-allele-rcn.txt.gz";
         ogzstream out_rcn_baseline(sstm.str().c_str());
         for(int j = 0; j < test_tree.nleaf; ++j){
@@ -990,7 +990,7 @@ void print_simulations(int mode, int num_seg, vector<genome>& results, const vec
     sstm.str("");
 
     if(print_level.print_allele){
-        cout << "Writing allele specific copy number of internal nodes" << endl;
+        cout << "Writing haplotype specific  copy number of internal nodes" << endl;
         sstm << dir << prefix << "-inodes-allele-cn.txt.gz";
         ogzstream out_allele_cn_inodes(sstm.str().c_str());
         for(int j = test_tree.nleaf; j < ntotn; ++j){
@@ -1152,7 +1152,7 @@ void run_simulations(string tree_file, int mode, int method, const vector<int>& 
             double del_rate = rate_consts[1];
             if(model == BOUNDA){
                 if(debug){
-                    cout << "\tGetting allele specific rate matrix" << endl;
+                    cout << "\tGetting haplotype specific  rate matrix" << endl;
                 }
                 get_rate_matrix_allele_specific(qmat, dup_rate, del_rate, cn_max);
             }else{
@@ -1227,7 +1227,7 @@ int main (int argc, char** const argv) {
        ;
     po::options_description optional("Optional parameters");
     optional.add_options()
-      ("nsim,n", po::value<int>(&Nsims)->default_value(1), "number of multi-region samples")
+      ("nsim,n", po::value<int>(&Nsims)->default_value(3), "number of multi-region samples")
 
       ("tree_file", po::value<string>(&tree_file)->default_value(""), "input tree file. Mutations will be generated along this tree if provided.")
       ("nregion,r", po::value<int>(&Ns)->default_value(5), "number of regions")
@@ -1264,8 +1264,8 @@ int main (int argc, char** const argv) {
       ("print_allele", po::value<int>(&print_allele)->default_value(1), "whether or not to output haplotype-specific copy numbers")
       ("print_mut", po::value<int>(&print_mut)->default_value(1), "whether or not to output the list of mutations")
       ("print_nex", po::value<int>(&print_nex)->default_value(1), "whether or not to output the tree in NEXUS format")
-      ("print_relative", po::value<int>(&print_relative)->default_value(0), "whether or not to print relative copy numbers, similar to output of CGHcall: -2 (double deletion), -1 (single deletion), 0 (normal), 1 (gain), 2 (double gain)")
-      ("print_baseline", po::value<int>(&print_baseline)->default_value(0), "whether or not to print relative copy numbers obtained from baseline strategy as used in PISCA")
+      ("print_relative", po::value<int>(&print_relative)->default_value(0), "whether or not to print relative total copy numbers, similar to output of CGHcall: -2 (double deletion), -1 (single deletion), 0 (normal), 1 (gain), 2 (double gain)")
+      ("print_baseline", po::value<int>(&print_baseline)->default_value(0), "whether or not to print relative haplotype-specific copy numbers obtained from baseline strategy as used in PISCA")
 
       ("seed", po::value<unsigned>(&seed)->default_value(0), "seed used for generating random numbers")
       ("verbose", po::value<int>(&debug)->default_value(0), "verbose level (0: default, 1: debug)")

@@ -49,6 +49,9 @@ cn_colors1 = c("#6283A9","#bdd7e7","#f0f0f0", '#fdd49e', '#fdbb84','#fc8d59','#e
 # For relative CN -4 to 4
 cn_colors2 = c('#08519c','#3182bd', '#6baed6', '#9ecae1', "#f0f0f0", '#fdd49e','#fc8d59','#d7301f','#990000')
 
+xlab_cna_size = "Expected size of copy number alterations per site (Mbp)"
+xlab_cna_num = "Expected number of copy number alterations per site"
+xlab_cna_age = "Patient age (years)"
 
 MIN_BLEN = 1e-3
 TIP_OFFSET = 0.5
@@ -671,7 +674,7 @@ plot.tree.xlim.age <- function(tree, time_file, title = "", lextra = 3, rextra =
 
   # Shift all nodes by the difference between age util the first sample and node time of the first sample
   p$data$x = p$data$x + res_age$tshift
-  p <- p + geom_tiplab(align = TRUE, offset = TIP_OFFSET) + theme_tree2() + xlim(xl, tree_max) + xlab("Patient age (years)")
+  p <- p + geom_tiplab(align = TRUE, offset = TIP_OFFSET) + theme_tree2() + xlim(xl, tree_max) + xlab(xlab_cna_age)
   p <- p + geom_text2(aes(subset=!isTip, label=label), hjust=-.3)
 
   if(nrow(da) > 0){
@@ -701,9 +704,9 @@ plot.tree.bootstrap <- function(tree, title = "", rextra = 20, da = data.frame()
   # p <- p %<+% edge + geom_text(aes(x = branch, label = edge_len), nudge_y = 0.1)
 
   if(scale_factor == 1){
-    p <- p + ggtitle(title) + xlab("Number of copy number alteration")
+    p <- p + ggtitle(title) + xlab(xlab_cna_num)
   }else{
-    p <- p + ggtitle(title) + xlab("Size of copy number alteration (Mbp)")
+    p <- p + ggtitle(title) + xlab(xlab_cna_size)
   }
 
 
@@ -731,7 +734,7 @@ plot.tree.bootstrap.age <- function(tree, time_file, title = "", lextra = 3, rex
 
   # Shift all nodes by the difference between age util the first sample and node time of the first sample
   p$data$x = p$data$x + res_age$tshift
-  p <- p + geom_tiplab(align = TRUE, offset = TIP_OFFSET) + theme_tree2() + xlim(xl, tree_max) + xlab("Patient age (years)")
+  p <- p + geom_tiplab(align = TRUE, offset = TIP_OFFSET) + theme_tree2() + xlim(xl, tree_max) + xlab(xlab_cna_age)
   p <- p + geom_text2(aes(subset=!isTip, label=label), hjust=-.3, color="red")
 
   # edge = data.frame(tree$edge, edge_num = 1:nrow(tree$edge), edge_len = tree$edge.length)
@@ -778,7 +781,7 @@ plot.tree.ci.node <- function(tree_ci, time_file, title = "", lextra = 3, rextra
   # p <- p %<+% edge + geom_text(aes(x = branch, label = edge_len), nudge_y = 0.1, nudge_x = res_age$tshift)
 
   p <- p + geom_range('time_0.95_CI', color = 'red', size = 3, alpha = 0.3)
-  p <- p + xlim(xl, tree_max) + xlab("Patient age (years)")
+  p <- p + xlim(xl, tree_max) + xlab(xlab_cna_age)
 
   if(nrow(da) > 0){
     p = get.plot.annot(tree_ci@phylo, da, p)
@@ -813,10 +816,10 @@ plot.tree.ci.node.mut <- function(tree_ci, time_file, title = "", lextra = 0, re
 
   if(scale_factor == 1){
     p <- p + geom_range('nmut_0.95_CI', color='red', size = 3, alpha = 0.3)
-    p <- p + xlim(xl, tree_max) + xlab("Number of copy number alteration")
+    p <- p + xlim(xl, tree_max) + xlab(xlab_cna_num)
   }else{
     p <- p + geom_range('mutsize_0.95_CI', color='red', size=3, alpha = 0.3)
-    p <- p  + xlim(xl, tree_max) + xlab("Size of copy number alteration (Mbp)")
+    p <- p  + xlim(xl, tree_max) + xlab(xlab_cna_size)
   }
 
 
