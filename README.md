@@ -2,12 +2,12 @@ Copy Number Evolutionary Tree Analysis
 =============
 
 # Introduction
-This repository contains a set of programs to simulate and build phylogenetic trees from copy number alterations in tumour genomes from multiple samples of a patient.
+This repository contains a set of programs to simulate and build phylogenetic trees from copy number alterations (CNAs) in tumour genomes from multiple samples of a patient.
 
 NOTE: This repository is still under development and mainly for personal use currently.
 
 There are mainly 3 programs:
-* cnets: simulating SVs along a phylogenetic (coalescence) tree
+* cnets: simulating CNAs along a phylogenetic (coalescence) tree
 * cnetml: building phylogenetic trees from copy numbers with maximum likelihood approach
 * cnetmcmc: building phylogenetic trees from copy numbers with Bayesian MCMC approach
 
@@ -187,7 +187,7 @@ For whole genome doubling, chr is assigned to 0 and seg_ID is assigned to -1.
 
 
 
-# Tree building with ML
+# Tree building with cnetml
 There are 4 running modes in cnetml.
 * mode 0 (default): building maximum likelihood tree from input copy numbers, using "-b 1" for bootstrapping
 * mode 1: a simple comprehensive test on a simulated tree
@@ -210,7 +210,7 @@ Mutation rates are implicit parameters in the computing tree likelihood, so the 
 
 There are 3 tree searching method:
 * exhaustive search (feasible for trees with fewer than 7 samples)
-* hill climbing (applicable for trees with at least 5 samples)
+* heuristic search (applicable for trees with at least 5 samples)
 * genetic algorithm (may be slow, need improvement, deprecated)
 
 
@@ -289,12 +289,12 @@ Only the implementation under the bounded model of haplotype-specific copy numbe
 
 ## Output
 * *.(mrca|joint).cn: The reconstructed copy numbers in tab-delimited format for the most recent common ancestor node of all tumour samples (mrca) and all internal nodes (joint) respectively. When the input are total copy numbers, there are four columns:  node ID, chromosome ID, site ID, CN. When the input are haplotype-specific copy numbers, there are five columns: node ID, chromosome ID, site ID, cnA, cnB.
-* *.mrca.state: A tab-delimited file containing the posterior probability of each possible copy number state on a site for MRCA node. The columns are: node ID, site ID (chromosomeID_siteID), probability_stateID. The copy number state ID is the same as the state index in the rate matrix of the Markov model.
-* *.joint.state: A tab-delimited file containing the possible copy number state on a site for all internal nodes. The columns are: node ID, site ID (chromosomeID_siteID), cn_stateID.
+* *.mrca.state: A tab-delimited file containing the posterior probability of each possible copy number state on a unique variant site (containing at least one atypical copy number across all samples) for MRCA node. The columns are: node ID, site ID (chromosomeID_siteID), probability_stateID. The copy number state ID is the same as the state index in the rate matrix of the Markov model.
+* *.joint.state: A tab-delimited file containing the possible copy number state on a unique variant site for all internal nodes. The columns are: node ID, site ID (chromosomeID_siteID), cn_stateID.
 
 
 
-# Tree building with MCMC
+# Tree building with cnetmcmc
 
 Only basic MCMC algorithm is implemented here and not comprehensively tested.
 

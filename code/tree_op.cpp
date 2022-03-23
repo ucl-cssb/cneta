@@ -661,6 +661,176 @@ evo_tree generate_random_tree(int Ns, gsl_rng* r, long unsigned (*fp_myrng)(long
 }
 
 
+// treat the number of samples and their sampling times as given, and use the times to form time intervals.  
+// The number of lineages (and the coalescent rate) changes at each sampling time as well as at each coalescent time.  
+// Other things are the same as in coalescent simulation for contemporary samples
+evo_tree generate_time_tree(int nsample, gsl_rng* r, long unsigned (*fp_myrng)(long unsigned), const ITREE_PARAM& itree_param, const vector<int>& time_sampling, int debug){
+    cout << "Generating random coalescence trees with different sampling times" << endl;
+    cout << " The effective population size is " << itree_param.Ne << endl;
+    cout << " The generation time is " << itree_param.gtime << endl;
+    if(itree_param.beta > 0){
+        cout << " The exponential growth rate is " << itree_param.beta << endl;
+    }
+
+    vector<int> edges;
+    vector<double> lengths;
+    vector<double> epoch_times;
+    vector<double> times(2 * nsample + 1, 0.0);
+    vector<int> tip_nodes;  // the available tip nodes
+    vector<int> tip_nodes_coalesced; 
+    vector<int> nodes;   // the available nodes are based on sampling times, tip nodes will be added based on time 
+
+    int Ne = itree_param.Ne;
+    double beta = itree_param.beta;
+    double gtime = itree_param.gtime;
+
+    // For compatibility with ape in R, root node must be labelled
+    // 0 to nsample-1 are leaf, nsample is germline, nsample + 1 is root
+    // all other nodes ids start from here
+    int node_count = nsample + 2;
+
+    // create leaf nodes
+    // split time into intervals, tipID: tipTime
+    map<int, int> sample_times;
+    for(int i = 0; i < nsample; i++){
+        tip_nodes.push_back(i);
+        sample_times[i] = time_sampling[i];
+        times[i] = time_sampling[i] / gtime;
+    }
+
+    // initial nodes are tip nodes at time 0 (at least one tip)
+    for(auto it = sample_times.begin(); it != sample_times.end(); ++it){
+       if(it->second == 0) nodes.push_back(it->first);
+    }
+
+    // need at least two nodes to coalescence
+    if(nodes.size() <= 1){
+        vector<int> index(nsample, 0);
+        iota(index.begin(), index.end(), 0);
+        sort(index.begin(), index.end(), [&](int i, int j){ return time_sampling[i] < time_sampling[j]; } );
+        nodes.push_back(index[1]);         
+    }
+
+    double t_tot = 0.0;
+    int nlin = nsample;
+    while(nlin > 1){
+        if(debug > 1){
+            cout << "current number of nodes " << nodes.size() << endl;
+            cout << "nodes available for coalescence at time " << t_tot;
+            for(auto n0 : nodes) cout << " " << n0;
+            cout << endl;
+        }
+        // sample a time from Exp( combinations(k,2) )
+        double lambda = nlin * (nlin - 1) / 2;
+        double tn = gsl_ran_exponential(r, 1 / lambda) * Ne;
+        if(debug  > 1) cout << "Normal coalescence time  " << tn << endl;
+        double t = tn;
+        if(beta > 0){  // simulate exponential growth
+            t = ((log(exp(beta * t_tot) + beta * tn)) / beta) - t_tot;    // Formula in CoalEvol7.3.5.c, equivalent to the one above
+        }
+        if(debug > 1) cout << "exponential coalescence time  " << t << endl;
+        t_tot += t;
+        if(debug > 1) cout << "total time " << t_tot << endl;
+
+        // choose two random nodes from available list
+        random_shuffle(nodes.begin(), nodes.end(), fp_myrng);
+
+        // edge node_count -> node
+        edges.push_back(node_count);
+        edges.push_back(nodes[nodes.size() - 1]);
+        lengths.push_back(t_tot - times[nodes[nodes.size() - 1]]);
+        if(debug > 1) cout << "time at node " << nodes[nodes.size() - 1] << " is " << times[nodes[nodes.size() - 1]] << endl;
+
+        edges.push_back(node_count);
+        edges.push_back(nodes[nodes.size() - 2]);
+        lengths.push_back(t_tot - times[nodes[nodes.size() - 2]]);
+        if(debug > 1) cout << "time at node " << nodes[nodes.size() - 2] << " is " << times[nodes[nodes.size() - 2]] << endl;
+
+        // update time for this node
+        //cout << "\t" << node_count + 1 << "\t" << t_tot << endl;
+        epoch_times.push_back(t_tot);
+        times[node_count] = t_tot;
+
+        if(debug > 1) cout << "coalesced nodes " << nodes[nodes.size() - 1] << ", " << nodes[nodes.size() - 2] << endl;
+        // remove the coalesced nodes, remove them from available tip nodes too
+        int nid1 = nodes.back();   
+        if(nid1 < nsample){
+            tip_nodes_coalesced.push_back(nid1);
+            tip_nodes.erase(find(tip_nodes.begin(), tip_nodes.end(), nid1));
+            if(debug > 1)   cout << "remove node " << nid1 << endl;
+        } 
+        nodes.pop_back();
+        int nid2 = nodes.back();      
+        if(nid2 < nsample){
+            tip_nodes_coalesced.push_back(nid2);
+            tip_nodes.erase(find(tip_nodes.begin(), tip_nodes.end(), nid2));
+            if(debug > 1)   cout << "remove node " << nid2 << endl;
+        } 
+        nodes.pop_back();
+
+        if(debug > 1) cout << "tip node size after deletion " << tip_nodes.size() << endl;
+        // only add new nodes after previous nodes have been popped back to maintain the order
+        // check if there are still tip nodes available and their times
+        for(auto tn : tip_nodes){
+            // cout << "tip node " << tn << endl;
+            if(find(tip_nodes_coalesced.begin(), tip_nodes_coalesced.end(), tn) != tip_nodes_coalesced.end()) continue;
+            if(find(nodes.begin(), nodes.end(), tn) == nodes.end() && t_tot >= sample_times[tn]){
+                // add all the available tip nodes 
+                if(debug > 1) cout << "add tip node " << tn << endl;
+                nodes.push_back(tn);
+            }
+        }
+        nodes.push_back(node_count);
+
+        node_count++;
+        nlin--;
+    }
+
+    // create the root and germline nodes and edges
+    double lambda = runiform(r, 0, 1);
+    double tn = gsl_ran_exponential(r, 1/lambda) * Ne;
+    if(debug > 1) cout << "Normal coalescence time  " << tn << endl;
+    double t = tn;
+    if(beta > 0){  // simulate exponential growth
+        // t = (log(1 + beta * tn * exp(- beta * t_tot))) / beta;  // Formula in book "Gene Genealogies, Variation and Evolution", P99
+        t = ((log(exp(beta * t_tot) + beta * tn)) / beta)- t_tot;    // Formula in CoalEvol7.3.5.c, equivalent to the one above
+    }
+    if(debug > 1) cout << "exponential coalescence time  " << t << endl;
+    t_tot += t;
+    epoch_times.push_back(t_tot);
+
+    // add in the time for the root and germline nodes
+    times[nsample + 1] = t_tot;
+    times[nsample] = t_tot;
+
+    edges.push_back(nsample + 1);
+    edges.push_back(node_count - 1);
+    lengths.push_back(t);
+
+    edges.push_back(nsample + 1);
+    edges.push_back(nsample);
+    lengths.push_back(0);
+
+    // invert the times
+    for(int i = 0; i < times.size(); ++i){
+        times[i] = t_tot - times[i];
+    }
+
+    for(int l = 0; l < lengths.size(); ++l){
+        lengths[l] = lengths[l] * gtime;
+    }
+
+    evo_tree ret(nsample + 1, edges, lengths);
+
+    if(debug){
+      cout << "coalescence tree with different tip times: " << endl;
+      ret.print();
+    }
+
+    return ret;
+}
+
+
 // Create a new tree with the same topology as input tree but different branch lengths
 evo_tree create_new_tree(gsl_vector* blens, evo_tree& rtree, const double& max_tobs, int cons){
     int nedge = 2 * rtree.nleaf - 2;

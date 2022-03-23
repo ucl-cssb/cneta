@@ -127,9 +127,11 @@ void assign_tip_times(double delta_t, int Ns, gsl_rng* r, vector<double>& tobs, 
 evo_tree generate_random_tree(int Ns, gsl_rng* r, long unsigned (*fp_myrng)(long unsigned), int age, const ITREE_PARAM& itree_param, double delta_t, int cons, int debug = 0);
 
 
+evo_tree generate_time_tree(int nsample, gsl_rng* r, long unsigned (*fp_myrng)(long unsigned), const ITREE_PARAM& itree_param, const vector<int>& time_sampling, int debug = 0);
+
+
 // Create a new tree with the same topology as input tree but different branch lengths
 evo_tree create_new_tree(gsl_vector* blens, evo_tree& rtree, const double& max_tobs, int cons);
-
 
 
 // Adjust the time of sample1 so that it is not after all other tips. Then the subsequent adjustment will be addition, not introducing negative values

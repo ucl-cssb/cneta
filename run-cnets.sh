@@ -18,6 +18,8 @@ gtime=0.002739726 # generation time in year
 age=60  # Age of the patient at first sample
 cons=1  # Whether the tree height is constrained by age or not
 dt=2  # time step for simulating different sampling times
+stime=""
+# stime="0 1 2"
 ################################################################################
 
 
@@ -57,7 +59,7 @@ echo "Start running cnets"
 
 echo "seed $seed"  > $dir/std_cnets_cons${cons}_model${model}_method${method}
 # valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all --track-origins=yes -v
-/usr/bin/time ./code/cnets --tree_file "${tree_file}" -p "${prefix}" -o $dir -r $Ns -n $Nsim --mode $mode --method $method --fix_nseg $fix_nseg --seg_max $seg_max --cn_max $cn_max --dup_rate $r1 --del_rate $r2 --chr_gain $r3 --chr_loss $r4 --wgd $r5 --dup_size $s1 --del_size $s2 -e $Ne -b $beta --gtime $gtime -t $dt --verbose $verbose --constrained $cons --model $model --age $age --seed $seed --print_relative $print_relative --print_baseline $print_baseline >> $dir/std_cnets_cons${cons}_model${model}_method${method}
+/usr/bin/time ./code/cnets --tree_file "${tree_file}" -p "${prefix}" -o $dir -r $Ns -n $Nsim --mode $mode --method $method --fix_nseg $fix_nseg --seg_max $seg_max --cn_max $cn_max --dup_rate $r1 --del_rate $r2 --chr_gain $r3 --chr_loss $r4 --wgd $r5 --dup_size $s1 --del_size $s2 -e $Ne -b $beta --gtime $gtime -t $dt --verbose $verbose --constrained $cons --model $model --age $age --stime "$stime" --seed $seed --print_relative $print_relative --print_baseline $print_baseline >> $dir/std_cnets_cons${cons}_model${model}_method${method}
 
 wait
 

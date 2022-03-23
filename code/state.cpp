@@ -545,8 +545,6 @@ void get_ancestral_states_site_decomp(vector<vector<double>>& L_sk_k, vector<vec
 void set_pmat(const evo_tree& rtree, int Ns, int nstate, int model, int cn_max, const vector<int>& knodes, vector<double>& blens, vector<double*>& pmat_per_blen, ofstream& fout){
   int debug = 0;
 
-
-
   int dim_mat = nstate * nstate;
   double *qmat = new double[dim_mat];
   memset(qmat, 0.0, dim_mat*sizeof(double));
@@ -933,8 +931,14 @@ double reconstruct_marginal_ancestral_state(const evo_tree& rtree, map<int, vect
     if(model == BOUNDA) nstate = (cn_max + 1) * (cn_max + 2) / 2;
 
     string header="node\tsite";
-    for(int i = 0; i < nstate; i++){
-        header += "\tprobablity_" + to_string(i);
+    if(is_total){
+        for(int i = 0; i < cn_max + 1; i++){
+            header += "\tprobablity_" + to_string(i);
+        }
+    }else{
+        for(int i = 0; i < nstate; i++){
+            header += "\tprobablity_" + to_string(i);
+        }
     }
     fout << header << endl;
 
@@ -1109,13 +1113,13 @@ void reconstruct_joint_ancestral_state(const evo_tree& rtree, map<int, vector<ve
 
     string ofile_joint = ofile + ".joint.state";
     ofstream fout(ofile_joint);
+
     string header;
     if(is_total){
         header = "node\tsite\tcn";
     }else{
         header = "node\tsite\tcnA\tcnB";
     }
-
     fout << header << endl;
 
     string ofile_joint_cn = ofile + ".joint.cn";

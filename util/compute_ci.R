@@ -22,10 +22,11 @@ if(is_normal == "Y"){
   # using 2.5th and 97.5th percentile
   sorted_data = sort(data)
   ci95 = quantile(sorted_data, probs = c(0.025, 0.975))
+  smu = median(sorted_data)
   left = ci95[1]
   right = ci95[2]
 }
 
 
-ci_str = paste0("(", round(left, digit), ", ", round(right, digit), ")")
+ci_str = paste0(round(smu, digit), " (", round(left, digit), ", ", round(right, digit), ")")
 cat(ci_str)

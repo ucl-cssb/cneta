@@ -2197,7 +2197,7 @@ int main (int argc, char ** const argv) {
             }
 
             if(vm.count("version")) {
-                    cout << "cnetmcmc [version 0.1], a program to build a phylogenetic tree  from total or haplotype-specific copy number profiles of multiple (spatio-temporal) samples for a single patient with MCMC approach" << endl;
+                    cout << "CNETMCMC [version " << VERSION << "], a program to build a phylogenetic tree from total or haplotype-specific copy number profiles of multiple (spatio-temporal) samples for a single patient with MCMC approach" << endl;
                     cout << "This program can also be used to estimate parameters given a tree of fixed topology." << endl;
                     return 1;
             }

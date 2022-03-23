@@ -51,6 +51,8 @@ const int WGD_CUTOFF = 3;    // genome ploidy to determine WGD
 // key: chr, seg, copy_number
 typedef map<int, map<int, int>> copy_number;
 
+const string VERSION = "0.1";
+
 
 // read-only
 struct INPUT_PROPERTY{
@@ -74,6 +76,26 @@ struct INPUT_DATA{
   vector<vector<int>> obs_change_chr;
   vector<int> sample_max_cn;
 };
+
+
+// Read strings separated by space into a vector.
+// num: the number of element in the string. If not given, assume it is the first number in the string
+template <typename T>
+void get_vals_from_str(vector<T>& vals, string str_vals, int num = 0){
+    assert(str_vals != "");
+    stringstream ss(str_vals);
+    if(num==0)   ss >> num;
+    for(int i = 0; i < num; i++){
+        T d1;
+        ss >> d1;
+        vals.push_back(d1);
+    }
+    // cout << "vector from " << str_vals << ": ";
+    // for(auto v : vals){
+    //     cout << "\t" << v;
+    // }
+    // cout << endl;
+}
 
 
 #endif

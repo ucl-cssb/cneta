@@ -801,7 +801,7 @@ double compute_tree_likelihood(evo_tree& tree, map<int, vector<vector<int>>>& vo
 }
 
 
-void write_min_nlnl_tree(evo_tree& min_nlnl_tree, int num_total_bins, string ofile, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type, int maxj, int debug){ 
+void write_min_nlnl_tree(evo_tree& min_nlnl_tree, int num_total_bins, string ofile, map<int, vector<vector<int>>>& vobs, OBS_DECOMP& obs_decomp, const set<vector<int>>& comps, LNL_TYPE& lnl_type, int maxj, int debug){
     int only_seg = lnl_type.only_seg;
     int model = lnl_type.model;
 
@@ -1096,7 +1096,7 @@ int main(int argc, char** const argv){
     ("infer_chr", po::value<int>(&infer_chr)->default_value(0), "whether or not to infer chromosome gain/loss status of a sample from its ABSOLUTE copy numbers")
 
     ("use_repeat", po::value<int>(&use_repeat)->default_value(1), "whether or not to use repeated site patterns when computing the likelihood")
-    ("correct_bias", po::value<int>(&correct_bias)->default_value(1), "correct ascertainment bias")
+    ("correct_bias", po::value<int>(&correct_bias)->default_value(1), "correct bias when excluding invariant sites")
 
     // options related to inferring ancestry state
     ("infer_marginal_state", po::value<int>(&infer_marginal_state)->default_value(1), "whether or not to infer marginal ancestral state of MRCA")
@@ -1146,7 +1146,7 @@ int main(int argc, char** const argv){
           return 1;
       }
       if(vm.count("version")){
-          cout << "cnetml [version 0.1], a program to build a maximum likelihood phylogenetic tree from total or haplotype-specific copy number profiles of multiple (spatio-temporal) samples for a single patient" << endl;
+          cout << "CNETML [version " << VERSION << "], a program to build a maximum likelihood phylogenetic tree from total or haplotype-specific copy number profiles of multiple (spatio-temporal) samples for a single patient" << endl;
           cout << "This program can also be used to compute the likelihood and ancestral states of a given tree, maximum likelihood of a tree with fixed topology (and/or mutation rates), given the copy number profiles." << endl;
           return 1;
       }

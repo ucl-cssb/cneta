@@ -43,11 +43,13 @@ theme1 = theme(legend.position = "none",
 
 # cn_colors1 = c("#6283A9","#bdd7e7","#f0f0f0","#FCAE91", "#B9574E", "#76000D", "#8B0000", "#000000")
 # Max CN to show in heatmap
-MAX_CN = 8
-# For absolute CN 0 to 8
-cn_colors1 = c("#6283A9","#bdd7e7","#f0f0f0", '#fdd49e', '#fdbb84','#fc8d59','#ef6548','#d7301f','#990000')
+MAX_CN = 6
+# For absolute CN 0 to 8 (obtained from https://colorbrewer2.org, 8 classes, sequential data)
+# cn_colors1 = c("#6283A9","#bdd7e7","#f0f0f0", '#fdd49e', '#fdbb84','#fc8d59','#ef6548','#d7301f','#990000')
+# For absolute CN 0 to 6 (obtained from https://colorbrewer2.org, 5 classes, sequential data)
+cn_colors1 = c("#6283A9","#bdd7e7","#f0f0f0", '#fdcc8a','#fc8d59','#e34a33','#b30000')
 # For relative CN -4 to 4
-cn_colors2 = c('#08519c','#3182bd', '#6baed6', '#9ecae1', "#f0f0f0", '#fdd49e','#fc8d59','#d7301f','#990000')
+cn_colors2 = c('#08519c','#3182bd', '#6baed6', '#9ecae1', "#f0f0f0", '#fdcc8a','#fc8d59','#e34a33','#b30000')
 
 xlab_cna_size = "Expected size of copy number alterations per site (Mbp)"
 xlab_cna_num = "Expected number of copy number alterations per site"
@@ -851,7 +853,7 @@ plot.cn.heatmap <- function(d_seg, main, type="absolute", theme = theme1, cn_col
   if(type=="absolute"){
     print("Plot absolute copy number")
     d_seg %>% dplyr::mutate(cn=if_else(cn > MAX_CN, MAX_CN, cn)) -> d_seg
-    cn_vals = c("0", "1", "2", "3", "4", "5", "6", "7", "8")
+    cn_vals = c("0", "1", "2", "3", "4", "5", "6")
   }else{
     print("Plot relative copy number")
     d_seg %>% dplyr::mutate(cn=if_else(cn > max_rcn, max_rcn, cn)) %>% dplyr::mutate(cn=if_else(cn < min_rcn, min_rcn, cn)) -> d_seg

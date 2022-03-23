@@ -249,12 +249,12 @@ void write_sample_times(stringstream& sstm, evo_tree& test_tree, string dir, str
     cout << "Writing sampling times" << endl;
     sstm << dir << prefix << "-rel-times.txt";
     double node_min = NODE_MIN_TIME;
-    for(int j = 0; j < test_tree.nleaf-1; ++j){
+    for(int j = 0; j < test_tree.nleaf - 1; ++j){
         if(test_tree.nodes[j].time < node_min) node_min = test_tree.nodes[j].time;
     }
     //cout << "leaf minimum: " << node_min << endl;
     ofstream out_rel(sstm.str());
-    for(int j = 0; j < test_tree.nleaf-1; ++j){
+    for(int j = 0; j < test_tree.nleaf - 1; ++j){
         double delta = test_tree.nodes[j].time - node_min;
         if(delta < SMALL_VAL) delta = 0;
         out_rel << j + 1 << "\t" << delta << "\t" << ceil(age + delta) << endl;
@@ -1093,7 +1093,7 @@ void print_simulations(int mode, int num_seg, vector<genome>& results, const vec
 }
 
 
-void run_simulations(string tree_file, int mode, int method, const vector<int>& chr_lengths, int num_seg, int Ns, int Nsims, int cn_max, int model, int cons, const ITREE_PARAM& itree_param, double delta_t, int age, const vector<double>& rate_consts, const SV_SIZE& sv_size, string dir, string prefix, PRINT_LEVEL print_level, gsl_rng* r, int debug = 0){
+void run_simulations(string tree_file, int mode, int method, const vector<int>& chr_lengths, int num_seg, int Ns, int Nsims, int cn_max, int model, int cons, const ITREE_PARAM& itree_param, double delta_t, int age, const vector<double>& rate_consts, const vector<int>& time_sampling, const SV_SIZE& sv_size, string dir, string prefix, PRINT_LEVEL print_level, gsl_rng* r, int debug = 0){
     genome germline(chr_lengths, NORM_PLOIDY);
 
     string orig_prefix = prefix;
@@ -1116,10 +1116,16 @@ void run_simulations(string tree_file, int mode, int method, const vector<int>& 
         if(tree_file != ""){
             test_tree = read_tree_info(tree_file, Ns);
         }else{
-            test_tree = generate_random_tree(Ns, r, fp_myrng, age, itree_param, delta_t, cons, debug);
+            if(time_sampling.size() > 0){
+                test_tree = generate_time_tree(Ns, r, fp_myrng, itree_param, time_sampling, debug);
+            }else{
+                test_tree = generate_random_tree(Ns, r, fp_myrng, age, itree_param, delta_t, cons, debug);
+            }
+            
         }
         if(debug){
           test_tree.print();
+          cout << test_tree.make_newick() << endl;
           cout << "Simulated tree height " << get_tree_height(test_tree.get_node_times()) << endl;
         }
 
@@ -1176,6 +1182,7 @@ void run_simulations(string tree_file, int mode, int method, const vector<int>& 
     // cout << "finish simulations" << endl;
 }
 
+
 //////////////////////////////////////////////////////////
 ///                                                    ///
 ///   MAIN                                             ///
@@ -1208,7 +1215,7 @@ int main (int argc, char** const argv) {
     int Ne;     // effective population size
     double beta, gtime;    // population growth rate
     double delta_t;    // relative timing difference
-    // string stime;
+    string stime;  // a string to specify the sampling times of tips
 
     int print_allele, print_mut, print_nex, print_relative, print_baseline;
     string tree_file;
@@ -1230,7 +1237,7 @@ int main (int argc, char** const argv) {
       ("nsim,n", po::value<int>(&Nsims)->default_value(3), "number of multi-region samples")
 
       ("tree_file", po::value<string>(&tree_file)->default_value(""), "input tree file. Mutations will be generated along this tree if provided.")
-      ("nregion,r", po::value<int>(&Ns)->default_value(5), "number of regions")
+      ("nregion,r", po::value<int>(&Ns)->default_value(5), "number of samples")
       ("age,a", po::value<int>(&age)->default_value(MAX_AGE), "age of the patient to simulate")
 
       ("mode", po::value<int>(&mode)->default_value(0), "running mode of the program (0: simulating genome in fix-sized bins (4401 bins of size 500 Kbp by default), 1: simulating genome in segments of variable size, 2 to 4: test)")
@@ -1241,8 +1248,9 @@ int main (int argc, char** const argv) {
       ("epop,e", po::value<int>(&Ne)->default_value(2), "effective population size of cell populations")
       ("gtime", po::value<double>(&gtime)->default_value(0.002739726), "generation time in year")
       ("beta,b", po::value<double>(&beta)->default_value(0.0), "population growth rate")
-      ("tdiff,t", po::value<double>(&delta_t)->default_value(0), "relative timing difference to earliest sample")
-      // ("stime", po::value<string>(&stime)->default_value(""), "sampling time of different samples (Format: numTipDates Date1 from to Date2 from to ... DateN from to)")
+      ("tdiff,t", po::value<double>(&delta_t)->default_value(0), "relative timing difference to earliest sample, used to generate random sampling times")
+      // ("stime", po::value<string>(&stime)->default_value(""), "sampling time of different samples (Format: time 1 (in year, starting from 0), #samples at time 1, ..., time N, #samples at time N)")
+      ("stime", po::value<string>(&stime)->default_value(""), "sampling time of different samples (Format: time for sample 1 (in year, starting from 0 for the most recent sample), time for sample 2, ..., time for sample N)")      
       ("constrained", po::value<int>(&cons)->default_value(1), "whether or not to constrain tree height by patient age. If yes (1), the initial branch lengths will be adjusted by specified patient age so that the tree height is smaller than patient age.")
 
       // segment options
@@ -1282,7 +1290,7 @@ int main (int argc, char** const argv) {
             return 1;
         }
         if(vm.count("version")){
-            cout << "cnets [version 0.1], a program to simulate copy number alterations along a phylogenetic tree" << endl;
+            cout << "CNETS [version " << VERSION << "], a program to simulate copy number alterations along a phylogenetic tree" << endl;
             return 1;
         }
         po::notify(vm);
@@ -1301,6 +1309,19 @@ int main (int argc, char** const argv) {
     setup_rng(r, seed);
 
     fp_myrng = &myrng;
+
+    // read tip times for input string 
+    vector<int> time_sampling;
+    if(stime != ""){
+        get_vals_from_str(time_sampling, stime, Ns);
+    }
+    if(debug){
+        cout << "input sampling times:";
+        for(auto t : time_sampling){
+            cout << " " << t;
+        }
+        cout << endl;
+    }
 
     PRINT_LEVEL print_level{print_allele, print_mut, print_nex, print_relative, print_baseline};
 
@@ -1383,7 +1404,7 @@ int main (int argc, char** const argv) {
         if(beta > 0){
             cout << "\nSimulating exponential growth" << endl;
         }
-        run_simulations(tree_file, mode, method, chr_lengths, num_seg, Ns, Nsims, cn_max, model, cons, itree_param, delta_t, age, rate_consts, sv_size, dir, prefix, print_level, r, debug);
+        run_simulations(tree_file, mode, method, chr_lengths, num_seg, Ns, Nsims, cn_max, model, cons, itree_param, delta_t, age, rate_consts, time_sampling, sv_size, dir, prefix, print_level, r, debug);
     }else{
         cout << "\nRunning test" << endl;
         run_test(mode, dir, seed, itree_param, sv_size, debug);
