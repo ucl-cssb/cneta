@@ -298,7 +298,7 @@ Only the implementation under the bounded model of haplotype-specific copy numbe
 
 Only basic MCMC algorithm is implemented here and not comprehensively tested.
 
-Please see run-cnetmcmc.sh to learn how to set different parameters
+Please see run-cnetmcmc.sh to learn how to set different parameters.
 
 There are two running modes depending on whether a reference tree is provided or not.
 With a reference tree, the tree topolgy is fixed.

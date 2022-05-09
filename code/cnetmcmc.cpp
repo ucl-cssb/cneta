@@ -1808,8 +1808,8 @@ void run_mcmc(evo_tree& rtree, int model, const int n_draws, const int n_burnin,
                         }
 
                         default:{
-                        cout << "Wrong mutation rate type!" << endl;
-                        break;
+                            cout << "Wrong mutation rate type!" << endl;
+                            break;
                         }
                     }
                 }

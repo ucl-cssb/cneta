@@ -193,8 +193,8 @@ vector<evo_tree> get_initial_trees(int init_tree, string dir_itrees, int Ns, int
         }
     }
 
-    if(debug){
-        ofstream out_tree("./inital_trees.txt");
+    if(debug > 1){
+        ofstream out_tree("./initial_trees.txt");
         for(int i = 0; i < trees.size(); ++i){
             int precision = 5;
             string newick = trees[i].make_newick(precision);
@@ -956,7 +956,7 @@ void print_desc(int cons, int maxj, int correct_bias, int use_repeat, int optim,
     cout << "\nUsing L-BFGS-B method for optimization" << endl;
   }
 
-  switch(model){
+  (model){
       case MK:{
           cout << "\nAssuming Mk model " << endl;
           break;
