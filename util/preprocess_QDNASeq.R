@@ -4,12 +4,18 @@
 suppressMessages(library(tidyverse))
 
 # This script includes functions to process the output of QDNASeq to prepare input to CNETML
+# Two required input files for CNETML: *-cn.txt and *-sample-ids.txt
+# One optional input file for CNETML when samples are at different times: *-rel-times.txt
 
 ## Transform the data in the list element to a data frame
-transform.data <- function(mat, bins_data){
+# mat: CNA calls for a sample in a format of matrix with columns for each bin and rows being the fields including "chromosome","start","end","copynumber","calls"
+# bins: the boundary of bins of the CNA calls, with 3 columns: chromosome, start, end
+# Please see bin_locations_4401.Rdata for the format of bins
+# called in function write_cn to format CNAs for each sample in a patient
+transform.data <- function(mat, bins){
   df <- as.data.frame(t(mat))
 
-  df <- cbind(df, bins_data)
+  df <- cbind(df, bins)
 
   df <- df[, c("chromosome","start","end","copynumber","calls")]
   
@@ -24,6 +30,7 @@ transform.data <- function(mat, bins_data){
 # bins: the boundary of bins of the CNA calls, with 3 columns: chromosome, start, end
 # samps: all the samples of the patient, a data frame with 3 columns: "sample", "patient", "region"
 # dir: output directory
+# called in write_patients to prepare *-cn.txt files for all the patients of interest
 write_cn <- function(p, cna_all, bins, samps, dir){
     nsamps <- nrow(samps)
     d <- vector("list", nsamps)
@@ -52,8 +59,9 @@ write_cn <- function(p, cna_all, bins, samps, dir){
 
 # p: patient ID
 # samps: all the samples of the patient, a data frame with 3 columns: sample, patient, region
-# patient_info: a data frame with patient sample information, with columns including "PatientID and "sample", and additional columns when the sampling time information is available, "Age" and "SampleDate"
+# patient_info: a data frame with patient sample information, with columns including "PatientID and "sample", and additional columns when the sampling time information is available, "Age" and "SampleDate"; there must be a column called "sample" as it is used explicitly inside the function
 # incl_time: whether or not the sampling time information is included in patient_info
+# called in write_patients to prepare *-sample-ids.txt (and *-rel-times.txt) files for all the patients of interest
 write_patient_info <- function(p, samps, patient_info, dir, incl_time = F){
   nsamps <- nrow(samps)
 
@@ -96,7 +104,7 @@ write_patient_info <- function(p, samps, patient_info, dir, incl_time = F){
 
 # cna_all: a list of CNA calls for all the samples, each list contains a data frame with at least five columns: "chromosome","start","end","copynumber","calls"
 # bins: the boundary of bins of the CNA calls, with 3 columns: chromosome, start, end
-# patient_info: a data frame with patient sample information, with columns including PatientID, sample, Age, SampleDate        
+# patient_info: a data frame with patient sample information, with columns including "PatientID and "sample", and additional columns when the sampling time information is available, "Age" and "SampleDate"       
 # patient_sample: a data frame with 3 columns: sample, patient, region
 # patients: a vector of PatientIDs to process
 # dir: output directory
