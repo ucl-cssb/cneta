@@ -262,12 +262,14 @@ get.site.coord <- function(pos_file, cyto_file, bin_file = "", seed = NA){
   if(ncol(dpos)== 4){  # the index has to start from 1 for each chromosome
     names(dpos) <- c("sample", "chromosome", "index", "cn")
     nsite = dpos %>% group_by(sample) %>% tally() %>% select(n) %>% unique()
-    if(nsite == 4401){   # read bin file to get positions
-      if(bin_file == ""){
-        stop("Please provide the file of bin locations!")
+    if(bin_file != ""){   # read bin file to get positions
+      if(nsite == 4401){
+        bins = load(bin_file)
+        chr_sites_full = bins_4401
+      }else{
+        chr_sites_full = readRDS(bin_file)
+        names(chr_sites_full) = c("chromosome", "start", "end")
       }
-      bins = load(bin_file)
-      chr_sites_full = bins_4401
     }else{
       # randomly split the genome into n sites
       chr_end_arm = get_hg_ends(cyto_file)
