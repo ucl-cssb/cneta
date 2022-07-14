@@ -4,12 +4,10 @@ Copy Number Evolutionary Tree Analysis
 # Introduction
 This repository contains a set of programs to simulate and build phylogenetic trees from copy number alterations (CNAs) in tumour genomes from multiple samples of a patient.
 
-NOTE: This repository is still under development and mainly for personal use currently.
-
 There are mainly 3 programs:
 * cnets: simulating CNAs along a phylogenetic (coalescence) tree
 * cnetml: building phylogenetic trees from copy numbers with maximum likelihood approach
-* cnetmcmc: building phylogenetic trees from copy numbers with Bayesian MCMC approach
+* cnetmcmc (still under development): building phylogenetic trees from copy numbers with Bayesian MCMC approach
 
 
 # Installation
@@ -107,7 +105,7 @@ The most recent Mac switches to zsh. In that case, please replace `bash` with `z
 
 
 
-# Simulation with cnets
+# Simulating data with cnets
 cnets simulates structural variations that alter copy numbers along a phylogenetic tree of multiple samples.
 Each tip in the tree corresponds to the genome of a sample, which is represented by a consecutive set of pre-specified sites.
 Each site is considered as a segment of variable size or a bin of fixed size.
@@ -188,6 +186,10 @@ For whole genome doubling, chr is assigned to 0 and seg_ID is assigned to -1.
 
 
 # Tree building with cnetml
+
+cnetml is a new maximum likelihood method based on a novel evolutionary model of CNAs to infer phylogenies from spatio-temporal samples taken within a single patient. 
+
+
 There are 4 running modes in cnetml.
 * mode 0 (default): building maximum likelihood tree from input copy numbers, using "-b 1" for bootstrapping
 * mode 1: a simple comprehensive test on a simulated tree

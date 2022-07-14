@@ -956,7 +956,7 @@ void print_desc(int cons, int maxj, int correct_bias, int use_repeat, int optim,
     cout << "\nUsing L-BFGS-B method for optimization" << endl;
   }
 
-  (model){
+  switch(model){
       case MK:{
           cout << "\nAssuming Mk model " << endl;
           break;
