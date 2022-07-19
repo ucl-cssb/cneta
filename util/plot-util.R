@@ -835,6 +835,47 @@ plot.tree.ci.node.mut <- function(tree_ci, time_file, title = "", lextra = 0, re
 }
 
 
+# Plot CI for mutation number (size) estimation with a simplified layout: no tip alignment
+plot.tree.ci.node.mut.smpl <- function(tree_ci, time_file, title = "", lextra = 0, rextra = 3, da = data.frame(), has_bstrap = F, has_inode_label = F, scale_factor = 1){
+  tree_depth = max(node.depth.edgelength(tree_ci@phylo))
+  tree_max = tree_depth + rextra
+  xl = 0 - lextra
+  
+  p <- ggtree(tree_ci)
+  p <- p + geom_tiplab() + ggtitle(title)
+  
+  if(has_inode_label){
+    p <- p + geom_text2(aes(subset = !isTip, label = label), hjust = -0.3)
+  }
+  
+  # show label of internal nodes
+  if(has_bstrap){
+    p <- p + geom_label_repel(aes(label = bootstrap, fill = bootstrap)) + scale_fill_viridis_c(alpha = 0.5)
+  }
+  
+  # branch length not properly show after narrow down xaxis
+  # edge = data.frame(tree_ci@phylo$edge, edge_num = 1:nrow(tree_ci@phylo$edge), edge_len = tree_ci@phylo$edge.length)
+  # colnames(edge)=c("parent", "node", "edge_num", "edge_len")
+  # p <- p %<+% edge + geom_text(aes(x = branch, label = edge_len), nudge_y = 0.1, nudge_x = res_age$tshift)
+  
+  if(scale_factor == 1){
+    p <- p + geom_range('nmut_0.95_CI', color='red', size = 3, alpha = 0.3)
+    p <- p + xlim(xl, tree_max)
+  }else{
+    p <- p + geom_range('mutsize_0.95_CI', color='red', size=3, alpha = 0.3)
+    p <- p + xlim(xl, tree_max)
+  }
+  
+  
+  if(nrow(da) > 0){
+    p = get.plot.annot(tree_ci@phylo, da, p)
+  }
+  
+  return(p)
+}
+
+
+
 get.cn.matrix <- function(cn_file){
   data_cn = read.table(cn_file)
   names(data_cn) = c("sid", "chr", "seg", "cn")

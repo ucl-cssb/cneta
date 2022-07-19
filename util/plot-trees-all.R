@@ -40,7 +40,7 @@ option_list = list(
   make_option(c("", "--cyto_file"), type="character", default="",
               help="The file which contains the chromosome boundaries in human reference genome (e.g. hg19) [default=%default]", metavar="character"),
   make_option(c("", "--bin_file"), type="character", default="",
-              help="The file (.rds or .rdata format) which contains the positions of bins used for calling copy numbers in human reference genome (e.g. hg19) with three columns (chromosome, start, end) [default=%default]", metavar="character"),
+              help="The file which contains the positions of bins used for calling copy numbers in human reference genome (e.g. hg19) [default=%default]", metavar="character"),
   make_option(c("-d", "--tree_dir"), type="character", default="",
               help="The directory containing all the tree files to plot [default=%default]", metavar="character"),
   make_option(c("-s", "--bstrap_dir"), type="character", default="",
@@ -79,6 +79,8 @@ option_list = list(
               help="The type of plot, including: all (plotting all tree files in a directory), single (plotting a single tree file), bootstrap (plotting a single tree file with bootstrapping support) [default=%default]", metavar="character"),
   make_option(c("-l", "--tree_style"), type="character", default="simple",
               help="The style of tree plot, including: simple (a simple tree with tip labels and branch lengths), xlim (adding xlim to the tree), age (x-axis as real age of the patient), and ci (plotting a single tree file with confidence interval of node ages) [default=%default]", metavar="character"),
+  make_option(c("", "--ggtree_style"), type="integer", default = 0,
+              help="The style of showing ggtree (0: default, 1: simplified (used for plot with bootstrap support values)) [default=%default]", metavar="integer"),
   make_option(c("", "--seed"), type="numeric", default = NA,
               help="The seed used for sampling sites in the genomes [default=%default]", metavar="numeric")
 
@@ -103,6 +105,7 @@ nex_pattern = opt$nex_pattern
 bstrap_dir = opt$bstrap_dir
 bstrap_dir2 = opt$bstrap_dir2
 tree_style = opt$tree_style
+ggtree_style = opt$ggtree_style
 annot_file = opt$annot_file
 branch_num = opt$branch_num
 scale_factor = opt$scale_factor
@@ -231,7 +234,12 @@ if(plot_type == "all"){
         ci_prefix = "mutsize_0.95_CI"
       }
       tree_ci = get.ci.tree(fbs, bstrap_dir2, labels, T, nex_pattern, ci_prefix)
-      p = plot.tree.ci.node.mut(tree_ci, time_file, title, lextra, rextra, da, T, T, scale_factor)
+      if(ggtree_style == 0){
+        p = plot.tree.ci.node.mut(tree_ci, time_file, title, lextra, rextra, da, T, T, scale_factor)
+      }else{
+        p = plot.tree.ci.node.mut.smpl(tree_ci, time_file, title, lextra, rextra, da, T, T, scale_factor)
+      }
+     
     }
 
     if(with_cn){
