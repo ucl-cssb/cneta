@@ -1077,7 +1077,7 @@ int get_rcn_baseline(int cn, int baseline, gsl_rng* r){
             rcn = ceil(val);
         }else{
             rcn = floor(val);
-            if(rcn == 0) rcn = 1;
+            // if(rcn == 0) rcn = 1;    // this may hide loss events
         }
     }
 

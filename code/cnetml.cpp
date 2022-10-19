@@ -921,67 +921,73 @@ void find_ML_tree(string real_tstring, int num_total_bins, string ofile, int tre
 
 
 void print_desc(int cons, int maxj, int correct_bias, int use_repeat, int optim, int model, int is_total, int age, int only_seg){
-  if(cons){
-    cout << "\nAssuming the tree is constrained by age at sampling time" << endl;
-    cout << "\nThe age of patient at the first sampling time: " << age << endl;
-  }else{
-    cout << "\nAssuming the tree is unconstrained when doing optimization" << endl;
-    // cout << "\nThe age of patient is assumed to be: " << age << endl;
-  }
-
-  if(!maxj){
-    cout << "\nAssuming mutation rate is fixed " << endl;
-  }else{
-    cout << "\nEstimating mutation rates" << endl;
-    if(!only_seg){
-      cout << "\tfor site duplication/deletion, chromosome gain/loss, and whole genome doubling " << endl;
+    if(is_total){
+        cout << "\nTaking total copy number as input" << endl;
     }else{
-      cout << "\tfor site duplication/deletion " << endl;
+        cout << "\nTaking haplotype-specific copy number as input" << endl;
     }
-  }
 
-  if(!correct_bias){
-    cout << "\nNot correcting acquisition bias in likelihood computation " << endl;
-  }else{
-    cout << "\nCorrecting acquisition bias in likelihood computation " << endl;
-  }
+    if(cons){
+        cout << "\nAssuming the tree is constrained by age at sampling time" << endl;
+        cout << "\nThe age of patient at the first sampling time: " << age << endl;
+    }else{
+        cout << "\nAssuming the tree is unconstrained when doing optimization" << endl;
+        // cout << "\nThe age of patient is assumed to be: " << age << endl;
+    }
 
-  if(use_repeat){
-      cout << "   Using site repeats to speed up likelihood computation " << endl;
-  }
+    if(!maxj){
+        cout << "\nAssuming mutation rate is fixed " << endl;
+    }else{
+        cout << "\nEstimating mutation rates" << endl;
+        if(!only_seg){
+            cout << "\tfor site duplication/deletion, chromosome gain/loss, and whole genome doubling " << endl;
+        }else{
+            cout << "\tfor site duplication/deletion " << endl;
+        }
+    }
 
-  if(optim == GSL){
-    cout << "\nUsing Simplex method for optimization" << endl;
-  }else{
-    cout << "\nUsing L-BFGS-B method for optimization" << endl;
-  }
+    if(!correct_bias){
+        cout << "\nNot correcting acquisition bias in likelihood computation " << endl;
+    }else{
+        cout << "\nCorrecting acquisition bias in likelihood computation " << endl;
+    }
 
-  switch(model){
-      case MK:{
-          cout << "\nAssuming Mk model " << endl;
-          break;
-      }
-      case BOUNDT:{
-          cout << "\nAssuming One-step bounded model of total copy number" << endl;
-          break;
-      }
-      case BOUNDA:{
-          cout << "\nAssuming One-step bounded model of haplotype-specific copy number" << endl;
-          break;
-      }
-      case DECOMP:{
-          cout << "\nAssuming independent Markov chains" << endl;
-          if(!is_total){
-              cout << "This model only supports total copy number for now!" << endl;
-              exit(EXIT_FAILURE);
-          }
-          break;
-      }
-      default:{
-          cout << "";
-          break;
-      }
-  }
+    if(use_repeat){
+        cout << "   Using site repeats to speed up likelihood computation " << endl;
+    }
+
+    if(optim == GSL){
+        cout << "\nUsing Simplex method for optimization" << endl;
+    }else{
+        cout << "\nUsing L-BFGS-B method for optimization" << endl;
+    }
+
+    switch(model){
+        case MK:{
+            cout << "\nAssuming Mk model " << endl;
+            break;
+        }
+        case BOUNDT:{
+            cout << "\nAssuming One-step bounded model of total copy number" << endl;
+            break;
+        }
+        case BOUNDA:{
+            cout << "\nAssuming One-step bounded model of haplotype-specific copy number" << endl;
+            break;
+        }
+        case DECOMP:{
+            cout << "\nAssuming independent Markov chains" << endl;
+            if(!is_total){
+                cout << "This model only supports total copy number for now!" << endl;
+                exit(EXIT_FAILURE);
+            }
+            break;
+        }
+        default:{
+            cout << "";
+            break;
+        }
+    }
 }
 
 

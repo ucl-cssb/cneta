@@ -259,8 +259,14 @@ get_normal_segs <- function(d_withpos, chr_end_arm, pos_file){
 get.site.coord <- function(pos_file, cyto_file, bin_file = "", seed = NA){
   # original input, used to get sample names and original positions
   dpos <- read.table(pos_file)
-  if(ncol(dpos)== 4){  # the index has to start from 1 for each chromosome
-    names(dpos) <- c("sample", "chromosome", "index", "cn")
+  if(ncol(dpos)== 4 || ncol(dpos)== 5){  # the index has to start from 1 for each chromosome
+    if(ncol(dpos)== 4){
+      names(dpos) <- c("sample", "chromosome", "index", "cn")
+    }else{
+      names(dpos) <- c("sample", "chromosome", "index", "cnA", "cnB")
+      dpos = dpos %>% mutate(cn = cnA + cnB) %>% select(-c("cnA", "cnB"))
+    }
+    
     nsite = dpos %>% group_by(sample) %>% tally() %>% select(n) %>% unique()
     if(bin_file != ""){   # read bin file to get positions
       if(nsite == 4401){
@@ -305,8 +311,67 @@ get.site.coord <- function(pos_file, cyto_file, bin_file = "", seed = NA){
 }
 
 
+# convert copy number state to haplotype-specific copy number
+state2hcn <- function(state, cn_max = 4){
+  sums = c()
+  nmax = cn_max + 1
+  for(i in 1:nmax){
+    s = i * (i + 1) / 2
+    sums = c(sums, s)
+  }
+  
+  if(state < sums[1]) return(c(0, 0));
+  
+  i = 2;
+  repeat{
+    if(state >= sums[i - 1] & state < sums[i]){
+      cnA = state - sums[i - 1];
+      cnB = i - 1 - cnA;
+    }
+    i = i + 1;
+    if(i > nmax) break;
+  }
+  
+  
+  return(c(cnA, cnB))
+}
+
+
+# convert copy number state to a total copy number
+state2tcn <- function(state, cn_max = 4){
+  sums = c()
+  nmax = cn_max + 1
+  for(i in 1:nmax){
+    s = i * (i + 1) / 2
+    sums = c(sums, s)
+  }
+  
+  if(state < sums[1]) return(0);
+  
+  i = 2;
+  repeat{
+    if(state >= sums[i - 1] & state < sums[i]){
+      cnA = state - sums[i - 1];
+      cnB = i - 1 - cnA;
+    }
+    i = i + 1;
+    if(i > nmax) break;
+  }
+  
+  tcn = cnA + cnB
+  
+  return(tcn)
+}
+
+# for(i in 0:9){
+#   print(i)
+#   # print(state2tcn((i)))
+#   print(state2hcn((i)))
+# }
+
+
 # has_normal: whether or not the normal sample is in the input
-get.all.state <- function(dans, cn_file, seg_file, dpos, pos_file, has_normal = T){
+get.all.state <- function(dans, cn_file, seg_file, dpos, pos_file, has_normal = T, is_haplotype_specific = F, cn_max = 4){
   dpos %>% select(chromosome, index, start, end) %>% unique() -> site_pos
 
   if(seg_file != ""){  # reconstructed states
@@ -331,7 +396,11 @@ get.all.state <- function(dans, cn_file, seg_file, dpos, pos_file, has_normal = 
 
     dseg_cn_long = dseg_cn %>% gather(paste0("s", all_of(samples)), key = "sample", value = "cn") %>% mutate(sample = str_replace(sample, "s","")) %>% group_by(sample, chromosome)  %>%  mutate(index = 1:n()) %>% select(sample, chromosome, index, cn)
     dseg_cn_long$sample = as.numeric(dseg_cn_long$sample)
-    dseg_cn_long %>% group_by(sample) %>% tally()
+    
+    if(is_haplotype_specific){
+      dseg_cn_long = dseg_cn_long %>% rowwise() %>% mutate(cn = state2tcn(cn, cn_max))
+    }
+    # dseg_cn_long %>% group_by(sample) %>% tally()
 
     # add normal samples as seg_file does not contain normal samples
     dseg_cn_long %>% filter(sample == 1) -> s1  # use filter() to get segments
@@ -376,9 +445,18 @@ get.all.state <- function(dans, cn_file, seg_file, dpos, pos_file, has_normal = 
 # combine CNP with position information to get a file with the format: sample, chrom, start, end, cn
 # use chr and site index to bind the two datasets
 # ref_file contains the reference position of each site
-get.cn.data.by.pos <- function(cn_file, pos_file, seg_file, cyto_file, labels, ordered_nodes, has_normal = F, bin_file = "", seed = NA){
+get.cn.data.by.pos <- function(cn_file, pos_file, seg_file, cyto_file, labels, ordered_nodes, has_normal = F, bin_file = "", seed = NA, is_haplotype_specific = F, cn_max = 4){
   dans <- read.table(cn_file)
-  names(dans) <- c("sample", "chromosome", "index", "cn")
+  if(ncol(dans) == 4){
+    names(dans) <- c("sample", "chromosome", "index", "cn")
+  }else{
+    if(ncol(dans) != 5){
+      stop("There must be either 4 or 5 columns!")
+    }
+    names(dans) <- c("sample", "chromosome", "index", "cnA", "cnB")
+    dans = dans %>% mutate(cn = cnA + cnB) %>% select(-c("cnA", "cnB"))
+  }
+
   npos_ans = dans %>% group_by(sample) %>% tally() %>% select(n) %>% unique()
 
   # extract positions for all sites
@@ -390,7 +468,7 @@ get.cn.data.by.pos <- function(cn_file, pos_file, seg_file, cyto_file, labels, o
 
   # get reconstructed states with position
   # read segment file for original input as invariable bins are excluded and consecutive bins may be merged
-  d_all = get.all.state(dans, cn_file, seg_file, dpos, pos_file, has_normal)
+  d_all = get.all.state(dans, cn_file, seg_file, dpos, pos_file, has_normal, is_haplotype_specific, cn_max)
   # d_all %>% filter(sample %in% unique(dpos$sample)) %>% summary() %>% print()
 
   # d_all %>% group_by(chromosome, sample) %>% tally() %>% select(-sample) %>% unique() %>% print()
@@ -796,8 +874,9 @@ plot.tree.ci.node <- function(tree_ci, time_file, title = "", lextra = 3, rextra
 
 
 # Plot CI for mutation number (size) estimation
-plot.tree.ci.node.mut <- function(tree_ci, time_file, title = "", lextra = 0, rextra = 3, da = data.frame(), has_bstrap = F, has_inode_label = F, scale_factor = 1){
+plot.tree.ci.node.mut <- function(tree_ci, title = "", lextra = 0, rextra = 3, da = data.frame(), has_bstrap = F, has_inode_label = F, scale_factor = 1){
   tree_depth = max(node.depth.edgelength(tree_ci@phylo))
+  cat("tree depth ", tree_depth, "\n")
   tree_max = tree_depth + rextra
   xl = 0 - lextra
 
@@ -836,28 +915,28 @@ plot.tree.ci.node.mut <- function(tree_ci, time_file, title = "", lextra = 0, re
 
 
 # Plot CI for mutation number (size) estimation with a simplified layout: no tip alignment
-plot.tree.ci.node.mut.smpl <- function(tree_ci, time_file, title = "", lextra = 0, rextra = 3, da = data.frame(), has_bstrap = F, has_inode_label = F, scale_factor = 1){
+plot.tree.ci.node.mut.smpl <- function(tree_ci, title = "", lextra = 0, rextra = 3, da = data.frame(), has_bstrap = F, has_inode_label = F, scale_factor = 1){
   tree_depth = max(node.depth.edgelength(tree_ci@phylo))
   tree_max = tree_depth + rextra
   xl = 0 - lextra
-  
+
   p <- ggtree(tree_ci)
   p <- p + geom_tiplab() + ggtitle(title)
-  
+
   if(has_inode_label){
     p <- p + geom_text2(aes(subset = !isTip, label = label), hjust = -0.3)
   }
-  
+
   # show label of internal nodes
   if(has_bstrap){
     p <- p + geom_label_repel(aes(label = bootstrap, fill = bootstrap)) + scale_fill_viridis_c(alpha = 0.5)
   }
-  
+
   # branch length not properly show after narrow down xaxis
   # edge = data.frame(tree_ci@phylo$edge, edge_num = 1:nrow(tree_ci@phylo$edge), edge_len = tree_ci@phylo$edge.length)
   # colnames(edge)=c("parent", "node", "edge_num", "edge_len")
   # p <- p %<+% edge + geom_text(aes(x = branch, label = edge_len), nudge_y = 0.1, nudge_x = res_age$tshift)
-  
+
   if(scale_factor == 1){
     p <- p + geom_range('nmut_0.95_CI', color='red', size = 3, alpha = 0.3)
     p <- p + xlim(xl, tree_max)
@@ -865,12 +944,12 @@ plot.tree.ci.node.mut.smpl <- function(tree_ci, time_file, title = "", lextra = 
     p <- p + geom_range('mutsize_0.95_CI', color='red', size=3, alpha = 0.3)
     p <- p + xlim(xl, tree_max)
   }
-  
-  
+
+
   if(nrow(da) > 0){
     p = get.plot.annot(tree_ci@phylo, da, p)
   }
-  
+
   return(p)
 }
 
@@ -878,7 +957,15 @@ plot.tree.ci.node.mut.smpl <- function(tree_ci, time_file, title = "", lextra = 
 
 get.cn.matrix <- function(cn_file){
   data_cn = read.table(cn_file)
-  names(data_cn) = c("sid", "chr", "seg", "cn")
+  if(ncol(data_cn) == 4){
+    names(data_cn) <- c("sid", "chr", "seg", "cn")
+  }else{
+    if(ncol(data_cn) != 5){
+      stop("There must be either 4 or 5 columns!")
+    }
+    names(data_cn) <- c("sid", "chr", "seg", "cnA", "cnB")
+    data_cn = data_cn %>% mutate(cn = cnA + cnB) %>% select(-c("cnA", "cnB"))
+  }  
   data_cn %>% unite(chr, seg, col = "pos", sep = "_") %>% spread(pos, cn) %>% select(-sid) -> cns_wide
 
   return(cns_wide)

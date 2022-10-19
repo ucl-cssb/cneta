@@ -51,7 +51,7 @@ int rchoose(gsl_rng* r, const vector<double>& rates){
   double u = gsl_rng_uniform(r);
   int ret = -1;
   for(int i = 0; i < rates.size(); ++i){
-    if( u < psum[i] ){
+    if(u < psum[i]){
       ret = i;
       break;
     }

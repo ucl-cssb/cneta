@@ -60,13 +60,17 @@ option_list = list(
   make_option(c("", "--rextra"), type="numeric", default = 3,
               help="The left margin for the plot [default=%default]", metavar="numeric"),
   make_option(c("", "--height"), type="numeric", default = 5,
-              help="The height for the plot [default=%default]", metavar="numeric"),            
+              help="The height for the plot [default=%default]", metavar="numeric"),
   make_option(c("-m", "--mut_rate"), type="numeric", default = 0,
               help="The rate of somatic chromosomal aberrations [default=%default]", metavar="numeric"),
   make_option(c("-u", "--dup_rate"), type="numeric", default = 0,
               help="The site duplication rate of somatic chromosomal aberrations [default=%default]", metavar="numeric"),
   make_option(c("-e", "--del_rate"), type="numeric", default = 0,
               help="The site deletion rate of somatic chromosomal aberrations [default=%default]", metavar="numeric"),
+  make_option(c("", "--is_haplotype_specific"), default = FALSE, action = "store_true",
+              help="The input copy number is haplotype-specific [default=%default]", metavar="logical"),
+  make_option(c("", "--cn_max"), type="integer", default = 4,
+              help="The maximum copy number specified in building the tree, used for plotting haplotype-specific input [default=%default]", metavar="integer"),  
   make_option(c("-w", "--with_title"), default = FALSE, action = "store_true",
               help="Showing title [default=%default]", metavar="logical"),
   make_option(c("", "--with_cn"), default = FALSE, action = "store_true",
@@ -112,6 +116,8 @@ scale_factor = opt$scale_factor
 mut_rate = opt$mut_rate
 dup_rate = opt$dup_rate
 del_rate = opt$del_rate
+is_haplotype_specific = opt$is_haplotype_specific
+cn_max = opt$cn_max
 with_title = opt$with_title
 with_cn = opt$with_cn
 has_normal = opt$has_normal
@@ -216,15 +222,15 @@ if(plot_type == "all"){
     }
     p = plot.tree.bootstrap.age(mytree, time_file, title, lextra, rextra, da)
   }else if(tree_style == "ci"){
-    if(time_file == ""){
-      stop("The file containing the sampling time information is not provided!")
-    }
     # write bootstrap tree to a nex file
     fbs = str_replace(tree_file, ".txt", ".bstrap.nex")
     # the tree has correct tip labels after using write.nexus
     write.nexus(mytree, file = fbs)
 
     if(branch_num == 0){
+      if(time_file == ""){
+        stop("The file containing the sampling time information is not provided!")
+      }
       tree_ci = get.ci.tree(fbs, bstrap_dir2, labels, T, nex_pattern)
       p = plot.tree.ci.node(tree_ci, time_file, title, lextra, rextra, da, T, T)
     }else{
@@ -235,17 +241,17 @@ if(plot_type == "all"){
       }
       tree_ci = get.ci.tree(fbs, bstrap_dir2, labels, T, nex_pattern, ci_prefix)
       if(ggtree_style == 0){
-        p = plot.tree.ci.node.mut(tree_ci, time_file, title, lextra, rextra, da, T, T, scale_factor)
+        p = plot.tree.ci.node.mut(tree_ci, title, lextra, rextra, da, T, T, scale_factor)
       }else{
-        p = plot.tree.ci.node.mut.smpl(tree_ci, time_file, title, lextra, rextra, da, T, T, scale_factor)
+        p = plot.tree.ci.node.mut.smpl(tree_ci, title, lextra, rextra, da, T, T, scale_factor)
       }
-     
+
     }
 
     if(with_cn){
       d = fortify(tree_ci@phylo)
       ordered_nodes = d$label[order(d$y, decreasing = T)]
-      d_seg = get.cn.data.by.pos(cn_file, pos_file, seg_file, cyto_file, labels, ordered_nodes, has_normal, bin_file, seed)
+      d_seg = get.cn.data.by.pos(cn_file, pos_file, seg_file, cyto_file, labels, ordered_nodes, has_normal, bin_file, seed, is_haplotype_specific, cn_max)
       # get the node order of the tree and reorder heatmap
       phmap = plot.cn.heatmap(d_seg, "")
 

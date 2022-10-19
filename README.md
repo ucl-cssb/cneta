@@ -253,13 +253,14 @@ You may check the copy number counts in the input data using similar command as 
 <!-- ## How to prepare MP trees -->
 
 ## Input
-* (Required) A file containing integer absolute copy numbers for all the patient samples and/or the normal sample (*-cn.txt.gz or *-allele-cn.txt.gz).
+* (Required) A file containing integer absolute/relative copy numbers for all the patient samples and/or the normal sample (*-cn.txt.gz or *-allele-cn.txt.gz). When the input copy number is relative with normal copy being 0 as those output by [CGHcall](https://bioconductor.org/packages/release/bioc/html/CGHcall.html), please specifiy it with option "--is_rcn 1".
 
    Either compressed file or uncompressed file is fine.
    There need to be at least four columns, separated by space, in this file: sample_ID, chr_ID, site_ID, CN.
+   Note that there should be no header names in this file.
    Each column is an integer.
-   The sample_ID has to be ordered from 1 to the number of patient samples.
-   The chr_ID and site_ID together determine a unique site along the genome of a sample.
+   The sample_ID has to be __ordered__ from 1 to the number of patient samples.
+   The chr_ID and site_ID together determine a unique site along the genome of a sample, __ordering__ from 1 to the largest number.
    The site_ID can be consecutive numbers from 1 to the total number of sites along the genome, or consecutive numbers from 1 to the total number of sites along each chromosome of the genome.
    For haplotype-specific CN, there need to be at least five columns, with the last two being cnA, cnB.
    If the total CN is larger than the specified maximum CN allowed by the program,
@@ -279,6 +280,11 @@ You may check the copy number counts in the input data using similar command as 
 * *-tree.txt: The reconstructed tree in tab-delimited format.
 * *-tree.nex: The reconstructed tree in NEWICK format, with branch length representing calendar time.
 * *-tree.nmut.nex: The reconstructed tree in NEWICK format, with branch length representing number of mutations.
+* *-segs.txt: The file with the postprocessed copy number matrix for tree building, with columns being chr_D, start_bin_ID, end_bin_ID, start_segment_ID, end_segment_ID, and the copy numbers for each sample. It will be generated when reading the input copy number file.
+
+## Note 
+Please ensure the input file exist and their names are correct, or else there may be an error of "Segmentation fault (core dumped)"!
+
 
 ## Ancestral state reconstruction
 Only the implementation under the bounded model of haplotype-specific copy number has been fully tested so far.
