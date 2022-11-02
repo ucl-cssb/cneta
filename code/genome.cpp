@@ -196,6 +196,32 @@ void genome::calculate_allele_cn(){
 }
 
 
+// converting absolute copy number relative to the baseline ploidy
+int genome::get_rcn_baseline(int cn, int baseline, gsl_rng* r, int random_round){
+    int rcn = cn / baseline;   // quotient
+
+    // remainder is always 0 when ploidy = 1
+    // randomly round up when remainder is not 0
+    if(cn % baseline != 0){
+        double rand = runiform(r, 0, 1);
+        double val = cn / double(baseline);       
+        // cout << val << endl;    // check it is really float
+        if(random_round){
+            if(rand < 0.5){
+                rcn = ceil(val);
+            }else{
+                rcn = floor(val);
+                if(rcn == 0) rcn = 1;    
+            }
+        }else{
+            rcn = round(val);
+        }
+    }
+
+    return rcn;
+}
+
+
 void genome::print_muts(ostream& stream) const{
   stream << "MUTATIONS   (" << node_id + 1 << ") " << MUT_TYPES[0] << ", "  << MUT_TYPES[1] << ", " << MUT_TYPES[2] << ", "  << MUT_TYPES[3] << ", "  << MUT_TYPES[4] << ":";
 
@@ -251,21 +277,25 @@ void genome::write(ogzstream& of){
 }
 
 
-void genome::write_rcn(ogzstream& of, gsl_rng* r){
+ // normalize CN so that current ploidy is normal
+void genome::write_rcn(ogzstream& of, gsl_rng* r, int use_nwgd, int random_round){
   int nwgd = nmuts[N_MUT_TYPE - 1];
-  int ploidy = NORM_PLOIDY;
-  if(nwgd > 0) ploidy = pow(NORM_PLOIDY, 1 + nwgd);
+//   int ploidy = NORM_PLOIDY;
+  int baseline = 0;
+  if(nwgd > 0 && use_nwgd){
+    // ploidy = pow(NORM_PLOIDY, 1 + nwgd);
+    baseline = pow(NORM_PLOIDY, nwgd);
+  }else{
+    // use rounded mean copy number as base line
+    vector<int> cns = get_cn_vector();
+    baseline = round(get_mean_cn(cns) / 2);
+  }
 
   for(copy_number::const_iterator it1 = cn_profile.begin(); it1 != cn_profile.end(); ++it1){
     for(map<int, int>::const_iterator it2 = it1->second.begin(); it2 != it1->second.end(); ++it2){
         // sample and chr starts with 1; segment starts with 0
         int rcn = it2->second;
-        if(nwgd > 0){
-          // normalize CN so that current ploidy is normal
-          int incs = pow(NORM_PLOIDY, nwgd);
-          // randomly round up when there are WGDs
-          rcn = get_rcn_baseline(rcn, incs, r);
-        }
+        rcn = get_rcn_baseline(rcn, baseline, r, random_round);
         rcn = rcn - NORM_PLOIDY;
         if(rcn < -2) rcn = -2;
         if(rcn > 2) rcn = 2;
@@ -275,12 +305,26 @@ void genome::write_rcn(ogzstream& of, gsl_rng* r){
 }
 
 
-void genome::write_allele_rcn(ogzstream& of, gsl_rng* r){
+void genome::write_allele_rcn(ogzstream& of, gsl_rng* r, int use_nwgd, int random_round){
     int nwgd = nmuts[N_MUT_TYPE - 1];
     int ploidy = NORM_PLOIDY;
-    if(nwgd > 0) ploidy = pow(NORM_PLOIDY, 1 + nwgd);
-    // std::cout << "Number of WGD events is " << nwgd << ", so ploidy is " << ploidy << endl;
-    int allele_ploidy = ploidy / 2;
+    int alleleA_baseline = NORM_PLOIDY / 2;
+    int alleleB_baseline = alleleA_baseline;
+
+    // get the baseline
+    if(nwgd > 0 && use_nwgd){
+        ploidy = pow(NORM_PLOIDY, 1 + nwgd);
+        // std::cout << "Number of WGD events is " << nwgd << ", so ploidy is " << ploidy << endl;
+        alleleA_baseline = round(ploidy / 2);
+        alleleB_baseline = alleleB_baseline;
+    }else{
+        // use rounded mean copy number as base line
+        vector<int> cnsA;
+        vector<int> cnsB;
+        get_allele_cn_vector(cnsA, cnsB);
+        alleleA_baseline = round(get_mean_cn(cnsA));
+        alleleB_baseline = round(get_mean_cn(cnsB));
+    }
 
     // cout << "Writing haplotype-specific copy number " << endl;
     for(int i = 0; i < allele_cn_profile.size() / 2; i++){
@@ -293,8 +337,8 @@ void genome::write_allele_rcn(ogzstream& of, gsl_rng* r){
             int seg_id = seg.first;
             int cn1 = seg.second;        
             int cn2 = segs2[seg_id];
-            int rcnA = get_rcn_baseline(cn1, allele_ploidy, r);
-            int rcnB = get_rcn_baseline(cn2, allele_ploidy, r);
+            int rcnA = get_rcn_baseline(cn1, alleleA_baseline, r, random_round);
+            int rcnB = get_rcn_baseline(cn2, alleleB_baseline, r, random_round);
             // int rcn = rcnA + rcnB;
             of << node_id + 1 << "\t" << i + 1 << "\t" << seg_id + 1 << "\t" << rcnA << "\t" << rcnB << endl;
         }
@@ -303,7 +347,6 @@ void genome::write_allele_rcn(ogzstream& of, gsl_rng* r){
 
 
 void genome::write_allele_cn(ogzstream& of){
-  int debug = 0;
   assert(allele_cn_profile.size() == 2 * NUM_CHR);
   // cout << "Writing haplotype-specific copy number " << endl;
   for(int i = 0; i < NUM_CHR; i++){
@@ -321,6 +364,7 @@ void genome::write_allele_cn(ogzstream& of){
   }
 }
 
+
 vector<int> genome::get_cn_vector(){
   vector<int> cns;
   for(copy_number::const_iterator it1 = cn_profile.begin(); it1 != cn_profile.end(); ++it1){
@@ -330,6 +374,37 @@ vector<int> genome::get_cn_vector(){
   }
   return cns;
 }
+
+
+void genome::get_allele_cn_vector(vector<int>& cnsA, vector<int>& cnsB){
+    assert(cnsA.size() == 0 && cnsB.size() == 0);
+
+    for(int i = 0; i < allele_cn_profile.size() / 2; i++){
+        map<int, int> segs1 = allele_cn_profile[i];
+        map<int, int> segs2 = allele_cn_profile[i + NUM_CHR];
+        assert(segs1.size() == segs2.size());
+        for(auto seg: segs1){
+            int seg_id = seg.first;
+            int cn1 = seg.second;        
+            int cn2 = segs2[seg_id];
+            cnsA.push_back(cn1);
+            cnsB.push_back(cn2);
+        }
+    }
+}
+
+
+// get average total copy number by sample
+double genome::get_mean_cn(const vector<int>& cns){
+    int tcn = accumulate(cns.begin(), cns.end(), 0);
+    int nele = cns.size();
+    double avg_tcn = (double) tcn / nele;
+    // int avg_tcn = round(favg_tcn);
+    // cout << "Average total copy number " << favg_tcn << "\t" << avg_tcn << endl;
+    
+    return avg_tcn;
+}
+
 
 
 void print_cnp(copy_number& cn_profile){
@@ -1061,27 +1136,6 @@ int generate_wgd(genome& g, int cn_max, int debug){
     }
 
     return 1;
-}
-
-
-int get_rcn_baseline(int cn, int baseline, gsl_rng* r){
-    int rcn = cn / baseline;   // quotient
-
-    // remainder is always 0 when ploidy = 1
-    // randomly round up when remainder is not 0
-    if(cn % baseline != 0){
-        float rand = runiform(r, 0, 1);
-        float val = cn / float(baseline);       
-        // cout << val << endl;    // check it is really float
-        if(rand < 0.5){
-            rcn = ceil(val);
-        }else{
-            rcn = floor(val);
-            // if(rcn == 0) rcn = 1;    // this may hide loss events
-        }
-    }
-
-    return rcn;
 }
 
 

@@ -147,13 +147,13 @@ The units of mutation rates are different at site, chromosome, and whole genome 
 Please see run-cnets.sh to learn how to set different parameters.
 
 ## Input
-* --epop Ne: Ne (effective population size) is used to scale the tree height so that the branch length is measured in the unit of year, by multiplying each branch length with Ne.
+* `--epop Ne`: Ne (effective population size) is used to scale the tree height so that the branch length is measured in the unit of year, by multiplying each branch length with Ne.
 
-* --tdiff delta_t: The tip nodes of an initial tree may have the same time. This parameter can be used to introduce different times at the tip nodes. The terminal branches are increased by random multiples of delta_t. The maximum multiple is the number of samples.
+* `--tdiff delta_t`: The tip nodes of an initial tree may have the same time. This parameter can be used to introduce different times at the tip nodes. The terminal branches are increased by random multiples of delta_t. The maximum multiple is the number of samples.
 
-* --cn_max cn_max: The maximum copy number allowed in the program depends on the heap space.
+* `--cn_max cn_max`: The maximum copy number allowed in the program depends on the heap space.
 
-* --cons 1/0: Whether or not the tree is constrained by patient age. If yes (1), the initial branch lengths will be adjusted by specified patient age so that the tree height is smaller than patient age.
+* `--cons 1/0`: Whether or not the tree is constrained by patient age. If yes (1), the initial branch lengths will be adjusted by specified patient age so that the tree height is smaller than patient age.
 
 
 ## Output
@@ -202,11 +202,11 @@ The last three modes can be used to validate the computation of likelihood.
 Please see run-cnetml.sh to learn how to set different parameters.
 
 When estimating branch length, time constraints (in longitudinal samples) can be considered by specifying the following parameters.
-* cons: When cons = 1, optimization is done with time constraints on patient age and/or tip timing. Mutation rates can be estimated when there are considerate time differences among tips.
+* `cons`: When cons = 1, optimization is done with time constraints on patient age and/or tip timing. Mutation rates can be estimated when there are considerate time differences among tips.
 
 When building the tree, mutation rates can be estimated by specifying the following parameters.
-* estmu: Whether or not to estimate mutation rate. When estmu = 1, mutation rates will be estimated. This is only reliable when the sampling times of tip nodes provide sufficient information (cons = 1 and dt > 0).
-* only_seg: When only_seg = 1, only estimate duplication/deletion rates. Otherwise, the rates for chromosome gain/loss and WGD will be estimated.
+* `estmu`: Whether or not to estimate mutation rate. When estmu = 1, mutation rates will be estimated. This is only reliable when the sampling times of tip nodes provide sufficient information (cons = 1 and dt > 0).
+* `only_seg`: When only_seg = 1, only estimate duplication/deletion rates. Otherwise, the rates for chromosome gain/loss and WGD will be estimated.
 
 Mutation rates are implicit parameters in the computing tree likelihood, so the reconstructed tree should be more accurate when cons = 1 and estmu = 1 given longitudinal samples, unless mutation rates are known as in simulated data.
 
@@ -228,10 +228,10 @@ This model is DIFFERENT from the model used for simulating the data, which is us
 Model 2 may also be used but there is a strong assumption of event order, that WGD is followed by chromosomal gain or loss and then duplication or deletion.
 
 There are four important parameters for independent Markov chain model (model 3) to specify the number of states for each chain.
-* max_wgd: the maximum number of WGD events in a sample. When it is 0,
-* max_chr_change: the maximum number of chromosome gain/loss events across all chromosomes in a sample. When it is 0, chromosome-level CNAs are not considered.
-* max_site_change: the maximum number of duplication/deletion events across all sites in a sample. When it is 0, site-level CNAs are not considered.
-* m_max: The maximum number of copies of a segment before chromosome gain/loss events.
+* `max_wgd`: the maximum number of WGD events in a sample. When it is 0,
+* `max_chr_change`: the maximum number of chromosome gain/loss events across all chromosomes in a sample. When it is 0, chromosome-level CNAs are not considered.
+* `max_site_change`: the maximum number of duplication/deletion events across all sites in a sample. When it is 0, site-level CNAs are not considered.
+* `m_max`: The maximum number of copies of a segment before chromosome gain/loss events.
 
 Here, max_wgd, max_chr_change, and max_site_change determine the size of transition matrix of the 3 Markov chains for different levels of CNAs.
 If one type of event is known to be missing in the data, please specify corresponding max_TYPE to be 0.
@@ -253,7 +253,7 @@ You may check the copy number counts in the input data using similar command as 
 <!-- ## How to prepare MP trees -->
 
 ## Input
-* (Required) A file containing integer absolute/relative copy numbers for all the patient samples and/or the normal sample (*-cn.txt.gz or *-allele-cn.txt.gz). When the input copy number is relative with normal copy being 0 as those output by [CGHcall](https://bioconductor.org/packages/release/bioc/html/CGHcall.html), please specifiy it with option "--is_rcn 1".
+* (Required) A file containing integer absolute/relative copy numbers for all the patient samples and/or the normal sample (*-cn.txt.gz or *-allele-cn.txt.gz). When the input copy numbers are relative with normal copy being 0 as those output by [CGHcall](https://bioconductor.org/packages/release/bioc/html/CGHcall.html), please specifiy it with option "--is_rcn 1". When the input copy numbers are haplotype-specific which have been scaled relative to ploidy or not, please specifiy it with option "--is_total 0 --is_rcn 0".
 
    Either compressed file or uncompressed file is fine.
    There need to be at least four columns, separated by space, in this file: sample_ID, chr_ID, site_ID, CN.
@@ -275,7 +275,7 @@ You may check the copy number counts in the input data using similar command as 
 * (Optional) A folder containing initial trees for tree searching, which may obtained by parsimony-based methods.
 
     It is recommended when the tree is large to avoid local optima.
-
+  
 ## Output
 * *-tree.txt: The reconstructed tree in tab-delimited format.
 * *-tree.nex: The reconstructed tree in NEWICK format, with branch length representing calendar time.

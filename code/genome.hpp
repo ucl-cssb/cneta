@@ -82,17 +82,20 @@ public:
   int reset_cn(copy_number& cnp);   // reset counter to 0 for recounting after CN changes without losing positions
   void calculate_cn();   // Compute total copy number
   void calculate_allele_cn();   // Compute haplotype-specific copy number
+  int get_rcn_baseline(int cn, int baseline, gsl_rng* r, int random_round = 0);
 
   void print_muts(ostream& stream) const;
   void print() const;
   void print_cn() const;
   void write(ogzstream& of);
-  void write_rcn(ogzstream& of, gsl_rng* r);
+  void write_rcn(ogzstream& of, gsl_rng* r, int use_nwgd = 0, int random_round = 0);
   // write haplotype-specific relative CNs
-  void write_allele_rcn(ogzstream& of, gsl_rng* r);
+  void write_allele_rcn(ogzstream& of, gsl_rng* r, int use_nwgd = 0, int random_round = 0);
   void write_allele_cn(ogzstream& of);
 
   vector<int> get_cn_vector();   // get the CNP of the genome
+  void get_allele_cn_vector(vector<int>& cnsA, vector<int>& cnsB);
+  double get_mean_cn(const vector<int>& cns);
 };
 
 void print_cnp(copy_number& cn_profile);
