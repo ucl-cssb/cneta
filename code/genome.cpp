@@ -280,9 +280,9 @@ void genome::write(ogzstream& of){
  // normalize CN so that current ploidy is normal
 void genome::write_rcn(ogzstream& of, gsl_rng* r, int use_nwgd, int random_round){
   int nwgd = nmuts[N_MUT_TYPE - 1];
-//   int ploidy = NORM_PLOIDY;
   int baseline = 0;
-  if(nwgd > 0 && use_nwgd){
+  if(use_nwgd){
+    assert(nwgd >= 0);
     // ploidy = pow(NORM_PLOIDY, 1 + nwgd);
     baseline = pow(NORM_PLOIDY, nwgd);
   }else{
@@ -307,16 +307,15 @@ void genome::write_rcn(ogzstream& of, gsl_rng* r, int use_nwgd, int random_round
 
 void genome::write_allele_rcn(ogzstream& of, gsl_rng* r, int use_nwgd, int random_round){
     int nwgd = nmuts[N_MUT_TYPE - 1];
-    int ploidy = NORM_PLOIDY;
-    int alleleA_baseline = NORM_PLOIDY / 2;
+    int alleleA_baseline = 0;
     int alleleB_baseline = alleleA_baseline;
 
     // get the baseline
-    if(nwgd > 0 && use_nwgd){
-        ploidy = pow(NORM_PLOIDY, 1 + nwgd);
+    if(use_nwgd){
+        assert(nwgd >= 0);
         // std::cout << "Number of WGD events is " << nwgd << ", so ploidy is " << ploidy << endl;
-        alleleA_baseline = round(ploidy / 2);
-        alleleB_baseline = alleleB_baseline;
+        alleleA_baseline = pow(NORM_PLOIDY, nwgd);
+        alleleB_baseline = alleleA_baseline;
     }else{
         // use rounded mean copy number as base line
         vector<int> cnsA;
