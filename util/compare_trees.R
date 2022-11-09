@@ -9,7 +9,9 @@ library(treeio, quietly = T)
 library(xml2, quietly = T)
 library(Quartet, quietly = T)
 
-##code from github cnets code
+
+# This script contains common functions to compare trees.
+
 make.tree <- function(d){
    nedge <- nrow(d)
    nleaf <- (nedge + 2)/2
@@ -401,38 +403,38 @@ compare.all.trees <- function(tree_dir, nsim, incl_all, model, file_plot){
 }
 
 
-option_list = list(
-make_option(c("-t", "--tree_dir"), type="character", default="",
-              help="The directory containing all the files of tree building programs [default=%default]", metavar="character"),
-make_option(c("-d", "--data_dir"), type="character", default="",
-              help="The directory containing all the simulated files [default=%default]", metavar="character"),
-make_option(c("-r", "--ref_tree"), type="character", default="",
-              help="The reference tree [default=%default]", metavar="character"),
-make_option(c("-i", "--inf_tree"), type="character", default="",
-              help="The inferred tree [default=%default]", metavar="character"),
-make_option(c("-o", "--file_plot"), type="character", default="stat_plot.pdf",
-              help="The name of output plot file [default=%default]", metavar="character"),
-make_option(c("-s", "--file_dist"), type="character", default="tree_dist.txt",
-            help="The name of output file [default=%default]", metavar="character"),
-make_option(c("-a", "--incl_all"), type="integer", default=0,
-              help="Whether or not to exclude tree for which whose maximum likelihood is smaller than the maximum likelihood of all trees [default=%default]", metavar="integer"),
-make_option(c("-m", "--model"), type="integer", default=2,
-            help="The model of evolution [default=%default]", metavar="integer"),
-make_option(c("-p", "--type"), type="integer", default=0,
-            help="The type of analysis (0: multiple tree files in a directory; 1: a single tree) [default=%default]", metavar="integer"),
-make_option(c("-n", "--nsim"), type="integer", default=100,
-              help="The number of simulations [default=%default]", metavar="integer")
-);
-opt_parser = OptionParser(option_list = option_list);
-opt = parse_args(opt_parser);
+# option_list = list(
+# make_option(c("-t", "--tree_dir"), type="character", default="",
+#               help="The directory containing all the files of tree building programs [default=%default]", metavar="character"),
+# make_option(c("-d", "--data_dir"), type="character", default="",
+#               help="The directory containing all the simulated files [default=%default]", metavar="character"),
+# make_option(c("-r", "--ref_tree"), type="character", default="",
+#               help="The reference tree [default=%default]", metavar="character"),
+# make_option(c("-i", "--inf_tree"), type="character", default="",
+#               help="The inferred tree [default=%default]", metavar="character"),
+# make_option(c("-o", "--file_plot"), type="character", default="stat_plot.pdf",
+#               help="The name of output plot file [default=%default]", metavar="character"),
+# make_option(c("-s", "--file_dist"), type="character", default="tree_dist.txt",
+#             help="The name of output file [default=%default]", metavar="character"),
+# make_option(c("-a", "--incl_all"), type="integer", default=0,
+#               help="Whether or not to exclude tree for which whose maximum likelihood is smaller than the maximum likelihood of all trees [default=%default]", metavar="integer"),
+# make_option(c("-m", "--model"), type="integer", default=2,
+#             help="The model of evolution [default=%default]", metavar="integer"),
+# make_option(c("-p", "--type"), type="integer", default=0,
+#             help="The type of analysis (0: multiple tree files in a directory; 1: a single tree) [default=%default]", metavar="integer"),
+# make_option(c("-n", "--nsim"), type="integer", default=100,
+#               help="The number of simulations [default=%default]", metavar="integer")
+# );
+# opt_parser = OptionParser(option_list = option_list);
+# opt = parse_args(opt_parser);
 
-if(opt$type == 0){
-  compare.all.trees(opt$tree_dir, opt$nsim, opt$incl_all, opt$model, opt$file_plot)
-}else{
-  # Input format of the tree: edge list
-  dd <- read.table(opt$ref_tree, header=T)
-  simtree <- make.tree(dd)
-  dd <- read.table(opt$inf_tree, header=T)
-  inferred_tree <- make.tree(dd)
-  compare.single.tree(ref_tree, inf_tree, opt$file_dist, opt$file_plot)
-}
+# if(opt$type == 0){
+#   compare.all.trees(opt$tree_dir, opt$nsim, opt$incl_all, opt$model, opt$file_plot)
+# }else{
+#   # Input format of the tree: edge list
+#   dd <- read.table(opt$ref_tree, header=T)
+#   simtree <- make.tree(dd)
+#   dd <- read.table(opt$inf_tree, header=T)
+#   inferred_tree <- make.tree(dd)
+#   compare.single.tree(ref_tree, inf_tree, opt$file_dist, opt$file_plot)
+# }
