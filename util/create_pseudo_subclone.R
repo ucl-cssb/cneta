@@ -3,11 +3,12 @@
 library(tidyverse)
 library(MCMCpack)
 
-# This script is used to create data with subclonal structures (only applicable to total copy number data)
+# This script is used to create data with subclonal structures based on the output of CNETS (only applicable to total copy number data)
 
 
 # assume the last sample is normal, R pass function by value
 # simulate data with normal mixture
+# purs: purities of each sample
 convert_cns_by_purity <- function(cns_sel, purs){
   for(i in 1:nrow(cns_sel)){
     cns_sel[i,] = round(purs[i] * 2 + (1 - purs[i]) * cns_sel[i,])
@@ -17,7 +18,7 @@ convert_cns_by_purity <- function(cns_sel, purs){
 
 
 # get clone IDs in a vector
-get_clones_with_primary <- function(i, nclone, nprop, incl_normal){
+get_clones_with_primary <- function(i, nclone, nprop, incl_normal, idx_normal_clone){
   clones = c()
   if(incl_normal){
     clones = sample(1:nclone, nprop - 2)
@@ -58,7 +59,7 @@ convert_cns_by_props <- function(cns_sel, nprop = 3, incl_normal = T, orig_props
       props = props * (1 - major_prop)
       props = c(major_prop, props)
       # ensure the last clone is normal
-      clones = get_clones_with_primary(i, nclone, nprop, incl_normal)
+      clones = get_clones_with_primary(i, nclone, nprop, incl_normal, idx_normal_clone)
        
     }else{
       if(length(orig_props) == 0){
@@ -75,7 +76,7 @@ convert_cns_by_props <- function(cns_sel, nprop = 3, incl_normal = T, orig_props
       }else{
         props = orig_props
         # ensure first clone is the same
-        clones = get_clones_with_primary(i, nclone, nprop, incl_normal)
+        clones = get_clones_with_primary(i, nclone, nprop, incl_normal, idx_normal_clone)
       }     
     }
 
@@ -130,6 +131,8 @@ convert_one_file_purity <- function(file_cn, odir, mu_purity = 0.5, sd_purity = 
   data_cn <- read.table(file_cn)
   names(data_cn) <- c("sid", "chr", "seg", "cn")
   
+  file_base = basename(file_cn)
+  
   # transformation
   data_cn %>%
     unite(chr, seg, col = "pos", sep = "_") %>%
@@ -141,10 +144,12 @@ convert_one_file_purity <- function(file_cn, odir, mu_purity = 0.5, sd_purity = 
   purity_mean = mu_purity
   purity_sd = sd_purity
   nclone = nrow(cns_wide) - 1
-  purs = rnorm(nclone, purity_sd, purity_var)
+  purs = rnorm(nclone, purity_mean, purity_sd)
   purs[purs > 1] = 1
   
-  fout = file.path(odir, paste0("sim-data-", i, "-purity.txt"))
+  fname = str_replace(file_base, "-cn.txt.gz", "-purity.txt")
+  fout = file.path(odir, fname)
+  # fout = file.path(odir, paste0("sim-data-", i, "-purity.txt"))
   write_tsv(as.data.frame(purs), fout, col_names = F)
   
   purs = c(purs, 1)
@@ -163,7 +168,8 @@ convert_one_file_purity <- function(file_cn, odir, mu_purity = 0.5, sd_purity = 
     arrange(sid, chr, seg) -> dcns_new
   
   # write the data into gz file for tree building
-  fout = file.path(odir, paste0("sim-data-", i, "-cn.txt.gz"))
+  # fout = file.path(odir, paste0("sim-data-", i, "-cn.txt.gz"))
+  fout = file.path(odir, file_base)
   gz1 <- gzfile(fout, "w")
   write.table(dcns_new, gz1, quote = F, row.names = F, col.names = F, sep = "\t")
   close(gz1)
@@ -175,6 +181,8 @@ convert_one_file_purity <- function(file_cn, odir, mu_purity = 0.5, sd_purity = 
 convert_one_file_subclone <- function(file_cn, odir, nprop = 3, incl_normal = T, props = c(), major_prop = 0){
   data_cn <- read.table(file_cn)
   names(data_cn) <- c("sid", "chr", "seg", "cn")
+  
+  file_base = basename(file_cn)
   
   # transformation
   data_cn %>%
@@ -201,14 +209,16 @@ convert_one_file_subclone <- function(file_cn, odir, nprop = 3, incl_normal = T,
     dplyr::arrange(sid, chr, seg) -> dcns_new
   
   # write the data into gz file for tree building
-  fout = file.path(odir, paste0("sim-data-", i, "-cn.txt.gz"))
+  # fout = file.path(odir, paste0("sim-data-", i, "-cn.txt.gz"))
+  fout = file.path(odir, file_base)
   gz1 <- gzfile(fout, "w")
   write.table(dcns_new, gz1, quote = F, row.names = F, col.names = F, sep = "\t")
   close(gz1)
   
-  fout = file.path(odir, paste0("sim-data-", i, "-prop.txt"))
+  # fout = file.path(odir, paste0("sim-data-", i, "-prop.txt"))
+  fname = str_replace(file_base, "-cn.txt.gz", "-prop.txt")
+  fout = file.path(odir, fname)
   write_tsv(df_prop_clone, fout, col_names = F)
-  
 }
 
 
