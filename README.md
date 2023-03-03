@@ -211,7 +211,7 @@ When building the tree, mutation rates can be estimated by specifying the follow
 Mutation rates are implicit parameters in the computing tree likelihood, so the reconstructed tree should be more accurate when cons = 1 and estmu = 1 given longitudinal samples, unless mutation rates are known as in simulated data.
 
 There are 3 tree searching method:
-* exhaustive search (feasible for trees with fewer than 7 samples)
+* exhaustive search (efficient for trees of no more than seven samples)
 * heuristic search (applicable for trees with at least 5 samples)
 * genetic algorithm (may be slow, need improvement, deprecated)
 
@@ -253,18 +253,25 @@ You may check the copy number counts in the input data using similar command as 
 <!-- ## How to prepare MP trees -->
 
 ## Input
-* (Required) A file containing integer absolute/relative copy numbers for all the patient samples and/or the normal sample (*-cn.txt.gz or *-allele-cn.txt.gz). When the input copy numbers are relative with normal copy being 0 as those output by [CGHcall](https://bioconductor.org/packages/release/bioc/html/CGHcall.html), please specifiy it with option "--is_rcn 1". When the input copy numbers are haplotype-specific which have been scaled relative to ploidy or not, please specifiy it with option "--is_total 0 --is_rcn 0".
+* (Required) A file containing integer absolute/relative copy numbers for all the patient samples and/or the normal sample (*-cn.txt.gz or *-allele-cn.txt.gz). 
 
-   Either compressed file or uncompressed file is fine.
-   There need to be at least four columns, separated by space, in this file: sample_ID, chr_ID, site_ID, CN.
-   Note that there should be no header names in this file.
-   Each column is an integer.
-   The sample_ID has to be __ordered__ from 1 to the number of patient samples.
-   The chr_ID and site_ID together determine a unique site along the genome of a sample, __ordering__ from 1 to the largest number.
-   The site_ID can be consecutive numbers from 1 to the total number of sites along the genome, or consecutive numbers from 1 to the total number of sites along each chromosome of the genome.
-   For haplotype-specific CN, there need to be at least five columns, with the last two being cnA, cnB.
-   If the total CN is larger than the specified maximum CN allowed by the program,
-   the total CN will be automatically decreased to the maximum CN when the input is total CN and the program will exit when the input is haplotype-specific CN.
+  Either compressed file or uncompressed file is fine.
+  There need to be at least four columns, separated by space, in this file: sample_ID, chr_ID, site_ID, CN.
+  Note that there should be __no__ __header__ __names__ in this file.
+  Each column is an integer.
+  The sample_ID has to be __ordered__ from 1 to the number of patient samples.
+  The chr_ID and site_ID together determine a unique site along the genome of a sample, __ordering__ from 1 to the largest number.
+  The site_ID can be consecutive numbers from 1 to the total number of sites along the genome, or consecutive numbers from 1 to the total number of sites along each chromosome of the genome.
+  For haplotype-specific CN, there need to be at least five columns, with the last two being cnA, cnB.
+  If the total CN is larger than the specified maximum CN allowed by the program,
+  the total CN will be automatically decreased to the maximum CN when the input is total CN and the program will exit when the input is haplotype-specific CN.
+
+  When the input copy numbers are relative with normal copy being 0 as those output by [CGHcall](https://bioconductor.org/packages/release/bioc/html/CGHcall.html), please specifiy it with option "--is_rcn 1". 
+  
+  When the input copy numbers are haplotype-specific which have been scaled relative to ploidy or not, please specifiy it with option "--is_total 0 --is_rcn 0".
+
+  When the input copy numbers are in bins of fixed size, please specifiy it with option "--bin 0" to use orignial data. By default "--bin 1" is used to get segment-level data by merging consecutive bins with the same copy number in a sample with change points aligned across all the samples. 
+
 
 * (Optional) A file containing the timing information of patient samples (*-rel-times.txt).
 

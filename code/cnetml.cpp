@@ -1076,7 +1076,7 @@ int main(int argc, char** const argv){
 
     ("tree_file", po::value<string>(&tree_file)->default_value(""), "input tree file")
 
-    ("mode", po::value<int>(&mode)->default_value(0), "running mode of the program (0: Compute maximum likelihood tree from copy number profile; 1: Test on example data; 2: Compute the likelihood of a given tree with branch length; 3: Compute the maximum likelihood of a given tree; 4: Infer ancestral states of a given tree from copy number profile)")
+    ("mode", po::value<int>(&mode)->default_value(0), "running mode of the program (0: Compute maximum likelihood tree from copy number profile; 1: Test on example data; 2: Compute the likelihood of a given tree with branch length; 3: Compute the maximum likelihood of a given tree; 4: Infer ancestral states of a given tree from copy number profile; 5: get segment file only)")
     ("bootstrap,b", po::value<int>(&bootstrap)->default_value(0), "doing bootstrap or not")
 
     ("model,d", po::value<int>(&model)->default_value(2), "model of evolution (0: Mk, 1: one-step bounded (total), 2: one-step bounded (haplotype-specific), 3: independent Markov chains)")
@@ -1206,6 +1206,11 @@ int main(int argc, char** const argv){
     INPUT_PROPERTY input_prop{Ns, cn_max, model, is_total, is_rcn, is_bin, incl_all};
     INPUT_DATA input_data{num_invar_bins, num_total_bins, Nchar, obs_num_wgd, obs_change_chr, sample_max_cn};
     data = read_data_var_regions_by_chr(datafile, input_prop, input_data, seg_file, debug);
+
+    if(mode == 5){
+        exit(EXIT_SUCCESS);
+        gsl_rng_free(r);
+    }
 
     // assign variables back for those changed during input parsing
     num_invar_bins = input_data.num_invar_bins;

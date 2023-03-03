@@ -59,6 +59,8 @@ option_list = list(
               help="The left margin for the plot [default=%default]", metavar="numeric"),
   make_option(c("", "--rextra"), type="numeric", default = 3,
               help="The left margin for the plot [default=%default]", metavar="numeric"),
+  make_option(c("", "--width"), type="numeric", default = 8,
+              help="The width for the plot [default=%default]", metavar="numeric"),              
   make_option(c("", "--height"), type="numeric", default = 5,
               help="The height for the plot [default=%default]", metavar="numeric"),
   make_option(c("-m", "--mut_rate"), type="numeric", default = 0,
@@ -124,6 +126,7 @@ has_normal = opt$has_normal
 title = opt$title
 seed = opt$seed
 height = opt$height
+width = opt$width
 
 if(!is.na(seed)) set.seed(seed)
 
@@ -191,7 +194,7 @@ if(plot_type == "all"){
     # cat(paste0("Plotting confidence intervals for the tree in ", tree_file_nex, " with bootstrap trees in folder ", bstrap_dir2, "\n"))
     has_bstrap = F # assume no branch support value in the tree
     if(branch_num == 0){
-      tree_ci = get.ci.tree(fbs, bstrap_dir2, labels, has_bstrap, nex_pattern)
+      tree_ci = get.ci.tree(tree_file_nex, bstrap_dir2, labels, has_bstrap, nex_pattern)
       p = plot.tree.ci.node(tree_ci, time_file, title, lextra, rextra, da, T, T)
     }else{
       if(scale_factor == 1){
@@ -199,7 +202,7 @@ if(plot_type == "all"){
       }else{
         ci_prefix = "mutsize_0.95_CI"
       }
-      tree_ci = get.ci.tree(fbs, bstrap_dir2, labels, has_bstrap, nex_pattern, ci_prefix)
+      tree_ci = get.ci.tree(tree_file_nex, bstrap_dir2, labels, has_bstrap, nex_pattern, ci_prefix)
       p = plot.tree.ci.node.mut(tree_ci, time_file, title, lextra, rextra, da, T, T, scale_factor)
     }
   }
@@ -209,9 +212,14 @@ if(plot_type == "all"){
 }else if(plot_type == "bootstrap"){
   cat(paste0("Plotting bootstrap values for the tree in ", tree_file, "\n"))
 
-  # when the tree is read from txt file, the internal node labels follow the same order as input CNs
-  mytree = get.tree(tree_file, branch_num, labels, scale_factor)
-  mytree = get.bootstrap.tree(mytree, bstrap_dir, pattern)
+  # when the tree is read from txt file, the internal node labels follow the same order as input CNs, but not explicit
+  # mytree = get.tree(tree_file, branch_num, labels, scale_factor)
+  mytree = read.nexus(tree_file_nex)
+  lbl_orders = 1:length(labels)
+  mytree$tip.label = labels[match(mytree$tip.label, lbl_orders)]
+
+  # need to ensure the type of the branches in ML tree and bootstrap trees are the same (either time or number of mutations)
+  mytree = get.bootstrap.tree(mytree, labels, bstrap_dir, pattern)
 
   if(tree_style == "age"){
     if(time_file == ""){
@@ -245,7 +253,6 @@ if(plot_type == "all"){
       }else{
         p = plot.tree.ci.node.mut.smpl(tree_ci, title, lextra, rextra, da, T, T, scale_factor)
       }
-
     }
 
     if(with_cn){
@@ -253,18 +260,21 @@ if(plot_type == "all"){
       ordered_nodes = d$label[order(d$y, decreasing = T)]
       d_seg = get.cn.data.by.pos(cn_file, pos_file, seg_file, cyto_file, labels, ordered_nodes, has_normal, bin_file, seed, is_haplotype_specific, cn_max)
       # get the node order of the tree and reorder heatmap
+      d_seg = d_seg %>% mutate(chrom = ifelse(chrom == 23, "X", chrom))
       phmap = plot.cn.heatmap(d_seg, "")
 
       pc = ggarrange(p, phmap, nrow = 1, widths = c(6.5, 9.5))
       # pc = phmap %>% insert_left(p, width = 0.6)  # not work for internal nodes
-      ggsave(out_file, pc, width = 16, height = height)
+      #  width = 16
+      ggsave(out_file, pc, width = width, height = height)
     }else{
-      ggsave(out_file, p, width = 8, height = height)
+      ggsave(out_file, p, width = width, height = height)
     }
 
   }else{
     p = plot.tree.bootstrap(mytree, title, rextra, da, scale_factor)
-    ggsave(out_file, p, width = 8, height = height)
+    # width = 8
+    ggsave(out_file, p, width = width, height = height)
   }
 
 }else{

@@ -51,8 +51,8 @@ cn_colors1 = c("#6283A9","#bdd7e7","#f0f0f0", '#fdcc8a','#fc8d59','#e34a33','#b3
 # For relative CN -4 to 4
 cn_colors2 = c('#08519c','#3182bd', '#6baed6', '#9ecae1', "#f0f0f0", '#fdcc8a','#fc8d59','#e34a33','#b30000')
 
-xlab_cna_size = "Expected size of copy number alterations per site (Mbp)"
-xlab_cna_num = "Expected number of copy number alterations per site"
+# xlab_cna_size = "Expected size of copy number alterations per site (Mbp)"
+# xlab_cna_num = "Expected number of copy number alterations per site"
 xlab_cna_age = "Patient age (years)"
 
 MIN_BLEN = 1e-3
@@ -173,6 +173,23 @@ get_hg_ends <- function(fcyto){
   chr_end_arm_hg_short %>% select(chromosome = chrID, cend, csize, boundary) -> chr_end_arm_hg_short
 
   return(chr_end_arm_hg_short)
+}
+
+
+get.cn.matrix <- function(cn_file){
+  data_cn = read.table(cn_file)
+  if(ncol(data_cn) == 4){
+    names(data_cn) <- c("sid", "chr", "seg", "cn")
+  }else{
+    if(ncol(data_cn) != 5){
+      stop("There must be either 4 or 5 columns!")
+    }
+    names(data_cn) <- c("sid", "chr", "seg", "cnA", "cnB")
+    data_cn = data_cn %>% mutate(cn = cnA + cnB) %>% select(-c("cnA", "cnB"))
+  }  
+  data_cn %>% unite(chr, seg, col = "pos", sep = "_") %>% spread(pos, cn) %>% select(-sid) -> cns_wide
+  
+  return(cns_wide)
 }
 
 
@@ -525,14 +542,24 @@ prepare.tree.age <- function(mytree, time_file){
 
 
 # Get the tree with bootstrap support value
-get.bootstrap.tree <- function(mytree, bstrap_dir, pattern){
+get.bootstrap.tree <- function(mytree, labels, bstrap_dir, pattern){
   btrees = list()
   cat("Patterns to match bootstrapping trees: ", pattern, "\n")
   files = list.files(path = bstrap_dir, pattern = glob2rx(pattern), recursive = F)
   for(i in 1:length(files)){
     fname = file.path(bstrap_dir, files[i])
-    dt = read.table(fname,header = T)
-    btree = make.tree(dt, labels)
+    if(endsWith(fname, ".txt")){
+      dt = read.table(fname,header = T)
+      btree = make.tree(dt, labels)    
+    }else{
+      if(!endsWith(fname, ".nex")){
+        stop("The tree files should be in nexus format, with file name ending with .nex!")
+      }
+      btree = read.nexus(fname)
+      lbl_orders = 1:length(labels)
+      btree$tip.label = labels[match(btree$tip.label, lbl_orders)]
+    }
+
     btrees[[i]] = btree
   }
 
@@ -540,13 +567,24 @@ get.bootstrap.tree <- function(mytree, bstrap_dir, pattern){
   # prop.part counts the number of bipartitions found in a series of trees given as .... If a single tree is passed, the returned object is a list of vectors with the tips descending from each node (i.e., clade compositions indexed by node number).
   clad <- prop.clades(mytree, btrees, rooted = TRUE)
   clad[is.na(clad)] = 0
-  mytree$node.label = as.integer(clad * 100 / length(files))
-
+  bsval = as.integer(clad * 100 / length(files))
+  if(length(mytree$node.label) > 0){
+    mytree$node.label = paste0(mytree$node.label, "[&bootstrap=", bsval, "]")
+  }else{
+    mytree$node.label = bsval
+  }
+ 
   return(mytree)
 }
 
 
 # get the tree with confidence intervals at internal nodes
+# need to ensure both the original tree and bootstrap trees are read in the same way
+# when reading txt files, the internal node IDs are not recorded
+# when reading nex files, the internal node IDs are different from those in the file
+# tree_file_nex: bootstrap tree or original tree in nexus format
+# tip.label: a vector of mode character giving the labels of the tips; the order of these labels corresponds to the integers 1 to n in edge.
+# node.label (optional) a vector of mode character giving the labels of the nodes (ordered in the same way than tip.label).
 get.ci.tree <- function(tree_file_nex, bstrap_dir, labels, has_bstrap = F, nex_pattern = "*.nex", ci_prefix = "time_0.95_CI"){
   bstrees = list.files(bstrap_dir, pattern = nex_pattern)
   ntimes_all = data.frame()   # not always time, depending on the meaning of branch lengths
@@ -571,16 +609,17 @@ get.ci.tree <- function(tree_file_nex, bstrap_dir, labels, has_bstrap = F, nex_p
   colnames(ntimes_all) = id_labels
 
   # read the tree string
-  stree = read_file(tree_file_nex)
-  ape_tree = read.nexus(tree_file_nex)
+  stree = read_file(tree_file_nex)  # both original tree and bootstrap tree have the same node labels
+ # keep bootstrap value with read.mega
+  mega_tree = read.mega(tree_file_nex)
 
   # compute CI interval and append CI to the tree for visualization
   start_inode = btree$Nnode + 2
   root = start_inode
 
-  for(i in start_inode: ncol(ntimes_all)){
+  for(i in start_inode: ncol(ntimes_all)){  # id increasing from root
     # i = 8
-    lbl = id_labels[i]
+    lbl = id_labels[i]   # same labels as the original tree
     # print(i)
     # print(lbl)
     times = ntimes_all[, lbl]
@@ -595,29 +634,30 @@ get.ci.tree <- function(tree_file_nex, bstrap_dir, labels, has_bstrap = F, nex_p
     left = ci95[1]
     right = ci95[2]
 
+    # when the tree has bootstrap support value, the node label is the support value, assume: all internal branches have different lengths, not work at extreme cases such as when showing branch length as number of mutations and many branches have none
     # [&time_95%_CI={4.50612194676725E-002,1.10259531669597E-001}]
     if(i == start_inode){
       marker = ";"
-      blen = ""
+      # blen = ""
     }else{
       marker = ":"
       # use branch length to avoid mismatching
       # find the edge ID with the node
-      eid = which(ape_tree$edge[, 2]==i)
-      blen = ape_tree$edge.length[eid]
+      # eid = which(mega_tree@phylo$edge[, 2]==i)
+      # blen = mega_tree@phylo$edge.length[eid]
     }
 
     if(has_bstrap){
-      # when the tree has bootstrap support value, the node label is the support value
-      # assume: all internal branches have different lengths
       # find the index of current node
-      nid = which(id_labels == lbl)
-      bsval = ape_tree$node.label[nid - ape_tree$Nnode - 1]
-      orig_str = paste0(bsval, marker, blen)
-      ci_str = paste0(lbl, "[&", ci_prefix, "={", left, ",", right, "},bootstrap=", bsval, "]", marker, blen)
+      # internal node are relabeled,
+      lid = which(mega_tree@phylo$node.label == lbl)
+      bid = which(mega_tree@data$node == lid + mega_tree@phylo$Nnode + 1)  # mega_tree@data$node are node IDs
+      bsval = mega_tree@data$bootstrap[bid]
+      orig_str = paste0(lbl, "\\[&bootstrap=", bsval, "]", marker)
+      ci_str = paste0(lbl, "\\[&", ci_prefix, "={", left, ",", right, "},bootstrap=", bsval, "]", marker)
     }else{
-      orig_str = paste0(lbl, marker, blen)
-      ci_str = paste0(lbl, "[&", ci_prefix, "={", left, ",", right, "}]", marker, blen)
+      orig_str = paste0(lbl, marker)
+      ci_str = paste0(lbl, "[&", ci_prefix, "={", left, ",", right, "}]", marker)
     }
     # print(orig_str)
     # print(ci_str)
@@ -625,7 +665,10 @@ get.ci.tree <- function(tree_file_nex, bstrap_dir, labels, has_bstrap = F, nex_p
   }
 
   # write annotated tree to a file
-  ftree_ci = str_replace(tree_file, ".txt", ".ci.nex")
+  bname = basename(tree_file_nex)
+  dname = dirname(tree_file_nex)
+  prefix = strsplit(bname, "\\.")[[1]][1]
+  ftree_ci = file.path(dname, paste0(prefix, ".ci.nex"))
   #print(stree)
   write_lines(stree, ftree_ci)
 
@@ -711,12 +754,12 @@ plot.tree <- function(tree, title = "", da = data.frame(), add_blen = T) {
 }
 
 
-# Plot tree with xlim specified to show full tip labels
+# Plot tree with xlim specified to show full tip labels (representing time backwards)
 plot.tree.xlim <- function(tree, title = "", rextra = 20, da = data.frame(), add_blen = T) {
   p <- ggtree(tree, size = 0.5, linetype = 1)
   # Add margin to show full name of labels if (is.na(tree.max))
   tree.max = max(node.depth.edgelength(tree)) + rextra
-  p <- p + geom_tiplab(align = TRUE, offset = TIP_OFFSET) + theme_tree2() + xlim(NA, tree.max)
+  p <- p + geom_tiplab(align = TRUE, offset = TIP_OFFSET) + geom_treescale() + xlim(NA, tree.max)
   p <- p + ggtitle(title)
 
   if(add_blen){
@@ -778,19 +821,19 @@ plot.tree.bootstrap <- function(tree, title = "", rextra = 20, da = data.frame()
   # support[tree$node.label < 70] <- "blue"
 
   tree.max = max(node.depth.edgelength(tree)) + rextra
-  p <- p + geom_tiplab(align = TRUE, offset = TIP_OFFSET) + theme_tree2() + xlim(NA, tree.max)
+  p <- p + geom_tiplab(align = TRUE, offset = TIP_OFFSET) + geom_treescale() + xlim(NA, tree.max)
   p <- p + geom_text2(aes(subset=!isTip, label=label), hjust=-.3, color="red")
 
   # edge = data.frame(tree$edge, edge_num = 1:nrow(tree$edge), edge_len = tree$edge.length)
   # colnames(edge)=c("parent", "node", "edge_num", "edge_len")
   # p <- p %<+% edge + geom_text(aes(x = branch, label = edge_len), nudge_y = 0.1)
+  p + ggtitle(title)
 
-  if(scale_factor == 1){
-    p <- p + ggtitle(title) + xlab(xlab_cna_num)
-  }else{
-    p <- p + ggtitle(title) + xlab(xlab_cna_size)
-  }
-
+  # if(scale_factor == 1){
+  #   p <- p + xlab(xlab_cna_num)
+  # }else{
+  #   p <- p + xlab(xlab_cna_size)
+  # }
 
   if(nrow(da) > 0){
     p = get.plot.annot(tree, da, p)
@@ -881,7 +924,7 @@ plot.tree.ci.node.mut <- function(tree_ci, title = "", lextra = 0, rextra = 3, d
   xl = 0 - lextra
 
   p <- ggtree(tree_ci)
-  p <- p + geom_tiplab(align = TRUE, offset = TIP_OFFSET) + theme_tree2() + ggtitle(title)
+  p <- p + geom_tiplab(align = TRUE, offset = TIP_OFFSET) + geom_treescale() + ggtitle(title)
 
   if(has_inode_label){
     p <- p + geom_text2(aes(subset = !isTip, label = label), hjust = -0.3)
@@ -899,10 +942,12 @@ plot.tree.ci.node.mut <- function(tree_ci, title = "", lextra = 0, rextra = 3, d
 
   if(scale_factor == 1){
     p <- p + geom_range('nmut_0.95_CI', color='red', size = 3, alpha = 0.3)
-    p <- p + xlim(xl, tree_max) + xlab(xlab_cna_num)
+    p <- p + xlim(xl, tree_max) 
+    # + xlab(xlab_cna_num)
   }else{
     p <- p + geom_range('mutsize_0.95_CI', color='red', size=3, alpha = 0.3)
-    p <- p  + xlim(xl, tree_max) + xlab(xlab_cna_size)
+    p <- p  + xlim(xl, tree_max) 
+    # + xlab(xlab_cna_size)
   }
 
 
@@ -954,29 +999,30 @@ plot.tree.ci.node.mut.smpl <- function(tree_ci, title = "", lextra = 0, rextra =
 }
 
 
-
-get.cn.matrix <- function(cn_file){
-  data_cn = read.table(cn_file)
-  if(ncol(data_cn) == 4){
-    names(data_cn) <- c("sid", "chr", "seg", "cn")
-  }else{
-    if(ncol(data_cn) != 5){
-      stop("There must be either 4 or 5 columns!")
+# Plot a single tree in different format
+print.single.tree <- function(mytree, tree_style, time_file="", title = "", lextra = 0, rextra = 20, da = data.frame()){
+  if(tree_style == "simple"){
+    p = plot.tree(mytree, title, da)
+  }else if(tree_style == "xlim"){
+    p = plot.tree.xlim(mytree, title, rextra, da)
+  }else if(tree_style == "age"){
+    if(time_file == ""){
+      stop("The file containing the sampling time information is not provided!")
     }
-    names(data_cn) <- c("sid", "chr", "seg", "cnA", "cnB")
-    data_cn = data_cn %>% mutate(cn = cnA + cnB) %>% select(-c("cnA", "cnB"))
-  }  
-  data_cn %>% unite(chr, seg, col = "pos", sep = "_") %>% spread(pos, cn) %>% select(-sid) -> cns_wide
-
-  return(cns_wide)
+    p = plot.tree.xlim.age(mytree, time_file, title, lextra, rextra, da)
+  }else{
+    stop("tree plot style not supported!")
+  }
+  return(p)
 }
 
 
+###########################  functions to plot copy numbers ###########################
 # Plot CNPs of multiple samples as a heatmap for easy comparison
 # Format of d_seg: sample, chrom, start, end, cn, ploidy
 plot.cn.heatmap <- function(d_seg, main, type="absolute", theme = theme1, cn_colors = cn_colors1, allele_specific = F){
   d_seg$cn = round(d_seg$cn)
-  d_seg$chrom = factor(d_seg$chrom, levels=paste("",c(c(1:22)),sep=""))
+  d_seg$chrom = factor(d_seg$chrom, levels=paste("",c(c(1:22, "X")),sep=""))
   d_seg$pos = (d_seg$end + d_seg$start) / 2
   d_seg$width = (d_seg$pos - d_seg$start) * 2
 
@@ -1005,23 +1051,6 @@ plot.cn.heatmap <- function(d_seg, main, type="absolute", theme = theme1, cn_col
   return(p)
 }
 
-
-# Plot a single tree in different format
-print.single.tree <- function(mytree, tree_style, time_file="", title = "", lextra = 0, rextra = 20, da = data.frame()){
-  if(tree_style == "simple"){
-    p = plot.tree(mytree, title, da)
-  }else if(tree_style == "xlim"){
-    p = plot.tree.xlim(mytree, title, rextra, da)
-  }else if(tree_style == "age"){
-    if(time_file == ""){
-      stop("The file containing the sampling time information is not provided!")
-    }
-    p = plot.tree.xlim.age(mytree, time_file, title, lextra, rextra, da)
-  }else{
-    stop("tree plot style not supported!")
-  }
-  return(p)
-}
 
 
 get.cn.data.by.bin <- function(d, bins_4401){
