@@ -20,27 +20,6 @@ suppressMessages(library(ggpubr))
 # 3) plotting all tree files in a directory
 
 
-theme1 = theme(legend.position = "none",
-               #strip.text.x = element_blank(),
-               #strip.text.y = element_blank(),
-               strip.text.y.left = element_text(size=6, angle = 0),
-               strip.background = element_blank(),
-               axis.line.x = element_blank(),
-               axis.line.y = element_blank(),
-               axis.text.x = element_blank(),
-               axis.text.y = element_blank(),
-               axis.title.y = element_blank(),
-               axis.title.x = element_blank(),
-               axis.ticks.x = element_blank(),
-               axis.ticks.y = element_blank(),
-               panel.grid.minor = element_blank(),
-               panel.grid.major = element_blank(),
-               panel.spacing.y = unit(0, "lines"),
-               panel.spacing.x = unit(0, "lines"),
-               panel.border = element_rect(color = "#d8d8d8", fill = NA, size = .2),
-               panel.background = element_rect(fill = "#f0f0f0")
-)
-
 # cn_colors1 = c("#6283A9","#bdd7e7","#f0f0f0","#FCAE91", "#B9574E", "#76000D", "#8B0000", "#000000")
 # Max CN to show in heatmap
 MAX_CN = 6
@@ -966,7 +945,7 @@ plot.tree.ci.node.mut.smpl <- function(tree_ci, title = "", lextra = 0, rextra =
   xl = 0 - lextra
 
   p <- ggtree(tree_ci)
-  p <- p + geom_tiplab() + ggtitle(title)
+  p <- p + geom_tiplab() + ggtitle(title) + geom_treescale()
 
   if(has_inode_label){
     p <- p + geom_text2(aes(subset = !isTip, label = label), hjust = -0.3)
