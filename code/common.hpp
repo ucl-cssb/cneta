@@ -51,7 +51,7 @@ const int WGD_CUTOFF = 3;    // genome ploidy to determine WGD
 // key: chr, seg, copy_number
 typedef map<int, map<int, int>> copy_number;
 
-const string VERSION = "0.1";
+const string VERSION = "1.0";
 
 
 // read-only

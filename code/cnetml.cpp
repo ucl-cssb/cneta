@@ -1131,8 +1131,8 @@ int main(int argc, char** const argv){
 
     // mutation rates
     ("mu,x", po::value<double>(&mu)->default_value(0.02), "overall mutation rate")
-    ("dup_rate", po::value<double>(&dup_rate)->default_value(0.01), "duplication rate")
-    ("del_rate", po::value<double>(&del_rate)->default_value(0.01), "deletion rate")
+    ("dup_rate", po::value<double>(&dup_rate)->default_value(0.001), "duplication rate")
+    ("del_rate", po::value<double>(&del_rate)->default_value(0.001), "deletion rate")
     ("chr_gain_rate", po::value<double>(&chr_gain_rate)->default_value(0), "chromosome gain rate")
     ("chr_loss_rate", po::value<double>(&chr_loss_rate)->default_value(0), "chromosome loss rate")
     ("wgd_rate", po::value<double>(&wgd_rate)->default_value(0), "WGD (whole genome doubling) rate")
