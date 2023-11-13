@@ -292,6 +292,14 @@ You may check the copy number counts in the input data using similar command as 
 * *-tree.nmut.nex: The reconstructed tree in NEWICK format, with branch length representing number of mutations.
 * *-segs.txt: The file with the postprocessed copy number matrix for tree building, with columns being chr_D, start_bin_ID, end_bin_ID, start_segment_ID, end_segment_ID, and the copy numbers for each sample. It will be generated when reading the input copy number file.
 
+## Total to relative copy numbers
+When some samples are polyploidy (mode copy number > 3), it is needed to convert absolute copy numbers to relative copy numbers.
+
+To do this, we can divide the total copy numbers by 2 ^ {N_w} and rounding the resultant values to the nearest integer, where N_w is the number of WGD known in the genome.
+
+If there are hapolotype-specific or allele-specific copy numbers available, we can get relative haplotype-specific or allele-specific copy numbers by dividing the copy numbers of each haplotype or allele by the rounded mean value for that haplotype or allele and rounding the resultant values to the nearest integer. 
+Then we can obtain the relative total copy numbers by adding up the relative copy numbers of each haplotype or allele.
+
 ## Note 
 Please ensure the input file exist and their names are correct, or else there may be an error of "Segmentation fault (core dumped)"!
 

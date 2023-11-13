@@ -7,6 +7,7 @@ verbose=1  # Whether or not to print debug information
 
 # Running mode. 0: build maximum likelihood tree; 1: test; 2: compute likelihood; 3: compute maximum likelihood; 4: infer ancestral state
 mode=0
+plot=0
 
 ####################### Parameters related to input  ###########################
 idir="./example"   # The input directory
@@ -113,8 +114,9 @@ if [[ $mode -eq 0 ]]; then
   #
   echo "Finish running cnetml"
 
-  Rscript util/plot-trees-all.R -f $mltree -b 0 -t "single" -l "xlim" --time_file "$times"  #>& /dev/null
-
+  if [[ $plot -eq 1 ]]; then
+    Rscript util/plot-trees-all.R -f $mltree -b 0 -t "single" -l "xlim" --time_file "$times"  #>& /dev/null
+  fi
   # Evaluate the estimation error
   # cmp_plot=$dir/cmp_plot-"$suffix".pdf
   # cmp_dist=$dir/cmp_dist-"$suffix".txt
@@ -133,7 +135,9 @@ if [[ $mode -eq 0 ]]; then
       code/cnetml -c $input -t "$times" --tree_file "$tree_file" --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change --is_bin $is_bin --incl_all $incl_all -s $Ns -p $Npop -g $Ngen -e $Nstop -r $tolerance -o $ofile -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $estmu  --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2  --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode -b 1 > $bsdir1/std_cnetml_"$suffix"-btree-$i
     done
     # Draw the ML tree with bootstrapping support
-    Rscript util/plot-trees-all.R -s $bsdir1 -f $mltree -o $dir/MaxL-tree-"$suffix"-bootstrap.pdf -t "bootstrap" -l "age" --time_file "$times" -p "MaxL-"$suffix"-btree-*txt"
+    if [[ $plot -eq 1 ]]; then
+      Rscript util/plot-trees-all.R -s $bsdir1 -f $mltree -o $dir/MaxL-tree-"$suffix"-bootstrap.pdf -t "bootstrap" -l "age" --time_file "$times" -p "MaxL-"$suffix"-btree-*txt"
+    fi
   fi
 
 elif [[ $mode -eq 1 ]]; then
@@ -163,7 +167,9 @@ elif [[ $mode -eq 3 ]]; then
   /usr/bin/time code/cnetml --tree_file "$mltree" -o $mltree2 -c $input -t "$times" --is_bin $is_bin --incl_all $incl_all -s $Ns --is_total $is_total --max_wgd $max_wgd --max_chr_change $max_chr_change --max_site_change $max_site_change -d $model --cn_max $cn_max --only_seg $only_seg --tree_search $tree_search --init_tree $init_tree --epop $Ne --beta $beta --gtime $gtime --dir_itrees $dir_itrees --optim $opt --constrained $cons --estmu $estmu --correct_bias $correct_bias -x $mu --dup_rate $r1 --del_rate $r2 --chr_gain_rate $r3 --chr_loss_rate $r4 --wgd_rate $r5 --verbose $verbose --mode $mode > $dir/std_cnetml_"$suffix"-mode"$mode"
 
   # plot the new tree
-  Rscript util/plot-trees-all.R -f $mltree2 -b 0 -t "single" -l "xlim" --time_file "$times"  #>& /dev/null
+  if [[ $plot -eq 1 ]]; then
+    Rscript util/plot-trees-all.R -f $mltree2 -b 0 -t "single" -l "xlim" --time_file "$times"  #>& /dev/null
+  fi
 
   bootstrap=1
   if [[ $bootstrap -eq 1 ]]; then
@@ -184,7 +190,12 @@ elif [[ $mode -eq 3 ]]; then
     ci_dup=`Rscript util/compute_ci.R $fdup 4`
     ci_del=`Rscript util/compute_ci.R $fdel 4`
 
-    Rscript util/plot-trees-all.R -s $bsdir1 -f $mltree2 -o $dir/MaxL-tree-"$suffix"-fixt-bootstrap.pdf -t "bootstrap" -l "ci" --time_file "$times" -p "MaxL-"$suffix"-btree-*txt" --bstrap_dir2 $bsdir2 --title "duplication rate $ci_dup; deletion rate $ci_del"
+    echo $ci_dup
+    echo $ci_del
+
+    if [[ $plot -eq 1 ]]; then
+      Rscript util/plot-trees-all.R -s $bsdir1 -f $mltree2 -o $dir/MaxL-tree-"$suffix"-fixt-bootstrap.pdf -t "bootstrap" -l "ci" --time_file "$times" -p "MaxL-"$suffix"-btree-*txt" --bstrap_dir2 $bsdir2 --title "duplication rate $ci_dup; deletion rate $ci_del"
+    fi
   fi
 
 elif [[ $mode -eq 4 ]]; then  # Inferring ancestral states of a given tree from copy number profile

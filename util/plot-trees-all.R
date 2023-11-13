@@ -40,7 +40,7 @@ option_list = list(
   make_option(c("", "--cyto_file"), type="character", default="",
               help="The file which contains the chromosome boundaries in human reference genome (e.g. hg19) [default=%default]", metavar="character"),
   make_option(c("", "--bin_file"), type="character", default="",
-              help="The file which contains the positions of bins used for calling copy numbers in human reference genome (e.g. hg19) [default=%default]", metavar="character"),
+              help="The RDS file which contains the positions of bins used for calling copy numbers in human reference genome (e.g. hg19) with 3 columns: chr, start, end [default=%default]", metavar="character"),
   make_option(c("-d", "--tree_dir"), type="character", default="",
               help="The directory containing all the tree files to plot [default=%default]", metavar="character"),
   make_option(c("-s", "--bstrap_dir"), type="character", default="",
@@ -81,6 +81,8 @@ option_list = list(
               help="Plotting copy numbers [default=%default]", metavar="logical"),
   make_option(c("", "--has_normal"), default = FALSE, action = "store_true",
               help="Whether the input has copy numbers for normal sample [default=%default]", metavar="logical"),
+  make_option(c("", "--excluded_tip"), type="character", default="",
+              help="Tips to exclude when plotting the tree, string separated by ',' if there are more than one tip [default=%default]", metavar="character"),
   make_option(c("", "--title"), type="character", default="",
               help="The title of the plot [default=%default]", metavar="character"),
   make_option(c("-t", "--plot_type"), type="character", default="single",
@@ -130,7 +132,9 @@ seed = opt$seed
 height = opt$height
 width = opt$width
 font_size = opt$font_size
+excluded_tip = str_split(opt$excluded_tip, ",")[[1]]
 
+# customized font size 
 theme1 = theme(legend.position = "none",
                #strip.text.x = element_blank(),
                #strip.text.y = element_blank(),
@@ -201,6 +205,9 @@ if(plot_type == "all"){
     cat("running on: ", fname, "\n")
     out_file = get.outfile.name(fname, branch_num)
     mytree = get.tree(fname, branch_num, labels, scale_factor)
+    if(excluded_tip != ""){
+      mytree = drop.tip(mytree, excluded_tip)
+    }
     p = print.single.tree(mytree, tree_style, time_file, title, lextra, rextra, da)
     ggsave(out_file, p, width = 8, height = height)
   }
@@ -213,12 +220,15 @@ if(plot_type == "all"){
 
   if(tree_style != "ci"){
     mytree = get.tree(tree_file, branch_num, labels, scale_factor)
+    if(excluded_tip != ""){
+      mytree = drop.tip(mytree, excluded_tip)
+    }    
     p = print.single.tree(mytree, tree_style, time_file, title, lextra, rextra, da)
   }else{
     # cat(paste0("Plotting confidence intervals for the tree in ", tree_file_nex, " with bootstrap trees in folder ", bstrap_dir2, "\n"))
     has_bstrap = F # assume no branch support value in the tree
     if(branch_num == 0){
-      tree_ci = get.ci.tree(tree_file_nex, bstrap_dir2, labels, has_bstrap, nex_pattern)
+      tree_ci = get.ci.tree(tree_file_nex, bstrap_dir2, labels, has_bstrap, nex_pattern, excluded_tip = excluded_tip)
       p = plot.tree.ci.node(tree_ci, time_file, title, lextra, rextra, da, T, T)
     }else{
       if(scale_factor == 1){
@@ -226,7 +236,7 @@ if(plot_type == "all"){
       }else{
         ci_prefix = "mutsize_0.95_CI"
       }
-      tree_ci = get.ci.tree(tree_file_nex, bstrap_dir2, labels, has_bstrap, nex_pattern, ci_prefix)
+      tree_ci = get.ci.tree(tree_file_nex, bstrap_dir2, labels, has_bstrap, nex_pattern, ci_prefix, excluded_tip = excluded_tip)
       p = plot.tree.ci.node.mut(tree_ci, time_file, title, lextra, rextra, da, T, T, scale_factor)
     }
   }
@@ -239,11 +249,15 @@ if(plot_type == "all"){
   # when the tree is read from txt file, the internal node labels follow the same order as input CNs, but not explicit
   # mytree = get.tree(tree_file, branch_num, labels, scale_factor)
   mytree = read.nexus(tree_file_nex)
-  lbl_orders = 1:length(labels)
-  mytree$tip.label = labels[match(mytree$tip.label, lbl_orders)]
-
+  if(length(labels) > 0){
+    lbl_orders = 1:length(labels)
+    mytree$tip.label = labels[match(mytree$tip.label, lbl_orders)]   
+  }
+  if(excluded_tip != ""){
+    mytree = drop.tip(mytree, excluded_tip)
+  }   
   # need to ensure the type of the branches in ML tree and bootstrap trees are the same (either time or number of mutations)
-  mytree = get.bootstrap.tree(mytree, labels, bstrap_dir, pattern)
+  mytree = get.bootstrap.tree(mytree, labels, bstrap_dir, pattern, excluded_tip)
 
   if(tree_style == "age"){
     if(time_file == ""){
@@ -263,7 +277,7 @@ if(plot_type == "all"){
       if(time_file == ""){
         stop("The file containing the sampling time information is not provided!")
       }
-      tree_ci = get.ci.tree(fbs, bstrap_dir2, labels, T, nex_pattern)
+      tree_ci = get.ci.tree(fbs, bstrap_dir2, labels, T, nex_pattern, excluded_tip = excluded_tip)
       p = plot.tree.ci.node(tree_ci, time_file, title, lextra, rextra, da, T, T)
     }else{
       if(scale_factor == 1){
@@ -271,7 +285,8 @@ if(plot_type == "all"){
       }else{
         ci_prefix = "mutsize_0.95_CI"
       }
-      tree_ci = get.ci.tree(fbs, bstrap_dir2, labels, T, nex_pattern, ci_prefix)
+      tree_ci = get.ci.tree(fbs, bstrap_dir2, labels, T, nex_pattern, ci_prefix, excluded_tip = excluded_tip)
+
       if(ggtree_style == 0){
         p = plot.tree.ci.node.mut(tree_ci, title, lextra, rextra, da, T, T, scale_factor)
       }else{
@@ -282,7 +297,7 @@ if(plot_type == "all"){
     if(with_cn){
       d = fortify(tree_ci@phylo)
       ordered_nodes = d$label[order(d$y, decreasing = T)]
-      d_seg = get.cn.data.by.pos(cn_file, pos_file, seg_file, cyto_file, labels, ordered_nodes, has_normal, bin_file, seed, is_haplotype_specific, cn_max)
+      d_seg = get.cn.data.by.pos(cn_file, pos_file, seg_file, cyto_file, labels, ordered_nodes, has_normal, bin_file, seed, is_haplotype_specific, cn_max, excluded_tip)
       # get the node order of the tree and reorder heatmap
       d_seg = d_seg %>% mutate(chrom = ifelse(chrom == 23, "X", chrom))
       phmap = plot.cn.heatmap(d_seg, "")

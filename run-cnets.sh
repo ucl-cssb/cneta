@@ -7,6 +7,7 @@ verbose=0   # Whether or not to print debug information
 Nsim=1  # The number of simulations. Number of patients to simulate
 
 print_relative=1
+plot=0
 
 ####################### Parameters related to tree generation ##################
 Ns=3 # The number of tumor regions to sample. Output will be Ns+1 including germline normal region
@@ -67,11 +68,14 @@ echo "Finish running cnets"
 
 
 ####################### Plot simulated tree and copy numbers (optional) ########
-# Plot all simulated trees
-Rscript util/plot-trees-all.R -d $dir -b 0 -t "all" -l "xlim"  # >& /dev/null
-# Plot simulated tree with the number of mutations on the branch
-Rscript util/plot-trees-all.R -d $dir -b 1 -t "all" -l "xlim" # >& /dev/null
-Rscript util/plot-cns.R -d $dir -b util/bin_locations_4401.Rdata # >& /dev/null
+
+if [[ $plot -eq 1 ]]; then
+  # Plot all simulated trees
+  Rscript util/plot-trees-all.R -d $dir -b 0 -t "all" -l "xlim"  # >& /dev/null
+  # Plot simulated tree with the number of mutations on the branch
+  Rscript util/plot-trees-all.R -d $dir -b 1 -t "all" -l "xlim" # >& /dev/null
+  Rscript util/plot-cns.R -d $dir -b util/bin_locations_4401.Rdata # >& /dev/null
+fi 
 
 
 # Plot a single tree

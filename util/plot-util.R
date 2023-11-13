@@ -19,7 +19,7 @@ suppressMessages(library(ggpubr))
 # 2) plotting a single tree file with bootstrapping support
 # 3) plotting all tree files in a directory
 
-
+############### basic settings ###############
 # cn_colors1 = c("#6283A9","#bdd7e7","#f0f0f0","#FCAE91", "#B9574E", "#76000D", "#8B0000", "#000000")
 # Max CN to show in heatmap
 MAX_CN = 6
@@ -38,6 +38,8 @@ MIN_BLEN = 1e-3
 TIP_OFFSET = 0.5
 BLEN_DIGIT = 2
 
+
+############### functions to process input ###############
 # d is a data frame with 3 columns: start, end, branch length
 # Leaves must be encoded from 1 to nleaf
 make.tree <- function(d, labels = c()) {
@@ -251,7 +253,6 @@ get_normal_segs <- function(d_withpos, chr_end_arm, pos_file){
 }
 
 
-
 get.site.coord <- function(pos_file, cyto_file, bin_file = "", seed = NA){
   # original input, used to get sample names and original positions
   dpos <- read.table(pos_file)
@@ -441,7 +442,7 @@ get.all.state <- function(dans, cn_file, seg_file, dpos, pos_file, has_normal = 
 # combine CNP with position information to get a file with the format: sample, chrom, start, end, cn
 # use chr and site index to bind the two datasets
 # ref_file contains the reference position of each site
-get.cn.data.by.pos <- function(cn_file, pos_file, seg_file, cyto_file, labels, ordered_nodes, has_normal = F, bin_file = "", seed = NA, is_haplotype_specific = F, cn_max = 4){
+get.cn.data.by.pos <- function(cn_file, pos_file, seg_file, cyto_file, labels, ordered_nodes, has_normal = F, bin_file = "", seed = NA, is_haplotype_specific = F, cn_max = 4, excluded_tip = ""){
   dans <- read.table(cn_file)
   if(ncol(dans) == 4){
     names(dans) <- c("sample", "chromosome", "index", "cn")
@@ -485,9 +486,24 @@ get.cn.data.by.pos <- function(cn_file, pos_file, seg_file, cyto_file, labels, o
   # replace node IDs with sample names
   ans_nodes = unique(dans$sample) %>% unlist()
   ans_labels = data.frame(sample = ans_nodes, name = ans_nodes)
-  tip_labels = data.frame(sample = 1:length(labels), name = labels)
+  
+  if(length(labels) > 0){
+    tip_labels = data.frame(sample = 1:length(labels), name = labels)
+  }else{
+    if(has_normal){
+      tip_labels = data.frame(sample = 1:length(unique(dpos$sample)), name = unique(dpos$sample)) 
+    }else{
+      ns = length(unique(dpos$sample)) + 1
+      tip_labels = data.frame(sample = 1:ns, name = c(unique(dpos$sample), ns)) 
+    }
+  }
+  if(excluded_tip != ""){
+    tip_labels = tip_labels %>% filter(!name %in% excluded_tip)
+  }
+  # print(tip_labels)
   node_labels = rbind(ans_labels, tip_labels)
-  d_all = merge(d_all, node_labels, by = c("sample"), all.x = T) %>% select(-sample) %>% select(sample = name, chromosome, index, start, end, cn)
+  
+  d_all = merge(d_all, node_labels, by = c("sample"), all.y = T) %>% select(-sample) %>% select(sample = name, chromosome, index, start, end, cn)
   d_all$sample = factor(d_all$sample, levels = ordered_nodes)
 
   # d_all %>% group_by(chromosome , sample) %>% tally() %>% select(-sample) %>% unique() %>% print()
@@ -521,7 +537,7 @@ prepare.tree.age <- function(mytree, time_file){
 
 
 # Get the tree with bootstrap support value
-get.bootstrap.tree <- function(mytree, labels, bstrap_dir, pattern){
+get.bootstrap.tree <- function(mytree, labels, bstrap_dir, pattern, excluded_tip = ""){
   btrees = list()
   cat("Patterns to match bootstrapping trees: ", pattern, "\n")
   files = list.files(path = bstrap_dir, pattern = glob2rx(pattern), recursive = F)
@@ -535,10 +551,16 @@ get.bootstrap.tree <- function(mytree, labels, bstrap_dir, pattern){
         stop("The tree files should be in nexus format, with file name ending with .nex!")
       }
       btree = read.nexus(fname)
-      lbl_orders = 1:length(labels)
-      btree$tip.label = labels[match(btree$tip.label, lbl_orders)]
+      if(length(labels) > 0){
+        lbl_orders = 1:length(labels)
+        btree$tip.label = labels[match(btree$tip.label, lbl_orders)]        
+      }
     }
-
+    
+    if(excluded_tip != ""){
+      btree = drop.tip(btree, excluded_tip)
+    } 
+    
     btrees[[i]] = btree
   }
 
@@ -564,7 +586,7 @@ get.bootstrap.tree <- function(mytree, labels, bstrap_dir, pattern){
 # tree_file_nex: bootstrap tree or original tree in nexus format
 # tip.label: a vector of mode character giving the labels of the tips; the order of these labels corresponds to the integers 1 to n in edge.
 # node.label (optional) a vector of mode character giving the labels of the nodes (ordered in the same way than tip.label).
-get.ci.tree <- function(tree_file_nex, bstrap_dir, labels, has_bstrap = F, nex_pattern = "*.nex", ci_prefix = "time_0.95_CI"){
+get.ci.tree <- function(tree_file_nex, bstrap_dir, labels, has_bstrap = F, nex_pattern = "*.nex", ci_prefix = "time_0.95_CI", excluded_tip = ""){
   bstrees = list.files(bstrap_dir, pattern = nex_pattern)
   ntimes_all = data.frame()   # not always time, depending on the meaning of branch lengths
   nbs = length(bstrees)
@@ -573,6 +595,9 @@ get.ci.tree <- function(tree_file_nex, bstrap_dir, labels, has_bstrap = F, nex_p
     # i = 2
     ftree = file.path(bstrap_dir, bstrees[i])
     btree = read.nexus(ftree)
+    if(excluded_tip != ""){
+      btree = drop.tip(btree, excluded_tip)
+    }     
     # print(btree)
     # get node time
     ndepths = node.depth.edgelength(btree)
@@ -587,10 +612,20 @@ get.ci.tree <- function(tree_file_nex, bstrap_dir, labels, has_bstrap = F, nex_p
   id_labels = c(btree$tip.label, btree$node.label)
   colnames(ntimes_all) = id_labels
 
-  # read the tree string
-  stree = read_file(tree_file_nex)  # both original tree and bootstrap tree have the same node labels
- # keep bootstrap value with read.mega
-  mega_tree = read.mega(tree_file_nex)
+  # if(excluded_tip != ""){
+  #   stree = read.nexus(tree_file_nex)
+  #   stree = drop.tip(stree, excluded_tip)
+  #   fout = str_replace(tree_file_nex, ".nex", "_dtip.nex")
+  #   write.nexus(stree, file=fout)
+  #   stree = read_file(fout)
+  #   mega_tree = read.mega(fout)
+  # }else{
+    # bootstrap tree already has relevant tip removed in the previous step
+    # read the tree string
+    stree = read_file(tree_file_nex)  # both original tree and bootstrap tree have the same node labels
+    # keep bootstrap value with read.mega
+    mega_tree = read.mega(tree_file_nex)    
+  # }
 
   # compute CI interval and append CI to the tree for visualization
   start_inode = btree$Nnode + 2
