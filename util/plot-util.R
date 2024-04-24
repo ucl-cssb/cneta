@@ -266,9 +266,26 @@ get.site.coord <- function(pos_file, cyto_file, bin_file = "", seed = NA){
     
     nsite = dpos %>% group_by(sample) %>% tally() %>% select(n) %>% unique()
     if(bin_file != ""){   # read bin file to get positions
-      if(nsite == 4401){
+      if(file_ext(bin_file) ==  "Rdata"){
         bins = load(bin_file)
-        chr_sites_full = bins_4401
+        if(nsite == 4401){
+          chr_sites_full = bins_4401 
+        }else{
+          data = dpos %>% spread(sample, cn)
+          bin_count = data %>% group_by(chromosome) %>% count() 
+          nested_bins <- bins_4401 %>%
+            group_by(chromosome) %>%   # prep for work by Species
+            nest() %>%              # --> one row per Species
+            ungroup() %>%
+            mutate(n = bin_count$n) # add sample sizes
+          
+          sampled_bins <- nested_bins %>%
+            mutate(samp = map2(data, n, sample_n))
+          
+          chr_sites_full = sampled_bins %>%
+            select(-data) %>%
+            unnest(samp) %>% arrange(chromosome, start) %>% select(-c(n))
+        }
       }else{
         chr_sites_full = readRDS(bin_file)
         names(chr_sites_full) = c("chromosome", "start", "end")

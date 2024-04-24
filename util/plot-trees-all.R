@@ -28,7 +28,7 @@ option_list = list(
   make_option(c("-o", "--out_file"), type="character", default="",
               help="The name of output file [default=%default]", metavar="character"),
   make_option(c("-a", "--annot_file"), type="character", default="",
-              help="The file containing the labels of tip nodes [default=%default]", metavar="character"),
+              help="The file containing the labels of tip nodes with at least two columns with header name 'sample'(or 'Sample') and 'id', where ids are ordered from 1 to the number of samples [default=%default]", metavar="character"),
   make_option(c("", "--time_file"), type="character", default="",
               help="The file containing the sampling time information [default=%default]", metavar="character"),
   make_option(c("", "--cn_file"), type="character", default="",
@@ -209,7 +209,7 @@ if(plot_type == "all"){
       mytree = drop.tip(mytree, excluded_tip)
     }
     p = print.single.tree(mytree, tree_style, time_file, title, lextra, rextra, da)
-    ggsave(out_file, p, width = 8, height = height)
+    ggsave(out_file, p, width = width, height = height)
   }
 
 }else if(plot_type == "single"){
@@ -219,7 +219,12 @@ if(plot_type == "all"){
   }
 
   if(tree_style != "ci"){
-    mytree = get.tree(tree_file, branch_num, labels, scale_factor)
+    if(file_ext(tree_file) == "txt"){
+      mytree = get.tree(tree_file, branch_num, labels, scale_factor)
+    }else{
+      mytree = read.nexus(tree_file)
+    }
+    
     if(excluded_tip != ""){
       mytree = drop.tip(mytree, excluded_tip)
     }    
@@ -236,12 +241,26 @@ if(plot_type == "all"){
       }else{
         ci_prefix = "mutsize_0.95_CI"
       }
-      tree_ci = get.ci.tree(tree_file_nex, bstrap_dir2, labels, has_bstrap, nex_pattern, ci_prefix, excluded_tip = excluded_tip)
-      p = plot.tree.ci.node.mut(tree_ci, time_file, title, lextra, rextra, da, T, T, scale_factor)
+      mytree = get.ci.tree(tree_file_nex, bstrap_dir2, labels, has_bstrap, nex_pattern, ci_prefix, excluded_tip = excluded_tip)
+      p = plot.tree.ci.node.mut(mytree, time_file, title, lextra, rextra, da, T, T, scale_factor)
     }
   }
+  
+  if(with_cn){
+      d = fortify(mytree)
+      ordered_nodes = d$label[order(d$y, decreasing = T)]
+      d_seg = get.cn.data.by.pos(cn_file, pos_file, seg_file, cyto_file, labels, ordered_nodes, has_normal, bin_file, seed, is_haplotype_specific, cn_max, excluded_tip)
+      # get the node order of the tree and reorder heatmap
+      d_seg = d_seg %>% mutate(chrom = ifelse(chrom == 23, "X", chrom))
+      phmap = plot.cn.heatmap(d_seg, "")
 
-  ggsave(out_file, p, width = 8, height = height)
+      pc = ggarrange(p, phmap, nrow = 1, widths = c(6.5, 9.5))
+      # pc = phmap %>% insert_left(p, width = 0.6)  # not work for internal nodes
+      #  width = 16
+      ggsave(out_file, pc, width = width, height = height)
+  }else{
+      ggsave(out_file, p, width = width, height = height)
+  }
 
 }else if(plot_type == "bootstrap"){
   cat(paste0("Plotting bootstrap values for the tree in ", tree_file, "\n"))

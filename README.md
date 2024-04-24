@@ -209,7 +209,7 @@ When estimating branch length, time constraints (in longitudinal samples) can be
 
 When building the tree, mutation rates can be estimated by specifying the following parameters.
 * `estmu`: Whether or not to estimate mutation rate. When estmu = 1, mutation rates will be estimated. This is only reliable when the sampling times of tip nodes provide sufficient information (cons = 1 and dt > 0).
-* `only_seg`: When only_seg = 1, only estimate duplication/deletion rates. Otherwise, the rates for chromosome gain/loss and WGD will be estimated.
+* `only_seg`: When only_seg = 1, only estimate duplication/deletion rates. Otherwise, the rates for chromosome gain/loss and whole genome doubling (WGD) will be estimated.
 
 Mutation rates are implicit parameters in the computing tree likelihood, so the reconstructed tree should be more accurate when cons = 1 and estmu = 1 given longitudinal samples, unless mutation rates are known as in simulated data.
 
@@ -260,20 +260,26 @@ You may check the copy number counts in the input data using similar command as 
 
   Either compressed file or uncompressed file is fine.
   There need to be at least four columns, separated by space, in this file: sample_ID, chr_ID, site_ID, CN.
-  Note that there should be __no__ __header__ __names__ in this file.
   Each column is an integer.
-  The sample_ID has to be __ordered__ from 1 to the number of patient samples.
-  The chr_ID and site_ID together determine a unique site along the genome of a sample, __ordering__ from 1 to the largest number.
-  The site_ID can be consecutive numbers from 1 to the total number of sites along the genome, or consecutive numbers from 1 to the total number of sites along each chromosome of the genome.
-  For haplotype-specific CN, there need to be at least five columns, with the last two being cnA, cnB.
-  If the total CN is larger than the specified maximum CN allowed by the program,
+  Note that there should be __no__ __header__ __names__ in this file.
+
+  
+  * The sample_ID has to be __ordered__ from 1 to the number of patient samples.
+
+  * The chr_ID and site_ID together determine a unique site along the genome of a sample, __ordering__ from 1 to the largest number.
+
+  * The site_ID can be consecutive numbers from 1 to the total number of sites along the genome, or consecutive numbers from 1 to the total number of sites along each chromosome of the genome.
+
+  * For haplotype-specific CN, there need to be at least five columns, with the last two being cnA, cnB.
+
+  * If the total CN is larger than the specified maximum CN allowed by the program,
   the total CN will be automatically decreased to the maximum CN when the input is total CN and the program will exit when the input is haplotype-specific CN.
 
-  When the input copy numbers are relative with normal copy being 0 as those output by [CGHcall](https://bioconductor.org/packages/release/bioc/html/CGHcall.html), please specifiy it with option "--is_rcn 1". 
+  * When the input copy numbers are relative with normal copy being 0 as those output by [CGHcall](https://bioconductor.org/packages/release/bioc/html/CGHcall.html), please specifiy it with option "--is_rcn 1". 
   
-  When the input copy numbers are haplotype-specific which have been scaled relative to ploidy or not, please specifiy it with option "--is_total 0 --is_rcn 0".
+  * When the input copy numbers are haplotype-specific which have been scaled relative to ploidy or not, please specifiy it with option "--is_total 0 --is_rcn 0".
 
-  When the input copy numbers are in bins of fixed size, please specifiy it with option "--bin 0" to use orignial data. By default "--bin 1" is used to get segment-level data by merging consecutive bins with the same copy number in a sample with change points aligned across all the samples. 
+  * When the input copy numbers are in bins of fixed size, please specifiy it with option "--bin 0" to use orignial data. By default "--bin 1" is used to get segment-level data by merging consecutive bins with the same copy number in a sample with change points aligned across all the samples. 
 
 
 * (Optional) A file containing the timing information of patient samples (*-rel-times.txt).
@@ -295,7 +301,7 @@ You may check the copy number counts in the input data using similar command as 
 ## Total to relative copy numbers
 When some samples are polyploidy (mode copy number > 3), it is needed to convert absolute copy numbers to relative copy numbers.
 
-To do this, we can divide the total copy numbers by 2 ^ {N_w} and rounding the resultant values to the nearest integer, where N_w is the number of WGD known in the genome.
+To do this, we can divide the total copy numbers by $2 ^ {N_w}$ or half of the rounded mean copy number and then rounding the resultant values to the nearest integer, where $N_w$ is the number of WGD events known in the genome.
 
 If there are hapolotype-specific or allele-specific copy numbers available, we can get relative haplotype-specific or allele-specific copy numbers by dividing the copy numbers of each haplotype or allele by the rounded mean value for that haplotype or allele and rounding the resultant values to the nearest integer. 
 Then we can obtain the relative total copy numbers by adding up the relative copy numbers of each haplotype or allele.
