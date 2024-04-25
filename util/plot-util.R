@@ -23,6 +23,8 @@ suppressMessages(library(ggpubr))
 # cn_colors1 = c("#6283A9","#bdd7e7","#f0f0f0","#FCAE91", "#B9574E", "#76000D", "#8B0000", "#000000")
 # Max CN to show in heatmap
 MAX_CN = 6
+MAX_RCN = 4
+MIN_RCN = -4
 # For absolute CN 0 to 8 (obtained from https://colorbrewer2.org, 8 classes, sequential data)
 # cn_colors1 = c("#6283A9","#bdd7e7","#f0f0f0", '#fdd49e', '#fdbb84','#fc8d59','#ef6548','#d7301f','#990000')
 # For absolute CN 0 to 6 (obtained from https://colorbrewer2.org, 5 classes, sequential data)
@@ -385,7 +387,7 @@ state2tcn <- function(state, cn_max = 4){
 
 
 # has_normal: whether or not the normal sample is in the input
-get.all.state <- function(dans, cn_file, seg_file, dpos, pos_file, has_normal = T, is_haplotype_specific = F, cn_max = 4){
+get.all.state <- function(dans, seg_file, dpos, pos_file, has_normal = T, is_haplotype_specific = F, cn_max = 4){
   dpos %>% select(chromosome, index, start, end) %>% unique() -> site_pos
 
   if(seg_file != ""){  # reconstructed states
@@ -456,10 +458,7 @@ get.all.state <- function(dans, cn_file, seg_file, dpos, pos_file, has_normal = 
 }
 
 
-# combine CNP with position information to get a file with the format: sample, chrom, start, end, cn
-# use chr and site index to bind the two datasets
-# ref_file contains the reference position of each site
-get.cn.data.by.pos <- function(cn_file, pos_file, seg_file, cyto_file, labels, ordered_nodes, has_normal = F, bin_file = "", seed = NA, is_haplotype_specific = F, cn_max = 4, excluded_tip = ""){
+get.ancestral.cns <- function(cn_file){
   dans <- read.table(cn_file)
   if(ncol(dans) == 4){
     names(dans) <- c("sample", "chromosome", "index", "cn")
@@ -471,18 +470,34 @@ get.cn.data.by.pos <- function(cn_file, pos_file, seg_file, cyto_file, labels, o
     dans = dans %>% mutate(cn = cnA + cnB) %>% select(-c("cnA", "cnB"))
   }
 
-  npos_ans = dans %>% group_by(sample) %>% tally() %>% select(n) %>% unique()
+  return(dans)
+}
+
+# combine CNP with position information to get a file with the format: sample, chrom, start, end, cn
+# use chr and site index to bind the two datasets
+# ref_file contains the reference position of each site
+get.cn.data.by.pos <- function(cn_file, pos_file, seg_file, cyto_file, labels, ordered_nodes, has_normal = F, bin_file = "", seed = NA, is_haplotype_specific = F, cn_max = 4, excluded_tip = ""){
+  if(cn_file != ""){
+    dans = get.ancestral.cns(cn_file)
+    npos_ans = dans %>% group_by(sample) %>% tally() %>% select(n) %>% unique()
+    # replace node IDs with sample names
+    ans_nodes = unique(dans$sample) %>% unlist()
+    ans_labels = data.frame(sample = ans_nodes, name = ans_nodes)
+  }else{
+    dans = data.frame()
+    ans_labels = data.frame()
+    npos_ans = 0
+  }
 
   # extract positions for all sites
   dpos = get.site.coord(pos_file, cyto_file, bin_file, seed)
-  # print(dpos)
-  # print(summary(dpos))
+
   # number of sites in original input
   npos = dpos %>% group_by(sample) %>% tally() %>% select(n) %>%  unique()
 
   # get reconstructed states with position
   # read segment file for original input as invariable bins are excluded and consecutive bins may be merged
-  d_all = get.all.state(dans, cn_file, seg_file, dpos, pos_file, has_normal, is_haplotype_specific, cn_max)
+  d_all = get.all.state(dans, seg_file, dpos, pos_file, has_normal, is_haplotype_specific, cn_max)
   # d_all %>% filter(sample %in% unique(dpos$sample)) %>% summary() %>% print()
 
   # d_all %>% group_by(chromosome, sample) %>% tally() %>% select(-sample) %>% unique() %>% print()
@@ -495,14 +510,11 @@ get.cn.data.by.pos <- function(cn_file, pos_file, seg_file, cyto_file, labels, o
   # ftmp = str_replace(pos_file, "-cn.txt.gz", "-hg19.txt")
   # write_tsv(chr_end_arm, ftmp)
   # print(d_all)
-  if(npos_ans < npos){
+  if(npos_ans > 0 & npos_ans < npos){
     d_all = get_normal_segs(d_all, chr_end_arm, pos_file)
   }
   # print("after getting normal segments")
   # print(d_all)
-  # replace node IDs with sample names
-  ans_nodes = unique(dans$sample) %>% unlist()
-  ans_labels = data.frame(sample = ans_nodes, name = ans_nodes)
   
   if(length(labels) > 0){
     tip_labels = data.frame(sample = 1:length(labels), name = labels)
@@ -1063,7 +1075,7 @@ plot.cn.heatmap <- function(d_seg, main, type="absolute", theme = theme1, cn_col
     cn_vals = c("0", "1", "2", "3", "4", "5", "6")
   }else{
     print("Plot relative copy number")
-    d_seg %>% dplyr::mutate(cn=if_else(cn > max_rcn, max_rcn, cn)) %>% dplyr::mutate(cn=if_else(cn < min_rcn, min_rcn, cn)) -> d_seg
+    d_seg %>% dplyr::mutate(cn=if_else(cn > MAX_RCN, MAX_RCN, cn)) %>% dplyr::mutate(cn=if_else(cn < MIN_RCN, MIN_RCN, cn)) -> d_seg
     cn_vals = c("-4", "-3", "-2", "-1", "0", "1", "2", "3", "4")
   }
 
