@@ -22,7 +22,7 @@ This package is mostly written in C++. There are a few scripts written in R and 
   * [CMake](https://cmake.org/install/) is required for BFGS optimization
   * C libaries: [gsl](https://www.gnu.org/software/gsl/), [boost](https://www.boost.org/) (version >= 1.42)
 
-* Required R libraries for postprocessing
+* Required R libraries for data postprocessing
   * `optparse`
   * `copynumber`
   * `tools`
@@ -32,7 +32,7 @@ This package is mostly written in C++. There are a few scripts written in R and 
   * `phangorn`
 
 
-* Required Python libraries for postprocessing
+* Required Python libraries for data postprocessing
   * newick2elist.py: [networkx](https://networkx.org)
 
 ### How to install CMake
@@ -59,7 +59,7 @@ make
 make install
 ```
 
-### How to install required R libraries
+### How to install R libraries required for data proprocessing
 ```
 if (!requireNamespace("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
@@ -275,11 +275,11 @@ You may check the copy number counts in the input data using similar command as 
   * If the total CN is larger than the specified maximum CN allowed by the program,
   the total CN will be automatically decreased to the maximum CN when the input is total CN and the program will exit when the input is haplotype-specific CN.
 
-  * When the input copy numbers are relative with normal copy being 0 as those output by [CGHcall](https://bioconductor.org/packages/release/bioc/html/CGHcall.html), please specifiy it with option "--is_rcn 1". 
+  * When the input copy numbers are relative with normal copy being 0 as those output by [CGHcall](https://bioconductor.org/packages/release/bioc/html/CGHcall.html), please specify it with option "--is_rcn 1". 
   
-  * When the input copy numbers are haplotype-specific which have been scaled relative to ploidy or not, please specifiy it with option "--is_total 0 --is_rcn 0".
+  * When the input copy numbers are haplotype-specific which have been scaled relative to ploidy or not, please specify it with option "--is_total 0 --is_rcn 0".
 
-  * When the input copy numbers are in bins of fixed size, please specifiy it with option "--bin 0" to use orignial data. By default "--bin 1" is used to get segment-level data by merging consecutive bins with the same copy number in a sample with change points aligned across all the samples. 
+  * When the input copy numbers are in bins of fixed size, please specify it with option "--bin 0" to use original data. By default "--bin 1" is used to get segment-level data by merging consecutive bins with the same copy number in a sample with change points aligned across all the samples. 
 
 
 * (Optional) A file containing the timing information of patient samples (*-rel-times.txt).
@@ -333,7 +333,7 @@ Only basic MCMC algorithm is implemented here and not comprehensively tested.
 Please see run-cnetmcmc.sh to learn how to set different parameters.
 
 There are two running modes depending on whether a reference tree is provided or not.
-With a reference tree, the tree topolgy is fixed.
+With a reference tree, the tree topology is fixed.
 
 ## Input
 * (Required) A file containing copy numbers for all the samples, including the normal sample (*-cn.txt.gz or *-allele-cn.txt.gz)
