@@ -37,9 +37,10 @@ cn_colors2 = c('#08519c','#3182bd', '#6baed6', '#9ecae1', "#f0f0f0", '#fdcc8a','
 xlab_cna_age = "Patient age (years)"
 
 MIN_BLEN = 1e-3
-TIP_OFFSET = 0.5
+# TIP_OFFSET = 0.5
+TIP_OFFSET = 0
 BLEN_DIGIT = 2
-
+POINT_SIZE = 2
 
 ############### functions to process input ###############
 # d is a data frame with 3 columns: start, end, branch length
@@ -289,7 +290,11 @@ get.site.coord <- function(pos_file, cyto_file, bin_file = "", seed = NA){
             unnest(samp) %>% arrange(chromosome, start) %>% select(-c(n))
         }
       }else{
-        chr_sites_full = readRDS(bin_file)
+        if(tools::file_ext(bin_file) == "rds"){
+          chr_sites_full = readRDS(bin_file)
+        }else{
+          chr_sites_full = read_tsv(bin_file)
+        }       
         names(chr_sites_full) = c("chromosome", "start", "end")
       }
     }else{
@@ -748,6 +753,7 @@ get.plot.title <- function(mut_rate, dup_rate, del_rate, digit){
 get.plot.annot <- function(tree, da, p){
   df_labels = data.frame(apeID = 1:nrow(da), Sample = tree$tip.label)
   ds = merge(da, df_labels, by = c("Sample"))
+  # print(ds)
 
   # For IBD data
   if("LocationSpecific" %in% names(da)){
@@ -760,15 +766,22 @@ get.plot.annot <- function(tree, da, p){
   # For BE data
   if("hasWGD" %in% names(da)){
     ds = ds %>% select(node = apeID, hasWGD)
-    p <- p %<+% ds + geom_tippoint(aes(shape = as.factor(hasWGD)), size = 3) + theme(legend.position = "none")
+    p <- p %<+% ds + geom_tippoint(aes(shape = as.factor(hasWGD)), size = POINT_SIZE) + theme(legend.position = "none")
   }
 
   # For EAC data
   if("loc" %in% names(da)){
     # color for time, shape for location
     ds = ds %>% select(node = apeID, reltime, loc)
-    p <- p %<+% ds + geom_tippoint(aes(color = as.factor(loc)), size = 3) + theme(legend.position = "none")
+    p <- p %<+% ds + geom_tippoint(aes(color = as.factor(loc)), size = POINT_SIZE) + theme(legend.position = "none")
   }
+
+  if("MetastasisType" %in% names(da)){
+    # cannot remove individual legends
+    ds = ds %>% select(node = apeID, MetastasisType)
+    p <- p %<+% ds + geom_tippoint(aes(shape = as.factor(MetastasisType)), size = POINT_SIZE) + guides(shape = guide_legend(title = ""))
+  }
+
 
   return(p)
 }
@@ -1033,7 +1046,6 @@ plot.tree.ci.node.mut.smpl <- function(tree_ci, title = "", lextra = 0, rextra =
     p <- p + xlim(xl, tree_max)
   }
 
-
   if(nrow(da) > 0){
     p = get.plot.annot(tree_ci@phylo, da, p)
   }
@@ -1065,7 +1077,7 @@ print.single.tree <- function(mytree, tree_style, time_file="", title = "", lext
 # Format of d_seg: sample, chrom, start, end, cn, ploidy
 plot.cn.heatmap <- function(d_seg, main, type="absolute", theme = theme1, cn_colors = cn_colors1, allele_specific = F){
   d_seg$cn = round(d_seg$cn)
-  d_seg$chrom = factor(d_seg$chrom, levels=paste("",c(c(1:22, "X")),sep=""))
+  d_seg$chrom = factor(d_seg$chrom, levels=paste("",c(c(1:22, "X", "Y")),sep=""))
   d_seg$pos = (d_seg$end + d_seg$start) / 2
   d_seg$width = (d_seg$pos - d_seg$start) * 2
 
